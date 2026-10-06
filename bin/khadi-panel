@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Khadi — panel wrapper for the zellij layout.
+#
+# Exists so the layout can name a command instead of a path.
+#
+#   khadi-panel system   khadi-hud dash  — the eDEX system column
+#   khadi-panel net      khadi-hud net   — status, world map, traffic
+#   khadi-panel fs       khadi-hud fs    — mounts and usage
+#
+# The system panel used to be btop with `shown_boxes = "mem net"`, because
+# btop's CPU box refuses to render below 60 columns and eDEX's side column is
+# ~17% of screen width. khadi-hud was written for exactly that gap: it draws
+# the clock, hardware block, per-core sparklines, memory grid and process list
+# in 34 columns, which is the reference proportion.
+#
+# The net panel is khadi-hud too now. eDEX drew a WebGL globe there
+# (encom-globe) with endpoints resolved through MaxMind; a cell grid cannot
+# render WebGL and GeoLite2 needs an account, so the world view is ratatui's
+# built-in map with no pins and no geolocation.
+set -euo pipefail
+
+: "${XDG_CONFIG_HOME:=$HOME/.config}"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ -d "$XDG_CONFIG_HOME/btop/khadi" ]]; then
+    BT="$XDG_CONFIG_HOME/btop"
+else
+    BT="$(cd "$HERE/../config/btop" && pwd)"
+fi
+
+# Prefer an installed khadi-hud; fall back to a release build in the repo so
+# the dev loop works without installing.
+hud() {
+    if command -v khadi-hud >/dev/null 2>&1; then
+        command khadi-hud "$@"
+    elif [[ -x "$HERE/../target/release/khadi-hud" ]]; then
+        "$HERE/../target/release/khadi-hud" "$@"
+    else
+        echo "khadi-panel: khadi-hud not found. Build it: cargo build --release" >&2
+        exit 1
+    fi
+}
+
+case "${1:-system}" in
+    system) exec "$(command -v khadi-hud || echo "$HERE/../target/release/khadi-hud")" dash ;;
+    net)    exec "$(command -v khadi-hud || echo "$HERE/../target/release/khadi-hud")" net ;;
+    fs)     exec "$(command -v khadi-hud || echo "$HERE/../target/release/khadi-hud")" fs ;;
+    *)      echo "khadi-panel: unknown panel '${1}' (want: system, net, fs)" >&2; exit 2 ;;
+esac

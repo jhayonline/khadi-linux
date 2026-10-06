@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+# Khadi — installer. Phase 1.
+#
+# Links this repo's config/ into ~/.config and bin/ into ~/.local/bin.
+#
+# DRY RUN BY DEFAULT. Nothing is touched without --apply. Khadi's paths
+# collide with any existing Hyprland setup (Omarchy's especially), so every
+# target that already exists is backed up before it is replaced, and
+# --uninstall puts the backups back.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+: "${XDG_CONFIG_HOME:=$HOME/.config}"
+BIN="$HOME/.local/bin"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+MODE=link
+APPLY=0
+SYSTEM=0
+UNINSTALL=0
+
+usage() {
+    cat <<USAGE
+khadi-install — link the Khadi config into your home directory
+
+  --apply        actually do it (default is a dry run)
+  --copy         copy files instead of symlinking (default: symlink)
+  KHADI_THEME=x  build theme x before installing (default: tron)
+  --uninstall    remove Khadi links and restore the newest backups
+  -h, --help     this
+
+Dry run prints exactly what would change. Existing targets are moved to
+<target>.khadi-backup-<timestamp>, never deleted.
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --apply) APPLY=1 ;;
+        --system) SYSTEM=1 ;;
+        --copy) MODE=copy ;;
+        --uninstall) UNINSTALL=1 ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "khadi-install: unknown option $1" >&2; usage; exit 2 ;;
+    esac
+    shift
+done
+
+say()  { printf '  %s\n' "$*"; }
+act()  { if (( APPLY )); then "$@"; fi; }
+
+CONFIGS=(foot zellij btop hypr yazi fuzzel waybar helix mako khadi)
+BINS=(khadi-panel khadi-cheatsheet khadi-dev khadi-theme khadi-check)
+
+# ---------------------------------------------------------------- uninstall
+if (( UNINSTALL )); then
+    echo "Khadi uninstall $( ((APPLY)) || echo '(dry run)' )"
+    for prof in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile" \
+                "$HOME/.zprofile" "$HOME/.config/fish/conf.d/khadi-path.fish"; do
+        [[ -f "$prof" ]] && grep -qsF '# >>> khadi path >>>' "$prof" || continue
+        say "strip   khadi block from $prof"
+        act python3 - "$prof" <<'STRIP'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+open(p, 'w').write(re.sub(r'\n?# >>> khadi path >>>.*?# <<< khadi path <<<\n', '', s, flags=re.S))
+STRIP
+    done
+    for c in "${CONFIGS[@]}"; do
+        t="$XDG_CONFIG_HOME/$c"
+        if [[ -L "$t" && "$(readlink -f "$t")" == "$ROOT/config/$c" ]]; then
+            say "unlink  $t"; act rm "$t"
+        fi
+        b="$(ls -d "$t".khadi-backup-* 2>/dev/null | sort | tail -1 || true)"
+        if [[ -n "$b" ]]; then say "restore $b -> $t"; act mv "$b" "$t"; fi
+    done
+    for b in "${BINS[@]}"; do
+        t="$BIN/$b"
+        [[ -L "$t" ]] && { say "unlink  $t"; act rm "$t"; }
+    done
+    (( APPLY )) || echo $'\n  Dry run. Re-run with --apply.'
+    exit 0
+fi
+
+# ---------------------------------------------------------------- packages
+echo "Khadi install $( ((APPLY)) || echo '(dry run)' )"
+echo
+echo "Packages:"
+missing=()
+while read -r p _; do
+    [[ -z "$p" || "$p" == \#* ]] && continue
+    if pacman -Qq "$p" >/dev/null 2>&1; then say "✓ $p"
+    else say "✗ $p"; missing+=("$p"); fi
+done < "$ROOT/packages.txt"
+
+if (( ${#missing[@]} )); then
+    echo
+    say "Missing ${#missing[@]}. Khadi does not install packages for you —"
+    say "run this yourself, then re-run the installer:"
+    echo
+    say "    sudo pacman -S --needed ${missing[*]}"
+fi
+
+# ----------------------------------------------------------------- theme
+# Regenerate first: config/ is build output, and linking stale output would
+# let the tree drift from templates/ without anyone noticing.
+THEME="${KHADI_THEME:-tron}"
+echo
+echo "Theme ($THEME):"
+if (( APPLY )); then
+    "$ROOT/bin/khadi-theme" build "$THEME" | sed 's/^/  /'
+else
+    "$ROOT/bin/khadi-theme" build "$THEME" --check | sed 's/^/  /' || true
+fi
+
+# ---------------------------------------------------------------- configs
+echo
+echo "Config:"
+# A fresh user account has no ~/.config. Found by the Phase 1 gate: the
+# installer worked on the author's machine purely because the directory
+# already existed there.
+if [[ ! -d "$XDG_CONFIG_HOME" ]]; then
+    say "mkdir  $XDG_CONFIG_HOME"
+    act mkdir -p "$XDG_CONFIG_HOME"
+fi
+for c in "${CONFIGS[@]}"; do
+    src="$ROOT/config/$c"
+    t="$XDG_CONFIG_HOME/$c"
+    [[ -d "$src" ]] || continue
+    if [[ -L "$t" && "$(readlink -f "$t")" == "$src" ]]; then
+        say "ok      $t (already linked)"
+        continue
+    fi
+    if [[ -e "$t" ]]; then
+        say "BACKUP  $t -> $t.khadi-backup-$STAMP"
+        act mv "$t" "$t.khadi-backup-$STAMP"
+    fi
+    if [[ "$MODE" == link ]]; then
+        say "link    $t -> $src"
+        act ln -s "$src" "$t"
+    else
+        say "copy    $src -> $t"
+        act cp -r "$src" "$t"
+    fi
+done
+
+# The RESOLVED theme, not the source. khadi-theme writes config/khadi/theme.toml
+# with the derived ramp and roles; the source file in themes/ holds inputs only
+# and has no `role` section at all. Linking the source was a Phase 1 leftover
+# from before the generator existed — it made khadi-hud fail to start.
+say "link    $XDG_CONFIG_HOME/khadi -> $ROOT/config/khadi"
+
+# ---------------------------------------------------------------- binaries
+echo
+echo "Binaries:"
+act mkdir -p "$BIN"
+for b in "${BINS[@]}"; do
+    say "link    $BIN/$b"
+    act ln -sf "$ROOT/bin/$b" "$BIN/$b"
+done
+
+# Arch's /etc/profile adds /usr/local/bin but NOT ~/.local/bin, so in a login
+# shell khadi-panel is unfindable and the zellij layout fails to spawn its
+# side panels. Found by the Phase 1 gate; a non-interactive ssh shell has the
+# path and a login shell does not, so this hides from casual testing.
+# Which file a login shell actually reads is shell-specific, and bash ignores
+# ~/.profile entirely when ~/.bash_profile exists — which /etc/skel ships on
+# Arch. Writing to the wrong one fails silently. Found by the Phase 1 gate.
+login_profile() {
+    case "$(basename "${SHELL:-/bin/bash}")" in
+        zsh)  echo "$HOME/.zprofile" ;;
+        fish) echo "$HOME/.config/fish/conf.d/khadi-path.fish" ;;
+        *)    if   [[ -f "$HOME/.bash_profile" ]]; then echo "$HOME/.bash_profile"
+              elif [[ -f "$HOME/.bash_login"   ]]; then echo "$HOME/.bash_login"
+              else echo "$HOME/.profile"; fi ;;
+    esac
+}
+PROFILE="$(login_profile)"
+MARK="# >>> khadi path >>>"
+if ! grep -qsF "$MARK" "$PROFILE" 2>/dev/null; then
+    echo
+    echo "PATH:"
+    say "append  $PROFILE  (adds $BIN)"
+    if (( APPLY )); then
+        act mkdir -p "$(dirname "$PROFILE")"
+        [[ -e "$PROFILE" ]] && cp "$PROFILE" "$PROFILE.khadi-backup-$STAMP"
+        if [[ "$PROFILE" == *.fish ]]; then
+            cat >> "$PROFILE" <<'FISHP'
+# >>> khadi path >>>
+fish_add_path -g "$HOME/.local/bin"
+# <<< khadi path <<<
+FISHP
+            return 0
+        fi
+        cat >> "$PROFILE" <<PROF
+
+$MARK
+case ":\$PATH:" in
+    *":\$HOME/.local/bin:"*) ;;
+    *) PATH="\$HOME/.local/bin:\$PATH" ;;
+esac
+export PATH
+# <<< khadi path <<<
+PROF
+    fi
+fi
+
+# ------------------------------------------------------------------ system
+if (( SYSTEM )); then
+    echo
+    echo "System (needs root):"
+    say "install $ROOT/config/greetd/config.toml -> /etc/greetd/config.toml"
+    say "enable  greetd.service, disable getty autologin on tty1"
+    if (( APPLY )); then
+        sudo install -Dm644 "$ROOT/config/greetd/config.toml" /etc/greetd/config.toml
+        sudo rm -f /etc/systemd/system/getty@tty1.service.d/autologin.conf
+        sudo systemctl daemon-reload
+        sudo systemctl enable greetd.service >/dev/null 2>&1
+        say "greetd enabled — it takes over tty1 on next boot"
+    fi
+fi
+
+echo
+if (( APPLY )); then
+    say "Done. Log out and back in, or: hyprctl reload"
+else
+    say "Dry run — nothing changed. Re-run with --apply."
+fi

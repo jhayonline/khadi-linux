@@ -1,0 +1,315 @@
+#!/usr/bin/env bash
+# Khadi — test VM.
+#
+# A throwaway Arch VM to run the Phase 1 gate in: "someone else runs the
+# script and gets your desktop." Deliberately plain QEMU, no libvirt — one
+# script, no daemon, nothing installed into the host's system state.
+#
+#   khadi-vm deps     what you must install (needs root; this script will not)
+#   khadi-vm fetch    download + verify the Arch ISO
+#   khadi-vm create   make the disk image
+#   khadi-vm run      boot it (installer on first run, disk after)
+#   khadi-vm stop     graceful power-off via the QMP socket
+#   khadi-vm shot     screenshot the guest framebuffer via QMP
+#   khadi-vm ssh      shell into the guest once Arch is installed
+#   khadi-vm push     copy this repo into the guest
+#   khadi-vm status   what exists so far
+#   khadi-vm clean    delete the disk (keeps the ISO)
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+ISO_VER="2026.10.01"
+ISO_SHA="684ded26c63240ff4a41e8c25ee84ea6da233f557364821f13d12c2b0a9059a5"
+ISO="$HERE/archlinux-$ISO_VER-x86_64.iso"
+DISK="$HERE/khadi.qcow2"
+NVRAM="$HERE/OVMF_VARS.fd"
+QMP="$HERE/.qmp.sock"
+MIRROR="https://geo.mirror.pkgbuild.com/iso/$ISO_VER"
+
+RAM="${KHADI_VM_RAM:-4G}"
+CPUS="${KHADI_VM_CPUS:-2}"
+SIZE="${KHADI_VM_DISK:-24G}"
+SSH_PORT="${KHADI_VM_SSH:-2222}"
+# QEMU's default guest display is 1024x768, which at Iosevka Term size 10 is
+# 153 columns — below the 180 the reference layout needs (PLAN.md section 10).
+# The gate would fail on VM configuration rather than on Khadi. Match the host.
+XRES="${KHADI_VM_XRES:-1920}"
+YRES="${KHADI_VM_YRES:-1080}"
+# GL: on by default, KHADI_VM_GL=off falls back to a plain framebuffer.
+GL="${KHADI_VM_GL:-on}"
+# Headless: no GTK window, framebuffer fixed at XRES x YRES, reachable over
+# VNC. The GTK window's size *dictates* the guest resolution — under a tiling
+# WM that is whatever the WM assigned (732x810 here, ~109 columns, far under
+# the 180 the layout needs). Headless makes resolution reproducible and
+# `khadi-vm shot` meaningful, which is what automated gate runs require.
+HEADLESS="${KHADI_VM_HEADLESS:-0}"
+VNC_PORT="${KHADI_VM_VNC:-1}"
+
+die()  { printf '\n  %s\n\n' "$*" >&2; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# pgrep -f also matches shells whose command line mentions qemu, and pgrep -x
+# cannot match a name over 15 characters. Resolve /proc/PID/exe instead.
+vm_pid() {
+    local p
+    for p in /proc/[0-9]*; do
+        [[ "$(readlink "$p/exe" 2>/dev/null)" == */qemu-system-x86_64 ]] || continue
+        grep -qa 'khadi-test' "$p/cmdline" 2>/dev/null && { basename "$p"; return 0; }
+    done
+    return 1
+}
+
+cmd_deps() {
+    cat <<DEPS
+
+  Khadi's VM needs these. Installing packages requires root, so run it
+  yourself:
+
+      sudo pacman -S --needed qemu-desktop edk2-ovmf
+
+  qemu-desktop   the emulator plus a GTK display (qemu-base is headless)
+  edk2-ovmf      UEFI firmware — Khadi's real installer assumes UEFI + LUKS,
+                 so the VM should boot the same way
+
+  Already present and no action needed:
+DEPS
+    printf '    %-24s %s\n' "/dev/kvm" "$( [[ -w /dev/kvm ]] && echo 'writable — no group change needed' || echo 'NOT writable' )"
+    printf '    %-24s %s\n' "VT-x (vmx)" "$( grep -q vmx /proc/cpuinfo && echo present || echo ABSENT )"
+    echo
+}
+
+need_qemu() {
+    have qemu-system-x86_64 || die "qemu is not installed. Run: khadi-vm deps"
+}
+
+cmd_fetch() {
+    if [[ -f "$ISO" ]]; then echo "  ISO already here: $ISO"; else
+        echo "  Downloading Arch $ISO_VER (about 1.3 GiB)…"
+        curl -fL --progress-bar -o "$ISO.part" "$MIRROR/archlinux-$ISO_VER-x86_64.iso"
+        mv "$ISO.part" "$ISO"
+    fi
+    echo "  Verifying sha256…"
+    local got; got="$(sha256sum "$ISO" | cut -d' ' -f1)"
+    [[ "$got" == "$ISO_SHA" ]] || die "CHECKSUM MISMATCH
+    expected $ISO_SHA
+    got      $got
+  Delete $ISO and try again."
+    echo "  ✓ $ISO_VER verified"
+}
+
+cmd_create() {
+    need_qemu
+    [[ -f "$DISK" ]] && die "$DISK already exists. 'khadi-vm clean' first."
+    qemu-img create -f qcow2 "$DISK" "$SIZE" >/dev/null
+    echo "  ✓ created $DISK ($SIZE, sparse — it only grows as it fills)"
+    for f in /usr/share/edk2/x64/OVMF_VARS.4m.fd /usr/share/edk2-ovmf/x64/OVMF_VARS.fd; do
+        [[ -f "$f" ]] && { cp "$f" "$NVRAM"; break; }
+    done
+    [[ -f "$NVRAM" ]] && echo "  ✓ UEFI nvram at $NVRAM" || echo "  ! OVMF_VARS not found — install edk2-ovmf"
+}
+
+ovmf_code() {
+    for f in /usr/share/edk2/x64/OVMF_CODE.4m.fd /usr/share/edk2-ovmf/x64/OVMF_CODE.fd; do
+        [[ -f "$f" ]] && { echo "$f"; return; }
+    done
+    die "UEFI firmware not found. Run: sudo pacman -S edk2-ovmf"
+}
+
+cmd_run() {
+    need_qemu
+    [[ -f "$DISK" ]] || die "No disk yet. Run: khadi-vm create"
+    local boot=() code; code="$(ovmf_code)"
+    if [[ "${1:-}" == "--iso" || ! -s "$DISK" ]] || [[ "$(qemu-img info --output=json "$DISK" | python3 -c 'import sys,json;print(json.load(sys.stdin)["actual-size"])')" -lt 1000000 ]]; then
+        [[ -f "$ISO" ]] || die "No ISO yet. Run: khadi-vm fetch"
+        boot=(-cdrom "$ISO" -boot d)
+        echo "  Booting the installer ISO."
+    else
+        echo "  Booting the installed system."
+    fi
+    echo "  SSH will be on localhost:$SSH_PORT once sshd runs in the guest."
+    echo
+    # virtio-gpu-gl + virgl gives the guest a real GPU, which Hyprland needs.
+    # Without it, set WLR_RENDERER=pixman inside the guest to software-render.
+    #
+    # EGL vendor selection matters on hybrid graphics. glvnd reads
+    # /usr/share/glvnd/egl_vendor.d/ in name order, so 10_nvidia.json wins over
+    # 50_mesa.json and EGL lands on the discrete GPU. On this class of machine
+    # — Intel iGPU driving the display, NVIDIA secondary, Wayland session —
+    # that fails with "eglMakeCurrent failed" and the display silently drops to
+    # software. Pin qemu to mesa so it uses the iGPU that actually owns the
+    # screen. Override with KHADI_VM_EGL if your setup differs.
+    # -vga none is essential: without it QEMU adds its default stdvga at
+    # 00:01.0, the guest drives the console from bochs-drm, and virtio-gpu
+    # registers with "Cannot find any crtc or sizes" — present but unused.
+    # Symptom: xres/yres silently ignored and no 3D in the guest.
+    local gpu=() disp
+    if [[ "$HEADLESS" == "1" ]]; then
+        gpu=(-device "virtio-gpu,xres=$XRES,yres=$YRES")
+        disp="none"
+        echo "  headless: ${XRES}x${YRES}, VNC on 127.0.0.1:$((5900 + VNC_PORT))"
+    elif [[ "$GL" == "on" ]]; then
+        export __EGL_VENDOR_LIBRARY_FILENAMES="${KHADI_VM_EGL:-/usr/share/glvnd/egl_vendor.d/50_mesa.json}"
+        export __GLX_VENDOR_LIBRARY_NAME="${__GLX_VENDOR_LIBRARY_NAME:-mesa}"
+        gpu=(-device "virtio-gpu-gl,xres=$XRES,yres=$YRES")
+        disp="gtk,gl=on,show-cursor=on,zoom-to-fit=on"
+        echo "  GL on, EGL pinned to: $__EGL_VENDOR_LIBRARY_FILENAMES"
+    else
+        gpu=(-device "virtio-gpu,xres=$XRES,yres=$YRES")
+        disp="gtk,gl=off,show-cursor=on,zoom-to-fit=on"
+        echo "  GL off — guest needs WLR_RENDERER=pixman for Hyprland."
+    fi
+
+    exec qemu-system-x86_64 \
+        -name "khadi-test" \
+        -enable-kvm -cpu host -smp "$CPUS" -m "$RAM" \
+        -machine q35,accel=kvm \
+        -vga none \
+        -drive if=pflash,format=raw,readonly=on,file="$code" \
+        -drive if=pflash,format=raw,file="$NVRAM" \
+        -drive file="$DISK",if=virtio,format=qcow2 \
+        "${boot[@]}" \
+        "${gpu[@]}" \
+        -display "$disp" \
+        ${HEADLESS:+$( [[ "$HEADLESS" == 1 ]] && echo "-vnc 127.0.0.1:$VNC_PORT" )} \
+        -device virtio-net,netdev=n0 \
+        -netdev "user,id=n0,hostfwd=tcp::$SSH_PORT-:22" \
+        -device virtio-rng-pci \
+        -audiodev none,id=a0 \
+        -qmp "unix:$QMP,server,nowait" \
+        -usb -device usb-tablet
+}
+
+cmd_stop() {
+    # ACPI power button, the way the guest expects. Falls back to SIGTERM.
+    if [[ -S "$QMP" ]] && have python3; then
+        python3 - "$QMP" <<'QPY' 2>/dev/null && { echo "  ✓ power button sent"; return; }
+import socket, json, sys
+s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1])
+s.recv(4096)
+s.sendall(b'{"execute":"qmp_capabilities"}\n'); s.recv(4096)
+s.sendall(b'{"execute":"system_powerdown"}\n'); s.recv(4096)
+QPY
+    fi
+    local p; p="$(vm_pid)" && { kill -TERM "$p"; echo "  ✓ SIGTERM sent to $p"; } || echo "  not running"
+}
+
+cmd_shot() {
+    # Screenshot the guest framebuffer through QMP, independent of the GTK
+    # window. Lets the host verify what the guest is actually displaying.
+    local out="${1:-$HERE/shot.ppm}"
+    [[ -S "$QMP" ]] || die "no QMP socket — is the VM running?"
+    python3 - "$QMP" "$out" <<'QPY'
+import socket, json, sys
+s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); s.recv(65536)
+def q(o):
+    s.sendall((json.dumps(o)+"\n").encode())
+    while True:
+        for ln in s.recv(65536).decode().splitlines():
+            d = json.loads(ln)
+            if "return" in d or "error" in d: return d
+q({"execute":"qmp_capabilities"})
+r = q({"execute":"screendump","arguments":{"filename":sys.argv[2]}})
+print("  error:" if "error" in r else "  ok", r.get("error",""))
+QPY
+    [[ -f "$out" ]] && echo "  ✓ $out ($(identify -format '%wx%h' "$out" 2>/dev/null || stat -c%s "$out") )"
+}
+
+cmd_ssh() {
+    exec ssh -p "$SSH_PORT" \
+        -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        "${KHADI_VM_USER:-root}@localhost" "$@"
+}
+
+cmd_push() {
+    echo "  Copying the repo into the guest…"
+    # Mirror deletions. tar adds files but never removes them, so a renamed or
+    # deleted file lives on in the guest forever — which is exactly how an
+    # orphaned khadi-tron.theme survived a rename and poisoned every theme.
+    ssh -n -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
+        'rm -rf ~/khadi/templates ~/khadi/themes ~/khadi/bin ~/khadi/crates'
+    # NOTE: config/ is deliberately NOT removed. Hyprland watches
+    # config/hypr/hyprland.conf and regenerates a default the instant it
+    # vanishes, which races the delete and fails it with "Directory not
+    # empty". It does not need removing anyway: config/ is build output and
+    # `khadi-theme build` already prunes anything with no template behind it.
+
+    tar -C "$ROOT" \
+        --exclude=edex-ui --exclude=.git --exclude=target \
+        --exclude='vm/*.iso' --exclude='vm/*.iso.part' \
+        --exclude='vm/*.qcow2' --exclude='vm/OVMF_VARS.fd' --exclude='vm/.qmp.sock' \
+        -cf - . \
+      | ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
+            'mkdir -p ~/khadi && tar -C ~/khadi -xf -'
+    echo "  ✓ repo is at ~/khadi in the guest"
+
+    # The release binary goes separately. It CANNOT ride in the tar above:
+    # --exclude=target drops it even when the path is listed explicitly, which
+    # silently shipped a stale binary and cost a debugging round. The guest has
+    # no Rust toolchain (302 MiB) and should not need one — Phase 4 ships
+    # khadi-hud as a prebuilt package for the same reason.
+    if [[ -x "$ROOT/target/release/khadi-hud" ]]; then
+        # NOT ssh -n here: -n points stdin at /dev/null, which silently sent
+        # an empty file. The checksum below exists because that failure looked
+        # exactly like success.
+        ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
+            'mkdir -p ~/.local/bin; cat > ~/.local/bin/.khadi-hud.new && chmod 755 ~/.local/bin/.khadi-hud.new && mv ~/.local/bin/.khadi-hud.new ~/.local/bin/khadi-hud' \
+            < "$ROOT/target/release/khadi-hud"
+        local want got
+        want="$(md5sum < "$ROOT/target/release/khadi-hud" | cut -d" " -f1)"
+        got="$(ssh -n -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+               -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
+               'md5sum < ~/.local/bin/khadi-hud | cut -d" " -f1')"
+        if [[ "$want" == "$got" ]]; then
+            echo "  ✓ khadi-hud installed in the guest ($want)"
+        else
+            echo "  ✗ khadi-hud checksum mismatch: host $want, guest $got" >&2
+        fi
+    fi
+
+    # tar replacing files under a running Hyprland makes its config watcher see
+    # them vanish and fall back to an autogenerated config. Reload after.
+    # `ls -1t`, not `ls`: stale instance dirs linger after a session restart and
+    # an alphabetical pick silently targets a dead compositor.
+    ssh -n -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
+        'export XDG_RUNTIME_DIR=/run/user/$(id -u);
+         export HYPRLAND_INSTANCE_SIGNATURE=$(ls -1t $XDG_RUNTIME_DIR/hypr 2>/dev/null|head -1);
+         command -v hyprctl >/dev/null && [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] && hyprctl reload >/dev/null' \
+        2>/dev/null && echo "  ✓ hyprctl reload" || true
+}
+
+cmd_status() {
+    printf '  %-12s %s\n' "vm" "$(vm_pid >/dev/null && echo "running (pid $(vm_pid))" || echo 'stopped')"
+    printf '  %-12s %s\n' "qemu"  "$(have qemu-system-x86_64 && qemu-system-x86_64 --version | head -1 || echo 'NOT INSTALLED')"
+    printf '  %-12s %s\n' "kvm"   "$( [[ -w /dev/kvm ]] && echo ok || echo unavailable )"
+    printf '  %-12s %s\n' "iso"   "$( [[ -f $ISO ]] && du -h "$ISO" | cut -f1 || echo 'not fetched' )"
+    printf '  %-12s %s\n' "disk"  "$( [[ -f $DISK ]] && du -h "$DISK" | cut -f1 || echo 'not created' )"
+    printf '  %-12s %s\n' "ram"   "$RAM"
+    printf '  %-12s %s\n' "cpus"  "$CPUS"
+    local cols; cols=$(python3 -c "print(int($XRES/(10*96/72*0.5)))" 2>/dev/null || echo '?')
+    printf '  %-12s %s\n' "display" "${XRES}x${YRES}  (~$cols cols at Iosevka Term 10; layout needs >=180)"
+    printf '  %-12s %s\n' "gl" "$GL"
+}
+
+cmd_clean() {
+    rm -f "$DISK" "$NVRAM"
+    echo "  ✓ disk removed (ISO kept — 'rm $ISO' to drop that too)"
+}
+
+case "${1:-status}" in
+    deps) cmd_deps ;;
+    fetch) cmd_fetch ;;
+    create) cmd_create ;;
+    run) shift; cmd_run "$@" ;;
+    stop) cmd_stop ;;
+    shot) shift; cmd_shot "$@" ;;
+    ssh) shift; cmd_ssh "$@" ;;
+    push) cmd_push ;;
+    status) cmd_status ;;
+    clean) cmd_clean ;;
+    *) sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+esac

@@ -1,0 +1,34 @@
+// Khadi — reference layout.
+//
+// The eDEX arrangement: system left, shell centre, processes right, filesystem
+// along the bottom. The on-screen keyboard and GeoIP globe are non-goals
+// (PLAN.md section 12).
+//
+// Frames are off (config.kdl). Every pane draws its own chrome — the
+// correction the Phase 0 gate forced: zellij does layout, not looks.
+//
+// COLUMN WIDTHS ARE SET BY btop, NOT BY TASTE. Measured minimums:
+//   cpu 60 | proc 44 | mem 36 | net 36 | cpu+mem 60 | all four 80
+// eDEX's side columns are ~17% of screen width, which at any sane terminal
+// size is under 60, so btop's CPU box can never occupy one. The left column
+// carries mem+net, the right carries proc. zellij's `│` divider eats one
+// column, so sizes are minimum + 2.
+//
+// This layout needs >=180 columns to hold eDEX-like proportions. See
+// PLAN.md section 10.
+
+layout {
+    pane split_direction="horizontal" {
+        pane split_direction="vertical" size="78%" {
+            pane size=36 name="SYSTEM"    command="khadi-panel" { args "system"; }
+            pane            name="MAIN SHELL"
+            pane size=38 name="NETWORK"   command="khadi-panel" { args "net"; }
+        }
+        // eDEX's FILESYSTEM strip is two things under one name: a clickable
+        // icon grid and a mount-usage bar. Khadi splits them — browsing is
+        // yazi on Super+E (keyboard-driven, already themed, and an icon grid
+        // would need a Nerd Font Khadi does not ship), so this strip carries
+        // the usage, which has no home anywhere else.
+        pane size=6 name="FILESYSTEM" command="khadi-panel" { args "fs"; }
+    }
+}

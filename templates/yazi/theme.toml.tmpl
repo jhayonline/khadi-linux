@@ -1,0 +1,158 @@
+# Khadi — yazi theme. Derived from themes/tron.toml.
+# Phase 2 generates this file. Schema: yazi v26.9.1 theme-dark.toml.
+#
+# yazi loads its own theme-dark.toml first; this file overrides parts of it.
+#
+# ONE-COLOUR DESIGN. tron.json defines no ANSI 16, so there is no palette to
+# colour file types with. Rather than invent hues the rest of the system does
+# not have, every rule collapses onto the flattened alpha ramp: brighter means
+# more important, never "this is an archive". This is the documented cost of
+# the one-colour theme (PLAN.md section 3), applied deliberately.
+
+[mgr]
+cwd = { fg = "{{ role.text | hex }}" }
+
+find_keyword  = { fg = "{{ role.text | hex }}", bold = true, underline = true }
+find_position = { fg = "{{ role.text_dim | hex }}", bg = "reset", bold = true }
+
+symlink_target = { fg = "{{ role.text_muted | hex }}", italic = true }
+
+marker_copied   = { fg = "{{ ramp.a60 | hex }}", bg = "{{ ramp.a60 | hex }}" }
+marker_cut      = { fg = "{{ ramp.a90 | hex }}", bg = "{{ ramp.a90 | hex }}" }
+marker_marked   = { fg = "{{ role.text | hex }}",   bg = "{{ role.text | hex }}" }
+marker_selected = { fg = "{{ role.text_dim | hex }}", bg = "{{ role.text_dim | hex }}" }
+marker_symbol   = "│"
+
+count_copied   = { fg = "{{ role.ground | hex }}", bg = "{{ ramp.a60 | hex }}" }
+count_cut      = { fg = "{{ role.ground | hex }}", bg = "{{ ramp.a90 | hex }}" }
+count_selected = { fg = "{{ role.ground | hex }}", bg = "{{ role.text_dim | hex }}" }
+
+# The hairline. Same rule colour as every other surface in Khadi.
+border_symbol = "│"
+border_style  = { fg = "{{ role.rule | hex }}" }
+
+[tabs]
+active   = { fg = "{{ role.ground | hex }}", bg = "{{ role.text | hex }}", bold = true }
+inactive = { fg = "{{ role.text_muted | hex }}", bg = "{{ role.rule_faint | hex }}" }
+# eDEX tabs are skewed parallelograms (chrome.tab_skew_deg). A cell grid
+# cannot skew, so the separators stay empty rather than faking it with
+# powerline wedges, which would import a different design language.
+sep_inner = { open = "", close = "" }
+sep_outer = { open = "", close = "" }
+
+[mode]
+normal_main = { fg = "{{ role.ground | hex }}", bg = "{{ role.text | hex }}",   bold = true }
+normal_alt  = { fg = "{{ role.text | hex }}",   bg = "{{ role.rule | hex }}" }
+select_main = { fg = "{{ role.ground | hex }}", bg = "{{ role.text_dim | hex }}", bold = true }
+select_alt  = { fg = "{{ role.text_dim | hex }}", bg = "{{ role.rule | hex }}" }
+unset_main  = { fg = "{{ role.ground | hex }}", bg = "{{ role.text_muted | hex }}", bold = true }
+unset_alt   = { fg = "{{ role.text_muted | hex }}", bg = "{{ role.rule | hex }}" }
+
+[status]
+sep_left  = { open = "", close = "" }
+sep_right = { open = "", close = "" }
+
+perm_sep   = { fg = "{{ role.rule | hex }}" }
+perm_type  = { fg = "{{ role.text_dim | hex }}" }
+perm_read  = { fg = "{{ ramp.a70 | hex }}" }
+perm_write = { fg = "{{ ramp.a70 | hex }}" }
+perm_exec  = { fg = "{{ role.text | hex }}" }
+
+progress_label  = { fg = "{{ role.text | hex }}", bold = true }
+progress_normal = { fg = "{{ role.text | hex }}", bg = "{{ role.rule | hex }}" }
+progress_error  = { fg = "{{ role.ground | hex }}", bg = "{{ ramp.a90 | hex }}" }
+
+[input]
+border   = { fg = "{{ role.rule | hex }}" }
+title    = { fg = "{{ role.text | hex }}" }
+value    = { fg = "{{ role.text | hex }}" }
+selected = { bg = "{{ role.rule | hex }}" }
+
+[pick]
+border   = { fg = "{{ role.rule | hex }}" }
+active   = { fg = "{{ role.text | hex }}", bold = true }
+inactive = { fg = "{{ role.text_muted | hex }}" }
+
+[confirm]
+border     = { fg = "{{ role.rule | hex }}" }
+title      = { fg = "{{ role.text | hex }}" }
+body       = { fg = "{{ role.text_dim | hex }}" }
+list       = { fg = "{{ role.text_dim | hex }}" }
+btn_yes    = { fg = "{{ role.ground | hex }}", bg = "{{ role.text | hex }}" }
+btn_no     = { fg = "{{ role.text_muted | hex }}" }
+btn_labels = [ "  [Y]es  ", "  (N)o  " ]
+
+[cmp]
+border   = { fg = "{{ role.rule | hex }}" }
+active   = { fg = "{{ role.text | hex }}", bold = true }
+inactive = { fg = "{{ role.text_muted | hex }}" }
+
+[tasks]
+border  = { fg = "{{ role.rule | hex }}" }
+title   = { fg = "{{ role.text | hex }}" }
+hovered = { fg = "{{ role.text | hex }}", underline = true }
+
+[which]
+cols            = 3
+mask            = { bg = "{{ role.ground | hex }}" }
+cand            = { fg = "{{ role.text | hex }}" }
+rest            = { fg = "{{ role.text_muted | hex }}" }
+desc            = { fg = "{{ role.text_dim | hex }}" }
+separator       = "  ·  "
+separator_style = { fg = "{{ role.rule | hex }}" }
+
+[help]
+border  = { fg = "{{ role.rule | hex }}" }
+chord   = { fg = "{{ role.text | hex }}" }
+action  = { fg = "{{ role.text_dim | hex }}" }
+hovered = { bg = "{{ role.rule | hex }}", bold = true }
+
+[notify]
+title_info  = { fg = "{{ role.text | hex }}" }
+title_warn  = { fg = "{{ role.text_dim | hex }}" }
+title_error = { fg = "{{ ramp.a90 | hex }}" }
+
+[spot]
+border = { fg = "{{ role.rule | hex }}" }
+title  = { fg = "{{ role.text | hex }}" }
+
+[filetype]
+rules = [
+	# Brightness carries importance, not file type. See the note at the top.
+	{ url = "*/", fg = "{{ role.text | hex }}" },                   # directories, brightest
+	{ url = "*", is = "exec", fg = "{{ ramp.a90 | hex }}" },
+	{ url = "*", is = "orphan", fg = "{{ ramp.a40 | hex }}" },
+	{ mime = "vfs/{absent,stale}", fg = "{{ ramp.a40 | hex }}" },
+	{ url = "*", fg = "{{ role.text_dim | hex }}" },                # everything else
+]
+
+[indicator]
+# The hovered row. Upstream wraps it in Powerline wedges:
+#   padding = { open = "\ue0b6", close = "\ue0b4" }
+# Those are Private-Use-Area glyphs needing a Nerd Font, which Khadi's locked
+# {{ font.mono }} is not — they would be tofu on a clean Arch install. They also
+# import a different design language: eDEX has no rounded anything
+# (chrome, section 3). A plain space reads as a block highlight instead.
+parent  = { reversed = true }
+current = { reversed = true }
+preview = { underline = true }
+padding = { open = " ", close = " " }
+
+[icon]
+# yazi ships 725 icon rules, each with a hardcoded Material Design hex colour
+# (#03a9f4, #8bc34a, #ff9800 ...). Two problems with that here:
+#
+#   1. It floods a ONE-COLOUR design with ~20 imported hues. Measured: four
+#      non-Khadi colours were reaching the screen before this override.
+#   2. The glyphs need a Nerd Font. Khadi's locked mono is {{ font.mono }}, which
+#      is not one, and ttf-iosevkaterm-nerd is 1141 MiB. On a clean Arch
+#      install the icons would render as tofu — a Phase 1 gate failure.
+#
+# So: no icons. Consistent with [filetype] above, where brightness carries
+# importance rather than category. eDEX's own file icons live in its GUI
+# panel; the terminal surface does not need them.
+globs = []
+dirs  = []
+files = []
+exts  = []
+conds = []

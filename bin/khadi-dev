@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Khadi — run from the repo without installing anything.
+# Phase 1 dev loop: edit config/, run this, look.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PATH="$ROOT/bin:$PATH"
+exec zellij -c "$ROOT/config/zellij/config.kdl" \
+            --config-dir "$ROOT/config/zellij" \
+            -n khadi "$@"

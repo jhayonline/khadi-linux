@@ -1,0 +1,21 @@
+# Khadi — greetd. Installed to /etc/greetd/config.toml (system-level, needs root).
+#
+# A text-mode greeter is the right login surface for a terminal-first desktop:
+# it matches the aesthetic and it is keyboard-only by construction. It also
+# fixes Hyprland's "started without start-hyprland, strongly discouraged"
+# warning, because the session launches through the shipped wrapper rather
+# than bare Hyprland from a shell profile.
+#
+# CONSTRAINT: tuigreet runs on a bare VT, which has only the 16 ANSI colours.
+# themes/tron.toml's flattened ramp is unavailable here, so the palette is
+# approximated: `cyan` for the accent, `darkgray` for rules, `black` ground.
+# This is the one Khadi surface that cannot be truecolor-themed.
+
+[terminal]
+vt = 1
+
+[default_session]
+# tuigreet theme keys are the documented set: text, time, container, border,
+# title, greet, prompt, input, action, button.
+command = "tuigreet --remember --time --asterisks --greeting 'KHADI' --cmd start-hyprland --theme 'border=darkgray;title=cyan;text=cyan;time=darkgray;greet=cyan;prompt=cyan;input=white;action=darkgray;button=cyan;container=black'"
+user = "greeter"

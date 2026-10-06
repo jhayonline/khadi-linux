@@ -1,0 +1,22 @@
+# Khadi theme — matrix
+#
+# Ported from eDEX-UI src/assets/themes/matrix.json. Inputs only; khadi-theme
+# derives the ramp, roles and terminal block. Compare the length of this file
+# to what the same theme needed before the generator existed.
+
+[meta]
+name        = "matrix"
+description = "eDEX-UI's matrix. Phosphor green on black."
+upstream    = "eDEX-UI src/assets/themes/matrix.json (GPL-3.0)"
+
+[palette]
+accent     = "#008f11"  # PORTED  rgb(0,143,17)
+black      = "#0d0208"  # PORTED
+background = "#090b0a"  # PORTED  (eDEX: light_black)
+grid       = "#262827"  # PORTED  (eDEX: grey)
+
+[font]
+ui       = "Rajdhani"
+ui_light = "Rajdhani Light"
+mono     = "Iosevka Term"
+display  = "Orbitron"

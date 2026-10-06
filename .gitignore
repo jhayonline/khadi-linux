@@ -1,0 +1,16 @@
+# VM artefacts — large, local, reproducible from vm/khadi-vm
+vm/*.iso
+vm/*.iso.part
+vm/*.qcow2
+vm/OVMF_VARS.fd
+
+# upstream reference clone, not ours to version
+edex-ui/
+
+# python
+__pycache__/
+*.pyc
+vm/.qmp.sock
+
+# rust build output
+/target/

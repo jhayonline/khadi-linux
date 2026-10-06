@@ -1,0 +1,58 @@
+# Khadi — foot config. HAND-BUILT, Phase 0; Phase 2 generates this.
+# Derived from themes/tron.toml.
+
+[main]
+term=foot
+font={{ font.mono }}:size=10
+pad=8x8 center
+
+[colors-dark]
+alpha=1.0
+foreground={{ role.text | bare }}
+background={{ role.ground | bare }}
+selection-foreground={{ role.text | bare }}
+selection-background={{ role.rule | bare }}
+# cursor = <background> <foreground>
+cursor={{ role.ground | bare }} {{ role.text | bare }}
+# ANSI 16. khadi-theme resolves these: a theme that declares [terminal.ansi]
+# gets its own, otherwise the slots collapse onto the alpha ramp — the
+# one-colour design's documented cost. Templates stay flat either way.
+regular0={{ ansi.black | bare }}
+regular1={{ ansi.red | bare }}
+regular2={{ ansi.green | bare }}
+regular3={{ ansi.yellow | bare }}
+regular4={{ ansi.blue | bare }}
+regular5={{ ansi.magenta | bare }}
+regular6={{ ansi.cyan | bare }}
+regular7={{ ansi.white | bare }}
+bright0={{ ansi.bright_black | bare }}
+bright1={{ ansi.bright_red | bare }}
+bright2={{ ansi.bright_green | bare }}
+bright3={{ ansi.bright_yellow | bare }}
+bright4={{ ansi.bright_blue | bare }}
+bright5={{ ansi.bright_magenta | bare }}
+bright6={{ ansi.bright_cyan | bare }}
+bright7={{ ansi.bright_white | bare }}
+
+[cursor]
+style=block
+blink=no
+
+[tweak]
+# foot draws box-drawing glyphs ITSELF rather than taking them from the font,
+# and exposes their stroke weight. This is the closest a terminal gets to
+# eDEX's 0.092vh hairline — the motif the whole design rests on.
+# Default is 0.04. Thinner reads closer to the reference; retune against
+# spike/motif.py once a display and font size are settled.
+box-drawing-base-thickness=0.03
+box-drawing-solid-shades=yes
+grapheme-shaping=yes
+
+[key-bindings]
+# Keyboard model, PLAN.md section 6: the terminal owns Ctrl+Shift ONLY.
+# Everything else stays clean for zellij (Alt) and applications (Ctrl).
+font-increase=Control+Shift+equal
+font-decrease=Control+Shift+minus  # minus has no shifted form; fine
+font-reset=Control+Shift+0
+clipboard-copy=Control+Shift+c
+clipboard-paste=Control+Shift+v

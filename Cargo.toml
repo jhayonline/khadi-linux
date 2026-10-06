@@ -1,0 +1,21 @@
+# Khadi — Rust workspace.
+#
+# khadi-core  theme + metrics. No UI dependencies, because two very different
+#             surfaces consume it: a ratatui TUI (Phase 3a) and a GTK
+#             layer-shell panel (Phase 3b). Anything that knows about a cell
+#             grid or a widget tree does not belong here.
+# khadi-hud   the binary. `dash` today; `panel` in 3b.
+[workspace]
+members = ["crates/khadi-core", "crates/khadi-hud"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+repository = "https://github.com/khadi/khadi"
+
+[workspace.dependencies]
+serde  = { version = "1", features = ["derive"] }
+toml   = "0.9"
+anyhow = "1"

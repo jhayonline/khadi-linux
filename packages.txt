@@ -1,0 +1,41 @@
+# Khadi — package manifest. Phase 1.
+#
+# Official Arch repos only. Nothing here may come from the AUR: Khadi ships as
+# a pacman repo and a repo cannot depend on the AUR (PLAN.md section 7).
+# Lines are "package  # why". Blank lines and # comments are ignored.
+
+# --- session -----------------------------------------------------------
+hyprland           # compositor; locked Phase 0
+foot               # terminal; locked Phase 0 (CPU-rendered, tunable box strokes)
+zellij             # panes; does layout, not looks
+fuzzel             # launcher, Wayland-native
+mako               # notifications
+waybar             # bar — PLACEHOLDER, retired by khadi-hud panel in Phase 3
+hyprlock           # lock screen
+greetd             # login daemon
+greetd-tuigreet    # TUI greeter — a text-mode login matches the aesthetic
+libnotify          # notify-send; a desktop without it is incomplete
+grim               # screenshot
+slurp              # region select
+wl-clipboard       # clipboard
+
+# --- workspace ---------------------------------------------------------
+btop               # system panels; see the measured width minimums in PLAN.md
+yazi               # file browser
+helix              # editor — pending the Phase 1 open decision vs neovim
+git
+fish               # not the login shell; interactive default only
+
+# --- fonts -------------------------------------------------------------
+# Rajdhani and Orbitron are NOT in the official repos and are vendored by
+# khadi-fonts in Phase 4. Iosevka is here only for Phase 1 convenience: the
+# full package is 446 MiB for 189 faces and Phase 4 replaces it with a
+# 2-face subset. See PLAN.md section 3.
+ttc-iosevka        # 446 MiB — TEMPORARY, Phase 4 vendors a subset
+
+# --- not yet resolved --------------------------------------------------
+# uwsm       — Hyprland logs "started without start-hyprland"; /usr/bin/
+#              start-hyprland ships with hyprland and is what greetd will
+#              launch, so uwsm may not be needed. Revisit if it is.
+# impala       — TUI wifi; not in official repos, needs checking
+# bandwhich    — per-process bandwidth; not in official repos, needs checking

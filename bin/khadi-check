@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# khadi-check — render every theme and validate the output.
+#
+# PLAN.md section 11 names rolling-release theme breakage as a standing risk:
+# any upstream can change its config format with no notice, and ten apps means
+# ten chances a week. The stated mitigation was "CI that renders every template
+# and diffs output on each upstream bump, so breakage is a failing build rather
+# than a user report". This is that.
+#
+#   khadi-check            render every theme, validate with each app's own checker
+#   khadi-check --drift    additionally fail if config/ differs from templates/
+#
+# Validators are only run for tools that are installed; a missing tool is
+# reported as skipped rather than passed, because silence is not success.
+set -uo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+pass=0; fail=0; skip=0
+ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; pass=$((pass+1)); }
+no()   { printf '  \033[31m✗\033[0m %s\n' "$*"; fail=$((fail+1)); }
+sk()   { printf '  \033[2m–\033[0m %s (not installed)\n' "$*"; skip=$((skip+1)); }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+DRIFT=0
+[[ "${1:-}" == "--drift" ]] && DRIFT=1
+
+ACTIVE="$(sed -n 's/^name *= *"\(.*\)"/\1/p' config/khadi/theme.toml 2>/dev/null | head -1)"
+ACTIVE="${ACTIVE:-tron}"
+
+if (( DRIFT )); then
+    echo "Drift"
+    if ./bin/khadi-theme build "$ACTIVE" --check >/dev/null 2>&1; then
+        ok "config/ matches templates/ for $ACTIVE"
+    else
+        no "config/ has drifted — run: khadi-theme build $ACTIVE"
+    fi
+    echo
+fi
+
+for theme in themes/*.toml; do
+    t="$(basename "$theme" .toml)"
+    echo "Theme: $t"
+    if ! ./bin/khadi-theme build "$t" >/dev/null 2>&1; then
+        no "render failed"; echo; continue
+    fi
+    ok "renders"
+
+    # Each app's own validator is the only authority on its own format.
+    if have foot; then
+        foot --check-config -c config/foot/foot.ini >/dev/null 2>&1 \
+            && ok "foot" || no "foot rejected its config"
+    else sk "foot"; fi
+
+    if have fuzzel; then
+        fuzzel --check-config --config=config/fuzzel/fuzzel.ini >/dev/null 2>&1 \
+            && ok "fuzzel" || no "fuzzel rejected its config"
+    else sk "fuzzel"; fi
+
+    python3 - <<'PY' && ok "toml outputs parse" || no "a TOML output is malformed"
+import tomllib, sys
+for f in ("config/yazi/theme.toml", "config/yazi/yazi.toml",
+          "config/helix/config.toml", "config/helix/themes/khadi.toml",
+          "config/greetd/config.toml", "config/khadi/theme.toml"):
+    try: tomllib.load(open(f, "rb"))
+    except Exception as e: print(f"    {f}: {e}"); sys.exit(1)
+PY
+
+    python3 - <<'PY' && ok "waybar json parses" || no "waybar json malformed"
+import json, re, sys
+s = open("config/waybar/config.jsonc").read()
+try: json.loads(re.sub(r"^\s*//.*$", "", s, flags=re.M))
+except Exception as e: print(f"    {e}"); sys.exit(1)
+PY
+
+    # The one-colour invariant: a theme that declares no ANSI must not leak a
+    # hue the palette does not contain. This is the check that caught yazi's
+    # 725 Material-coloured icon rules.
+    python3 - "$t" <<'PY' && ok "no colours outside the theme" || no "stray colours in output"
+import re, sys, tomllib, pathlib
+ctx = tomllib.load(open("config/khadi/theme.toml", "rb"))
+allowed = {v.lower() for sect in ("palette","ramp","role","terminal","ansi")
+           for v in ctx.get(sect, {}).values()
+           if isinstance(v, str) and v.startswith("#")}
+allowed |= {"#000000", "#ffffff"}
+bad = {}
+# Comment syntax is PER FORMAT, never guessed. A heuristic that treats any
+# line starting with "#" as a comment silently skips every CSS id selector —
+# which is exactly where stray colours hide. Caught by a negative control:
+# an injected #ff00ff in waybar's stylesheet passed a checker that "worked".
+LINE_COMMENT = {".css": None, ".jsonc": "//", ".kdl": "//",
+                ".ini": "#", ".conf": "#", ".toml": "#", ".theme": "#"}
+
+def strip_comments(text, suffix):
+    # Comments legitimately quote colours — the yazi theme names three of the
+    # Material hues it overrides. A checker that reads its own documentation
+    # as config reports a defect that is not there.
+    if suffix == ".css":
+        return re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    marker = LINE_COMMENT.get(suffix)
+    if marker is None:
+        return text
+    out = []
+    for line in text.splitlines():
+        if line.lstrip().startswith(marker): continue
+        out.append(re.sub(rf"\s+{re.escape(marker)}\s.*$", "", line))
+    return "\n".join(out)
+
+for f in pathlib.Path("config").rglob("*"):
+    if not f.is_file(): continue
+    body = strip_comments(f.read_text(errors="ignore"), f.suffix)
+    for m in re.findall(r"#[0-9a-fA-F]{6}\b", body):
+        if m.lower() not in allowed: bad.setdefault(str(f), set()).add(m)
+for f, c in sorted(bad.items()): print(f"    {f}: {', '.join(sorted(c))}")
+sys.exit(1 if bad else 0)
+PY
+    echo
+done
+
+./bin/khadi-theme build "$ACTIVE" >/dev/null 2>&1
+echo "────────────────────────────────────────────"
+printf '  %d passed, %d failed, %d skipped   (restored: %s)\n' "$pass" "$fail" "$skip" "$ACTIVE"
+exit $(( fail > 0 ))
