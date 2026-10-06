@@ -14,7 +14,7 @@ look like eDEX; that is Phase 3's job, and [PLAN.md](PLAN.md) explains why.
 ## Try it without installing anything
 
 ```sh
-git clone <this repo> khadi && cd khadi
+git clone git@github.com:jhayonline/khadi-linux.git khadi-linux && cd khadi-linux
 ./bin/khadi-dev
 ```
 
