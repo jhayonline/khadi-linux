@@ -20,7 +20,9 @@ monitor = , preferred, auto, 1
 # session just comes up without a terminal and nothing says why.
 exec-once = foot -e zellij -n khadi 2>$HOME/.cache/khadi-session.log
 exec-once = mako
-exec-once = waybar
+# khadi-bar replaces waybar (Phase 3b). It carries the two motifs a cell grid
+# cannot: the faithful sub-pixel bracket tick and the skewX(35deg) tab bar.
+exec-once = khadi-bar 2>$HOME/.cache/khadi-bar.log
 
 # ------------------------------------------------------------------ input --
 input {

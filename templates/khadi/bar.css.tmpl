@@ -1,0 +1,98 @@
+/* Khadi — khadi-bar stylesheet. Derived from the theme.
+ *
+ * This file carries the two motifs a cell grid cannot draw. Everything here
+ * is the eDEX geometry at its real proportions rather than an approximation:
+ * in CSS the bracket tick is sub-pixel decoration, where in a terminal it
+ * costs a whole row (Phase 0 measured 43% of screen height across nine
+ * headers, versus 23% for the one-row compromise the TUI uses).
+ */
+
+window.background,
+.bar {
+    background: {{ role.ground | hex }};
+    color: {{ role.text | hex }};
+    font-family: "{{ font.ui }}";
+    font-size: 12px;
+    /* MOTIF 1: the hairline. 0.3 alpha over the ground, flattened by
+     * khadi-theme. The single most repeated value in the whole design —
+     * 35 occurrences in eDEX's own stylesheets. */
+    border-bottom: 1px solid {{ role.rule | hex }};
+    min-height: 26px;
+}
+
+/* Uppercase, letter-spaced section labels. */
+.label {
+    color: {{ role.text_dim | hex }};
+    letter-spacing: 2px;
+    padding: 0 12px;
+}
+
+/* The clock, in the display face. eDEX sets it at 10vh and it is the single
+ * most prominent element on the screen. */
+.clock {
+    font-family: "{{ font.display }}";
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: {{ role.text | hex }};
+    padding: 0 20px;
+}
+
+.stat {
+    color: {{ role.text | hex }};
+    letter-spacing: 1px;
+    padding: 0 10px;
+    /* MOTIF 1 again, vertical: readouts are separated by the same hairline
+     * rather than by whitespace or a pill. */
+    border-left: 1px solid {{ role.rule | hex }};
+}
+
+/* ------------------------------------------------------------------------
+ * MOTIF 2: the angled tab bar.
+ *
+ * eDEX skews each tab into a parallelogram and skews the label back so the
+ * text stays upright:
+ *     transform: skewX(35deg)          on the <li>
+ *     transform: skewX(-35deg)         on its label
+ *     transform: skewX(35deg) scale(1.2)  on the active tab
+ *
+ * A terminal cannot skew anything — this is the motif that is structurally
+ * exclusive to this surface, and the reason Phase 3b exists at all.
+ * ---------------------------------------------------------------------- */
+.tabs {
+    margin-left: 6px;
+}
+
+.tab {
+    transform: skewX({{ chrome.tab_skew_deg }}deg);
+    background: {{ ramp.a10 | hex }};
+    border-bottom: 2px solid {{ role.rule | hex }};
+    margin-right: 6px;
+    padding: 0 16px;
+    min-width: 90px;
+}
+
+.tab-label {
+    /* Un-skew the text so only the container is a parallelogram. */
+    transform: skewX(-{{ chrome.tab_skew_deg }}deg);
+    color: {{ role.text_muted | hex }};
+    letter-spacing: 1px;
+    font-size: 11px;
+}
+
+.tab.active {
+    background: {{ ramp.a30 | hex }};
+    border-bottom: 2px solid {{ role.text | hex }};
+}
+
+.tab.active .tab-label {
+    color: {{ role.text | hex }};
+}
+
+/* eDEX has no rounded anything and no shadows: the chrome is hairlines and
+ * angles, and softening either reads as a different design language. */
+* {
+    border-radius: 0;
+    box-shadow: none;
+    text-shadow: none;
+}

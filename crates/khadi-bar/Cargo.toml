@@ -1,0 +1,27 @@
+# khadi-bar — the GTK layer-shell panel (Phase 3b).
+#
+# A SEPARATE BINARY from khadi-hud, not a `khadi-hud panel` subcommand as the
+# plan sketched. Three khadi-hud processes are resident in the layout at once;
+# linking all of GTK into each of them to serve a fourth, different surface is
+# a cost paid three times for no benefit. khadi-core is the shared part, which
+# is exactly why it carries no UI dependencies.
+#
+# Named `bar`, not `panel`, because bin/khadi-panel is already the zellij pane
+# wrapper and two different things with one name is how confusion starts.
+[package]
+name = "khadi-bar"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "khadi-bar"
+path = "src/main.rs"
+
+[dependencies]
+khadi-core = { path = "../khadi-core" }
+anyhow.workspace = true
+gtk4 = "0.11"
+gtk4-layer-shell = "0.8"
+glib = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }

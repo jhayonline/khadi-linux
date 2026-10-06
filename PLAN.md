@@ -2,7 +2,7 @@
 
 A keyboard-driven, terminal-first Arch distribution with an eDEX-UI aesthetic.
 
-Status: Phase 3a in progress — khadi-hud holds the system column.
+Status: Phase 3b started — khadi-bar draws the motifs a terminal cannot.
 Last updated 2026-10-06.
 
 ---
@@ -364,7 +364,7 @@ answer.
 | **0 · Spike** | days | Design tokens extracted; pane layout hand-built; fonts, terminal and compositor locked | **Zellij frames can carry the bracket-tick motif** — or the chrome moves into `khadi-hud` earlier than planned |
 | **1 · Dotfiles** ✅ | weeks 1–3 | One config repo, scriptable onto any Arch install. No packaging, no ISO, no hosting | Someone else runs the script and gets your desktop — **passed mechanically (42 checks, clean VM); not yet by a third party** |
 | **2 · Theme engine** 🔄 | weeks 3–6 | `khadi-theme` plus base16 templates. Three shipped themes to prove the pipeline generalises | One file change restyles every app in the stack — **passed**, verified live in the VM |
-| **3 · khadi-hud** 🔄 | weeks 6–12 | 3a: the ratatui dashboard. 3b: the layer-shell panel that retires Waybar | The product no longer reads as someone else's desktop with new colours — **A/B faithful count 1 → 8 of 18** |
+| **3 · khadi-hud** 🔄 | weeks 6–12 | 3a: the ratatui dashboard ✅. 3b: the layer-shell panel that retires Waybar 🔄 | The product no longer reads as someone else's desktop with new colours — **A/B faithful count 1 → 11 of 18, plus the skewed tab bar that only 3b can draw** |
 | **4 · Packaging** | weeks 10–14 | Signed repo, PKGBUILDs, keyring, meta-package, migrations | `pacman -S khadi` works on a clean Arch install |
 | **5 · Installer + ISO** | weeks 14–18 | archiso profile, Docker build, archinstall front-end, styled live TTY | A stranger installs from USB without asking you anything |
 | **6 · Operate** | ongoing | Breakage watch, migrations, release cadence, support load, hosting bill | No gate. This is the job from here on, and the part that decides whether Khadi survives |
@@ -1196,6 +1196,62 @@ Two details:
       so they may belong to the zellij layout rather than to `khadi-hud`.
 - [ ] The angled tab bar (item 11) stays impossible in a cell grid; it is 3b
       work, on the GTK panel.
+
+---
+
+## 10e. Phase 3b — current
+
+`khadi-bar` is a Wayland layer-shell panel. It exists for the two motifs a
+cell grid structurally cannot draw, and both now render.
+
+### The angled tab bar works
+
+eDEX skews each tab into a parallelogram and skews the label back so the text
+stays upright — `skewX(35deg)` on the container, `skewX(-35deg)` on the label.
+A terminal cannot skew anything. **GTK4's CSS parser accepts `skewX` with zero
+errors**, verified against the generated stylesheet before any of the panel was
+written, and the tabs render as parallelograms in the VM.
+
+That motif was found during the Phase 0 A/B and logged as *impossible* — it is
+the one element of the eighteen that could only ever live here.
+
+### The bracket tick, at full fidelity
+
+In a terminal the tick costs a whole row: Phase 0 measured 43% of screen height
+across nine headers, against 23% for the one-row compromise the TUI uses. In
+CSS it is sub-pixel decoration, exactly as eDEX had it. The bar uses the
+faithful geometry.
+
+### Decisions
+
+- **A separate binary, not `khadi-hud panel`.** The plan sketched a subcommand.
+  Three `khadi-hud` processes are resident in the layout at once; linking all
+  of GTK into each of them to serve a fourth, different surface is a cost paid
+  three times for nothing. `khadi-core` carries no UI dependencies precisely
+  so this split is free.
+- **Named `khadi-bar`, not `khadi-panel`.** `bin/khadi-panel` is already the
+  zellij pane wrapper, and two different things with one name is how confusion
+  starts.
+- **The stylesheet is generated like every other config.**
+  `templates/khadi/bar.css.tmpl` → `config/khadi/bar.css`, so the bar cannot
+  drift from the palette the rest of the system uses.
+- **GTK4 and gtk4-layer-shell are new runtime dependencies.** waybar used GTK3,
+  so this is genuinely new weight, caught by the VM refusing to start the
+  binary. Both are in `extra`; the manifest is 21 packages, all verified.
+
+### Not yet done
+
+- [ ] **waybar is still installed and configured.** It is kept one release as
+      a fallback while `khadi-bar` proves itself on real hardware rather than
+      in a VM with software rendering. Retiring it means deleting
+      `config/waybar/`, its templates and its package entry.
+- [ ] Workspace tabs are static placeholders. They should reflect Hyprland's
+      actual workspaces over its IPC socket.
+- [ ] No click handling. eDEX's tabs are clickable; Khadi is keyboard-driven,
+      so this may stay as it is deliberately.
+- [ ] The bar duplicates readouts `khadi-hud` already shows. eDEX puts chrome
+      along the top, so this is faithful, but it is worth asking whether both
+      should exist on a small screen.
 
 ---
 

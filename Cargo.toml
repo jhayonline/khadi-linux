@@ -6,7 +6,7 @@
 #             grid or a widget tree does not belong here.
 # khadi-hud   the binary. `dash` today; `panel` in 3b.
 [workspace]
-members = ["crates/khadi-core", "crates/khadi-hud"]
+members = ["crates/khadi-core", "crates/khadi-hud", "crates/khadi-bar"]
 resolver = "2"
 
 [workspace.package]
