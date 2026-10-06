@@ -732,7 +732,8 @@ desktop.**
       `config/fuzzel/fuzzel.ini`. Neither package is installed here, so they
       were written against the upstream schema at the exact packaged version
       (yazi v26.9.1, fuzzel 1.15.0) and cross-checked key by key. See below.
-- [ ] Configs for the remaining uninstalled pieces: mako, waybar, helix
+- [ ] Configs for the remaining uninstalled pieces: mako, helix
+      *(waybar retired in Phase 3b; see section 10e)*
 - [x] **VM tooling written** — `vm/khadi-vm`, `vm/provision.sh`,
       `vm/README.md`. Plain QEMU, no libvirt: one script, no daemon, nothing
       added to host system state beyond two packages. UEFI via OVMF because
@@ -1239,12 +1240,49 @@ faithful geometry.
   so this is genuinely new weight, caught by the VM refusing to start the
   binary. Both are in `extra`; the manifest is 21 packages, all verified.
 
-### Not yet done
+### Tested on real hardware, and waybar is retired
 
-- [ ] **waybar is still installed and configured.** It is kept one release as
-      a fallback while `khadi-bar` proves itself on real hardware rather than
-      in a VM with software rendering. Retiring it means deleting
-      `config/waybar/`, its templates and its package entry.
+`khadi-bar` was run on a real Hyprland session with a real GPU — not the VM's
+software rendering. The angled tabs render, the hairlines are crisp, nothing
+broke. waybar is now gone from `packages.txt`, the installer, the checker and
+the templates; `khadi-theme` pruned its generated configs as orphans.
+
+Two things made that test safe to run on a live desktop, and both are worth
+keeping:
+
+- **`KHADI_BAR_OVERLAY=1`** floats the bar instead of claiming an exclusive
+  zone. Without it the compositor reserves the strip and reshuffles every
+  window on screen, which is correct in a Khadi session and hostile when
+  testing on a desktop that already has a bar.
+- Fonts were loaded from `XDG_DATA_HOME=/tmp/...` rather than installed, so
+  nothing persisted to the host.
+
+### The typography had never been seen
+
+**`Rajdhani` and `Orbitron` are installed nowhere** — not on the development
+machine, not in the VM. Every screenshot of the bar until this test was
+rendering in *fallback* faces. The fonts locked in Phase 0 had never actually
+appeared on a screen, and nothing in the gate or `khadi-check` noticed, because
+a missing font is not an error: fontconfig silently substitutes.
+
+With them loaded the difference is obvious — Orbitron's wide geometric clock
+and Rajdhani's squared labels are the eDEX character the substitution was
+chosen for. The Phase 0 lock holds up. But it was being reported on without
+ever having been looked at.
+
+**This promotes `khadi-fonts` out of Phase 4.** It was filed as packaging work,
+which assumed it only mattered at distribution time. It does not: without it
+Khadi renders in the wrong faces on every machine including the author's, and
+the failure is invisible. Vendoring the OFL files into the repo and installing
+them is now Phase 3b work, ahead of packaging.
+
+A check belongs with it: the gate should fail if a font the theme names is not
+resolvable, because silent substitution is exactly the failure mode here.
+
+### Not yet done
+- [ ] **Vendor `khadi-fonts`** — Rajdhani and Orbitron into the repo, an
+      installer step, and a gate check that fails on an unresolvable font.
+      Promoted from Phase 4 by the finding above.
 - [ ] Workspace tabs are static placeholders. They should reflect Hyprland's
       actual workspaces over its IPC socket.
 - [ ] No click handling. eDEX's tabs are clickable; Khadi is keyboard-driven,

@@ -66,13 +66,6 @@ for f in ("config/yazi/theme.toml", "config/yazi/yazi.toml",
     except Exception as e: print(f"    {f}: {e}"); sys.exit(1)
 PY
 
-    python3 - <<'PY' && ok "waybar json parses" || no "waybar json malformed"
-import json, re, sys
-s = open("config/waybar/config.jsonc").read()
-try: json.loads(re.sub(r"^\s*//.*$", "", s, flags=re.M))
-except Exception as e: print(f"    {e}"); sys.exit(1)
-PY
-
     # The one-colour invariant: a theme that declares no ANSI must not leak a
     # hue the palette does not contain. This is the check that caught yazi's
     # 725 Material-coloured icon rules.
@@ -87,7 +80,7 @@ bad = {}
 # Comment syntax is PER FORMAT, never guessed. A heuristic that treats any
 # line starting with "#" as a comment silently skips every CSS id selector —
 # which is exactly where stray colours hide. Caught by a negative control:
-# an injected #ff00ff in waybar's stylesheet passed a checker that "worked".
+# an injected #ff00ff in a GTK stylesheet passed a checker that "worked".
 LINE_COMMENT = {".css": None, ".jsonc": "//", ".kdl": "//",
                 ".ini": "#", ".conf": "#", ".toml": "#", ".theme": "#"}
 

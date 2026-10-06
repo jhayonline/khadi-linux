@@ -77,7 +77,16 @@ fn build(app: &Application) {
     ] {
         window.set_anchor(edge, on);
     }
-    window.auto_exclusive_zone_enable();
+    // The exclusive zone makes the compositor reserve the strip. That is right
+    // in a Khadi session and wrong when testing on a desktop that already has
+    // a bar, because it reshuffles every window on screen. KHADI_BAR_OVERLAY=1
+    // floats it instead, which tests rendering without rearranging anything.
+    if std::env::var("KHADI_BAR_OVERLAY").is_ok() {
+        window.set_layer(Layer::Overlay);
+        window.set_exclusive_zone(0);
+    } else {
+        window.auto_exclusive_zone_enable();
+    }
 
     let root = gtk4::CenterBox::new();
     root.add_css_class("bar");

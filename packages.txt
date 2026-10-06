@@ -10,8 +10,6 @@ foot               # terminal; locked Phase 0 (CPU-rendered, tunable box strokes
 zellij             # panes; does layout, not looks
 fuzzel             # launcher, Wayland-native
 mako               # notifications
-waybar             # bar — superseded by khadi-bar; kept one release as a
-                   # fallback while khadi-bar proves itself on real hardware
 gtk4               # khadi-bar runtime. waybar used GTK3, so this is new.
 gtk4-layer-shell   # the layer-shell protocol binding khadi-bar needs
 hyprlock           # lock screen
