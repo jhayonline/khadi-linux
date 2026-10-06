@@ -25,6 +25,18 @@ have() { command -v "$1" >/dev/null 2>&1; }
 DRIFT=0
 [[ "${1:-}" == "--drift" ]] && DRIFT=1
 
+echo "Fonts"
+# Repo integrity: is every family OBTAINABLE — vendored here, or from a
+# package? Whether this particular machine has them installed is the gate's
+# question, not the repo's.
+if ./bin/khadi-fontcheck --vendored fonts config/khadi/theme.toml >/dev/null 2>&1; then
+    ok "every family the theme names is vendored or packaged"
+else
+    no "a theme font is neither vendored nor available"
+    ./bin/khadi-fontcheck --vendored fonts config/khadi/theme.toml 2>&1 | grep '✗' | sed 's/^/    /'
+fi
+echo
+
 ACTIVE="$(sed -n 's/^name *= *"\(.*\)"/\1/p' config/khadi/theme.toml 2>/dev/null | head -1)"
 ACTIVE="${ACTIVE:-tron}"
 

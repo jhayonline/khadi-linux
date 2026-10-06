@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# khadi-fontcheck — does every family the theme names actually resolve?
+#
+# This exists because of a specific failure. Khadi ran for an entire phase
+# rendering in the wrong typefaces, on every machine including the author's,
+# and nothing caught it: the gate passed, khadi-check passed, every screenshot
+# looked plausible. **A missing font is not an error.** fontconfig silently
+# substitutes its nearest match and reports success, so "it rendered" proves
+# nothing about what it rendered with.
+#
+# The test is therefore not "did it render" but "is what fontconfig would use
+# the thing we asked for".
+#
+#   khadi-fontcheck                   is this MACHINE able to render the theme?
+#   khadi-fontcheck <theme.toml>      same, for a specific theme
+#   khadi-fontcheck --vendored <dir> <theme.toml>
+#                                     is the font OBTAINABLE at all — shipped
+#                                     in the repo, or resolvable from a package?
+#
+# The two questions are different and both matter. The gate asks the first, on
+# an installed system. khadi-check asks the second, in the repo, where nothing
+# is installed and asking the first would only report that fact.
+set -uo pipefail
+
+: "${XDG_CONFIG_HOME:=$HOME/.config}"
+VENDORED=""
+if [[ "${1:-}" == "--vendored" ]]; then
+    VENDORED="${2:?--vendored needs a directory}"
+    shift 2
+fi
+THEME="${1:-$XDG_CONFIG_HOME/khadi/theme.toml}"
+
+if [[ ! -r "$THEME" ]]; then
+    echo "khadi-fontcheck: no theme at $THEME" >&2
+    exit 2
+fi
+if ! command -v fc-match >/dev/null 2>&1; then
+    echo "khadi-fontcheck: fc-match not found (fontconfig)" >&2
+    exit 2
+fi
+
+fail=0
+# Read the [font] table. Values are family names, which may contain spaces.
+while IFS= read -r line; do
+    key="${line%%=*}"; key="${key// /}"
+    want="${line#*=}"
+    want="$(printf '%s' "$want" | sed 's/^[[:space:]]*"//; s/"[[:space:]]*$//')"
+    [[ -z "$want" ]] && continue
+
+    # fc-match ALWAYS answers. A family that is absent comes back as whatever
+    # the default is, which is why comparing the answer is the whole test.
+    #
+    # Compare family AND style: "Rajdhani Light" is family "Rajdhani", style
+    # "Light", so matching the family alone reports a false negative on every
+    # style-qualified name. The first version of this check did exactly that.
+    # Vendored mode: does a file in the repo declare this family (and style)?
+    # Falls through to the system for families that ship as packages — mono is
+    # extra/ttc-iosevka, not something Khadi vendors.
+    if [[ -n "$VENDORED" ]]; then
+        if fc-scan --format '%{family[0]}|%{style[0]}\n' "$VENDORED" 2>/dev/null \
+           | awk -F'|' -v w="${want,,}" '
+               { fam=tolower($1); both=tolower($1" "$2) }
+               fam==w || both==w { found=1 }
+               END { exit !found }'; then
+            printf '  \033[32m✓\033[0m %-10s %s (vendored)\n' "$key" "$want"
+            continue
+        fi
+    fi
+
+    got_fam="$(fc-match -f '%{family[0]}' "$want" 2>/dev/null)"
+    got_style="$(fc-match -f '%{style[0]}' "$want" 2>/dev/null)"
+    combined="$got_fam $got_style"
+
+    if [[ "${got_fam,,}" == "${want,,}" || "${combined,,}" == "${want,,}" ]]; then
+        printf '  \033[32m✓\033[0m %-10s %s\n' "$key" "$want"
+    else
+        printf '  \033[31m✗\033[0m %-10s %s — fontconfig would use %s\n' \
+               "$key" "$want" "${combined:-nothing}"
+        fail=$((fail+1))
+    fi
+done < <(awk '/^\[font\]/{f=1;next} /^\[/{f=0} f && /=/' "$THEME")
+
+if (( fail )); then
+    echo
+    echo "  $fail font(s) unresolvable. Khadi will render in substitutes and"
+    echo "  nothing else will report a problem. Install them:"
+    echo "      khadi-install --apply   (vendored faces -> ~/.local/share/fonts/khadi)"
+fi
+exit $(( fail > 0 ))

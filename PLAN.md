@@ -1280,9 +1280,26 @@ A check belongs with it: the gate should fail if a font the theme names is not
 resolvable, because silent substitution is exactly the failure mode here.
 
 ### Not yet done
-- [ ] **Vendor `khadi-fonts`** — Rajdhani and Orbitron into the repo, an
-      installer step, and a gate check that fails on an unresolvable font.
-      Promoted from Phase 4 by the finding above.
+- [x] **`khadi-fonts` vendored** — `fonts/` carries Rajdhani (Light, Regular,
+      Medium) and Orbitron with their OFL licences, 1.2 MB. `khadi-install`
+      links them into `~/.local/share/fonts/khadi`, rebuilds the fontconfig
+      cache and verifies the result; `--uninstall` removes the link. Iosevka
+      Term stays a package dependency until the Phase 4 subset replaces the
+      446 MB `ttc-iosevka`.
+- [x] **`bin/khadi-fontcheck`** — the check that was missing. It asks
+      fontconfig what it *would actually use* for each family the theme names
+      and fails when the answer is something else, because "it rendered" says
+      nothing about what it rendered with.
+
+      Two modes, because there are two different questions. The **gate** asks
+      whether this machine can render the theme. **khadi-check** asks whether
+      the font is obtainable at all — vendored here or available from a
+      package — since nothing is installed in a repo and asking the first
+      question there would only report that fact.
+
+      The first version had a false negative: it compared family alone, so
+      `Rajdhani Light` (family `Rajdhani`, style `Light`) failed against a
+      correctly installed font. It now compares family and style.
 - [ ] Workspace tabs are static placeholders. They should reflect Hyprland's
       actual workspaces over its IPC socket.
 - [ ] No click handling. eDEX's tabs are clickable; Khadi is keyboard-driven,

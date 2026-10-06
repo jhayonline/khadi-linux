@@ -64,6 +64,21 @@ else
 fi
 echo
 
+echo "  Fonts"
+if command -v khadi-fontcheck >/dev/null 2>&1; then
+    # The check that a whole phase needed: fontconfig substitutes silently, so
+    # "it rendered" says nothing about what it rendered with.
+    if khadi-fontcheck "$XDG_CONFIG_HOME/khadi/theme.toml" >/dev/null 2>&1; then
+        ok "every theme font resolves"
+    else
+        no "a theme font resolves to a substitute"
+        khadi-fontcheck "$XDG_CONFIG_HOME/khadi/theme.toml" 2>&1 | grep '✗' | sed 's/^/    /'
+    fi
+else
+    no "khadi-fontcheck not installed"
+fi
+echo
+
 echo "  Config validity"
 foot --check-config -c "$XDG_CONFIG_HOME/foot/foot.ini" 2>/dev/null \
     && ok "foot --check-config" || no "foot config rejected"

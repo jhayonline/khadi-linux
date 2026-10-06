@@ -49,11 +49,16 @@ say()  { printf '  %s\n' "$*"; }
 act()  { if (( APPLY )); then "$@"; fi; }
 
 CONFIGS=(foot zellij btop hypr yazi fuzzel helix mako khadi)
-BINS=(khadi-panel khadi-cheatsheet khadi-dev khadi-theme khadi-check)
+BINS=(khadi-panel khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontcheck)
 
 # ---------------------------------------------------------------- uninstall
 if (( UNINSTALL )); then
     echo "Khadi uninstall $( ((APPLY)) || echo '(dry run)' )"
+    fd="${XDG_DATA_HOME:-$HOME/.local/share}/fonts/khadi"
+    if [[ -L "$fd" ]]; then
+        say "unlink  $fd"
+        act rm "$fd"
+    fi
     for prof in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile" \
                 "$HOME/.zprofile" "$HOME/.config/fish/conf.d/khadi-path.fish"; do
         [[ -f "$prof" ]] && grep -qsF '# >>> khadi path >>>' "$prof" || continue
@@ -200,6 +205,31 @@ esac
 export PATH
 # <<< khadi path <<<
 PROF
+    fi
+fi
+
+# ------------------------------------------------------------------ fonts
+# Vendored because Rajdhani and Orbitron are not in Arch's official repos and
+# a Khadi install cannot depend on the AUR. This runs BEFORE the font check
+# below, which is the thing that would have caught a whole phase of rendering
+# in Liberation Sans without anyone noticing.
+FONTDIR="${XDG_DATA_HOME:-$HOME/.local/share}/fonts/khadi"
+echo
+echo "Fonts:"
+say "link    $FONTDIR -> $ROOT/fonts"
+if (( APPLY )); then
+    mkdir -p "$(dirname "$FONTDIR")"
+    [[ -e "$FONTDIR" && ! -L "$FONTDIR" ]] && mv "$FONTDIR" "$FONTDIR.khadi-backup-$STAMP"
+    ln -sfn "$ROOT/fonts" "$FONTDIR"
+    if command -v fc-cache >/dev/null 2>&1; then
+        fc-cache -f "$ROOT/fonts" >/dev/null 2>&1 && say "fc-cache rebuilt"
+    fi
+    # A missing font is not an error — fontconfig substitutes silently — so the
+    # install verifies rather than assuming.
+    if "$ROOT/bin/khadi-fontcheck" "$ROOT/config/khadi/theme.toml" >/dev/null 2>&1; then
+        say "all theme fonts resolve"
+    else
+        say "WARNING: some theme fonts do not resolve — run khadi-fontcheck"
     fi
 fi
 
