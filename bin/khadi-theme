@@ -27,7 +27,7 @@ and nothing else — no loops, no conditionals, because the generator resolves
 everything to flat values first. A dependency on Jinja would be larger than
 the feature.
 """
-import argparse, difflib, json, re, sys, tomllib
+import argparse, difflib, json, os, re, sys, tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -168,6 +168,21 @@ COMMENT = {".css": ("/* ", " */"), ".jsonc": ("// ", ""), ".kdl": ("// ", ""),
            ".conf": ("# ", ""), ".ini": ("# ", ""), ".toml": ("# ", ""),
            ".theme": ("# ", "")}
 
+def write_atomic(dst: Path, text: str) -> None:
+    """Write via a temp file and rename.
+
+    `Path.write_text` truncates first, and a config watcher that reads during
+    that window sees an empty file. Hyprland's does exactly that and writes its
+    own stub back — observed in the VM, where `config/hypr/hyprland.conf` came
+    out of a `khadi-theme build` as "# This config is a STUB!". A rename on the
+    same filesystem is atomic, so a watcher sees either the old file or the new
+    one and never nothing.
+    """
+    tmp = dst.with_name(dst.name + ".khadi-tmp")
+    tmp.write_text(text)
+    os.replace(tmp, dst)
+
+
 def banner(path, theme):
     open_, close = COMMENT.get(path.suffix, ("# ", ""))
     if path.name == "hyprland.conf":
@@ -222,7 +237,7 @@ def cmd_build(a):
         if old != rendered_theme: print("  ~ khadi/theme.toml")
     else:
         resolved.parent.mkdir(parents=True, exist_ok=True)
-        resolved.write_text(rendered_theme)
+        write_atomic(resolved, rendered_theme)
         print("  wrote khadi/theme.toml  (resolved)")
     for t in tmpls:
         rel = t.relative_to(TEMPLATES).with_suffix("")   # strip .tmpl
@@ -241,7 +256,7 @@ def cmd_build(a):
                 print("      " + line.rstrip())
         else:
             dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_text(new)
+            write_atomic(dst, new)
             print(f"  wrote {rel}")
     # config/ is build output, so the generator owns it entirely: a file with
     # no template behind it is stale and must go. Without this, renaming a
