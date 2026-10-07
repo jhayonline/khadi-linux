@@ -59,6 +59,52 @@ if have pacman; then
 else sk "pacman"; fi
 echo
 
+# Every app a keybinding launches has to be something the install actually
+# provides. `Super+B` pointed at chromium for two phases while the manifest
+# never mentioned it: on a clean machine that key did nothing, silently, and
+# no check noticed because each half was internally consistent.
+echo "Keybinds vs manifest"
+miss=0; n=0
+while read -r app; do
+    [[ -z "$app" ]] && continue
+    n=$((n+1))
+    grep -qE "^${app}( |$)" packages.txt && continue
+    [[ -x "bin/$app" ]] && continue   # one of Khadi's own, shipped in bin/
+    printf '    %s is launched by a keybind, and is neither in packages.txt nor bin/\n' "$app"
+    miss=$((miss+1))
+done < <(grep -oE '^bind.*exec, *[a-zA-Z0-9._-]+' config/hypr/hyprland.conf 2>/dev/null \
+         | sed -E 's/.*exec, *//' | sort -u)
+if (( miss == 0 )); then ok "all $n keybound apps are provided"
+else no "$miss of $n keybound apps are provided by nothing"; fi
+echo
+
+# The backend NAMES in the portal config have to match installed .portal
+# files, and the one handed FileChooser has to actually implement it. Both
+# fail silently otherwise: xdg-desktop-portal picks whatever is available and
+# the user gets a different picker, or none, with nothing in any log they
+# would think to read.
+echo "Portal backends"
+PORTALS=/usr/share/xdg-desktop-portal/portals
+PCONF=config/xdg-desktop-portal/hyprland-portals.conf
+if [[ -d "$PORTALS" ]]; then
+    bad=0
+    for b in $(grep -v '^[[:space:]]*#' "$PCONF" | sed -nE 's/^[^=]+=//p' | tr ';' '\n' | sort -u); do
+        [[ -z "$b" ]] && continue
+        [[ -f "$PORTALS/$b.portal" ]] \
+            || { printf '    %s is named in the config but %s/%s.portal does not exist\n' \
+                 "$b" "$PORTALS" "$b"; bad=$((bad+1)); }
+    done
+    fc=$(grep -v '^[[:space:]]*#' "$PCONF" | sed -nE 's/^org\.freedesktop\.impl\.portal\.FileChooser=//p')
+    if [[ -n "$fc" ]] && [[ -f "$PORTALS/$fc.portal" ]] \
+       && ! grep -q 'org\.freedesktop\.impl\.portal\.FileChooser' "$PORTALS/$fc.portal"; then
+        printf '    FileChooser is routed to %s, which does not implement it\n' "$fc"
+        bad=$((bad+1))
+    fi
+    if (( bad == 0 )); then ok "every portal backend named exists and implements what it is given"
+    else no "$bad portal backend problem(s)"; fi
+else sk "xdg-desktop-portal"; fi
+echo
+
 echo "Fonts"
 # Repo integrity: is every family OBTAINABLE — vendored here, or from a
 # package? Whether this particular machine has them installed is the gate's
@@ -123,6 +169,27 @@ for f in ("config/yazi/theme.toml", "config/yazi/yazi.toml",
     try: tomllib.load(open(f, "rb"))
     except Exception as e: print(f"    {f}: {e}"); sys.exit(1)
 PY
+
+    # The GUI side. These are what make a browser's file picker work and stop
+    # every GTK app coming up blazing white; a typo here fails open and silent.
+    python3 - <<'GUICFG' && ok "portal and GTK configs parse" || no "a GUI config is malformed"
+import configparser, sys
+for f in ("config/xdg-desktop-portal/hyprland-portals.conf",
+          "config/gtk-3.0/settings.ini", "config/gtk-4.0/settings.ini"):
+    c = configparser.ConfigParser()
+    try: c.read(f)
+    except Exception as e: print(f"    {f}: {e}"); sys.exit(1)
+    if not c.sections(): print(f"    {f}: no sections"); sys.exit(1)
+# Both backends, or a file picker that opens nothing. hyprland's portal does
+# not implement FileChooser -- measured from the installed .portal files.
+c = configparser.ConfigParser()
+c.read("config/xdg-desktop-portal/hyprland-portals.conf")
+pref = c["preferred"]
+if "gtk" not in pref.get("default", "") \
+   and "gtk" not in pref.get("org.freedesktop.impl.portal.filechooser", ""):
+    print("    FileChooser has no gtk backend")
+    sys.exit(1)
+GUICFG
 
     # The one-colour invariant: a theme that declares no ANSI must not leak a
     # hue the palette does not contain. This is the check that caught yazi's

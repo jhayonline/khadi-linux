@@ -199,6 +199,28 @@ if pgrep -x Hyprland >/dev/null 2>&1; then
     esac
     e=$(hyprctl configerrors 2>/dev/null | grep -cv '^[[:space:]]*$')
     [[ "$e" -eq 0 ]] && ok "no config errors" || no "$e config errors"
+
+    # GUI apps. Khadi is terminal-first, not terminal-only, and this is the
+    # difference between a browser that can open a file and one that cannot.
+    # Both failures are silent at the app end, so the gate has to ask.
+    if busctl --user list 2>/dev/null | grep -q org.freedesktop.portal.Desktop; then
+        ok "xdg-desktop-portal is on the session bus"
+    else
+        no "no portal on the session bus — file pickers and screen sharing will fail"
+    fi
+    # The portal is D-Bus activated and inherits the ACTIVATION environment,
+    # not the session's. Without XDG_CURRENT_DESKTOP in it, it never matches
+    # hyprland-portals.conf and silently picks its own backend.
+    if systemctl --user show-environment 2>/dev/null | grep -q '^XDG_CURRENT_DESKTOP='; then
+        ok "XDG_CURRENT_DESKTOP is in the activation environment"
+    else
+        no "XDG_CURRENT_DESKTOP missing from the activation environment — hyprland-portals.conf will not match"
+    fi
+    cs=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null)
+    case "$cs" in
+        *prefer-dark*) ok "colour scheme is prefer-dark" ;;
+        *) no "colour scheme is ${cs:-unset} — libadwaita apps will come up light" ;;
+    esac
 else
     note "Hyprland not running — loaded-state checks skipped"
 fi

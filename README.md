@@ -74,6 +74,8 @@ crates/khadi-bar      the Wayland layer-shell panel, for the motifs a cell
 themes/tron.toml      the design system — one file, everything derives from it
 templates/            the source of every config; config/ is build output
 config/               mirrors ~/.config — GENERATED, do not edit
+                      (includes GTK and xdg-desktop-portal: Khadi is
+                      terminal-FIRST, not terminal-only)
 fonts/                Rajdhani and Orbitron, vendored with their OFL licences
 packages.txt          dependency manifest, official repos only
 vm/gate.sh            the install gate, run inside a clean Arch VM

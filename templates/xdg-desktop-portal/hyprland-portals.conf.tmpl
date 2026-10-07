@@ -1,0 +1,27 @@
+# Khadi — which portal backend answers which request.
+#
+# THIS FILE IS WHY GUI APPS WORK AT ALL. A portal is how a sandboxed or
+# toolkit-agnostic app asks the desktop to open a file, share a screen or pick
+# a colour. With no backend configured, a browser's "upload file" button opens
+# nothing and screen sharing fails, with no error a user can act on.
+#
+# TWO BACKENDS ARE REQUIRED, which is the part that is easy to get wrong.
+# Measured from the installed .portal files rather than assumed:
+#
+#   hyprland.portal  Screenshot, ScreenCast, GlobalShortcuts, InputCapture
+#   gtk.portal       FileChooser, AppChooser, Print, Notification, Settings,
+#                    Account, Email, Lockdown, DynamicLauncher, Inhibit, Access
+#
+# The Hyprland backend does NOT implement FileChooser. Installing it alone —
+# the obvious reading of "the portal for Hyprland" — gets you screen sharing
+# and still no file picker.
+#
+# Matched because XDG_CURRENT_DESKTOP contains "Hyprland", which Hyprland sets
+# for its own session.
+
+[preferred]
+# Tried in order, so Hyprland answers what it implements and GTK takes the
+# rest. Listing only `hyprland` here would leave the others unanswered.
+default=hyprland;gtk
+org.freedesktop.impl.portal.FileChooser=gtk
+org.freedesktop.impl.portal.Settings=gtk

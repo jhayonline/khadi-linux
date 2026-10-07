@@ -20,6 +20,19 @@ grim               # screenshot
 slurp              # region select
 wl-clipboard       # clipboard
 
+# --- GUI apps ----------------------------------------------------------
+# Khadi is terminal-FIRST, not terminal-only. A portal is how a GUI app asks
+# the desktop to open a file or share a screen, and BOTH backends are needed:
+# read from the installed .portal files, hyprland's implements Screenshot,
+# ScreenCast, GlobalShortcuts and InputCapture — and not FileChooser, which
+# is gtk's. Installing only the Hyprland one is the obvious mistake and it
+# leaves you with screen sharing and no file picker.
+xdg-desktop-portal          # the frontend every GUI app talks to
+xdg-desktop-portal-hyprland # screencast, screenshot, global shortcuts
+xdg-desktop-portal-gtk      # file chooser, print, settings (colour scheme)
+chromium                    # what Super+B launches. The keybind already
+                            # committed to it; the manifest now says so.
+
 # --- workspace ---------------------------------------------------------
 btop               # system panels; see the measured width minimums in PLAN.md
 yazi               # file browser

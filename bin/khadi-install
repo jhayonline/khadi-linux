@@ -48,7 +48,7 @@ done
 say()  { printf '  %s\n' "$*"; }
 act()  { if (( APPLY )); then "$@"; fi; }
 
-CONFIGS=(foot zellij btop hypr yazi fuzzel helix mako khadi)
+CONFIGS=(foot zellij btop hypr yazi fuzzel helix mako khadi gtk-3.0 gtk-4.0 xdg-desktop-portal)
 BINS=(khadi-panel khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontcheck)
 
 # ---------------------------------------------------------------- uninstall

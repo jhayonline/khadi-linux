@@ -1639,6 +1639,78 @@ what costs. Worth remembering before optimising anything here on instinct.
 
 ---
 
+## 10j. GUI apps
+
+Section 6 has always said it — *"windows exist for browsers and graphical
+apps, not for terminals"* — but nothing in the stack acted on it. Khadi is
+terminal-**first**, not terminal-only, and GUI apps were supported only in the
+sense that Hyprland will run anything you launch.
+
+### The functional half: portals, and the mistake everyone makes
+
+A portal is how an app asks the desktop to open a file or share a screen.
+There were none in the manifest, so a browser's upload button opened nothing
+and screen sharing failed — silently, with nothing in a log a user would think
+to read.
+
+**Two backends are required.** Read from the installed `.portal` files rather
+than assumed:
+
+| backend | implements |
+| --- | --- |
+| `hyprland.portal` | Screenshot, ScreenCast, GlobalShortcuts, InputCapture |
+| `gtk.portal` | FileChooser, AppChooser, Print, Notification, Settings, … |
+
+The Hyprland backend does **not** implement FileChooser. Installing it alone —
+the obvious reading of "the portal for Hyprland" — gets you screen sharing and
+still no file picker. `khadi-check` now verifies that every backend named in
+the config exists *and* implements what it was handed; both negative controls
+fire, including routing FileChooser to `hyprland`.
+
+**The portal is D-Bus activated**, so it inherits the activation environment,
+not the session's. Without `XDG_CURRENT_DESKTOP` in it the portal never matches
+`hyprland-portals.conf` and quietly picks its own backend, which is why the
+session now runs `dbus-update-activation-environment`.
+
+### The aesthetic half: settings, not a theme
+
+Phase 2's claim is "one file change restyles every app in the stack", and GUI
+apps were not in the stack — so the first one you opened came up in default
+Adwaita, light grey and rounded. That reads worse than no theme at all, because
+it is a seam rather than an absence.
+
+The restraint matters more than the coverage. A full GTK theme is thousands of
+lines chasing libadwaita, which is section 11's rolling-release risk multiplied
+by the largest config surface in the project, for apps Khadi does not own. What
+ships is the dark preference, the UI font, and a `gtk.css` of colour
+definitions — **recolouring only**. `bar.css` squares off every corner it owns
+because it owns those widgets; this file does not, and a stylesheet that fights
+someone else's toolkit loses slowly, in ways that surface months later as "this
+app looks broken".
+
+**libadwaita ignores `gtk-application-prefer-dark-theme`.** It asks the Settings
+portal, which reads gsettings — so `settings.ini` alone leaves every modern
+GNOME app blazing white on a near-black desktop. The session sets
+`color-scheme: prefer-dark` and the gate checks it.
+
+### A dangling keybind, and the check for the class
+
+`Super+B` launched `chromium`, which was never in the manifest. On a clean
+install that key did nothing, silently, and no check noticed because each half
+was internally consistent on its own — the same shape as the gate keeping its
+own copy of the installer's lists (section 10g).
+
+`khadi-check` now requires every app a keybind launches to be in `packages.txt`
+or in `bin/`. `chromium` is in the manifest because the keybind already
+committed to it; if Khadi should not ship a browser, the fix is to drop the
+bind instead, and the check holds either way.
+
+**Not yet verified:** that a file picker actually opens. That needs a running
+Khadi session, and the loaded-state gate checks for it exist but have only been
+exercised against the host's own compositor.
+
+---
+
 ## 11. Risks and open decisions
 
 | Risk | Why it bites | Mitigation |

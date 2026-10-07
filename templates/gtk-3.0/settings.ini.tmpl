@@ -1,0 +1,18 @@
+# Khadi — GTK3 settings.
+#
+# Phase 2's claim is "one file change restyles every app in the stack". GUI
+# apps were not in the stack: the first one you opened came up in default
+# Adwaita — light grey, rounded — which reads worse than no theme at all,
+# because it is a seam rather than an absence.
+#
+# SETTINGS, NOT A THEME. A full GTK theme is thousands of lines chasing
+# libadwaita, which is the rolling-release risk (section 11) multiplied by the
+# largest config surface in the project, for apps Khadi does not own. The dark
+# preference and the font are four lines, have been stable for a decade, and
+# carry most of the coherence. `gtk.css` beside this recolours the rest.
+
+[Settings]
+gtk-theme-name=Adwaita-dark
+gtk-icon-theme-name=Adwaita
+gtk-application-prefer-dark-theme=1
+gtk-font-name={{ font.ui }} 11

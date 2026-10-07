@@ -24,6 +24,20 @@ exec-once = mako
 # cannot: the faithful sub-pixel bracket tick and the skewX(35deg) tab bar.
 exec-once = khadi-bar 2>$HOME/.cache/khadi-bar.log
 
+# GUI APPS. Khadi is terminal-first, not terminal-only — PLAN.md section 6 is
+# explicit that windows exist for browsers and graphical apps. Two lines are
+# what make those apps work rather than half-work.
+#
+# The portal is started on demand by D-Bus, and it inherits the activation
+# environment, NOT the session's. Without this it comes up not knowing which
+# compositor it is talking to: a file picker opens nothing and a screen share
+# fails, both silently, which is the worst kind of broken.
+exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE
+# libadwaita does not read gtk-application-prefer-dark-theme. It asks the
+# Settings portal, which reads gsettings — so the settings.ini files alone
+# leave every modern GNOME app blazing white on a near-black desktop.
+exec-once = gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+
 # ------------------------------------------------------------------ input --
 input {
     kb_layout = us
