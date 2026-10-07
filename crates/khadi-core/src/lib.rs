@@ -4,6 +4,7 @@
 //! layer-shell panel (Phase 3b). Anything that knows about a cell grid or a
 //! widget tree belongs in khadi-hud, not here.
 pub mod disks;
+pub mod hypr;
 pub mod metrics;
 pub mod net;
 pub mod theme;

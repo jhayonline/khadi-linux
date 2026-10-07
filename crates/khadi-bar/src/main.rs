@@ -13,11 +13,13 @@
 //! khadi-hud already draws, and is here because eDEX's chrome runs along the
 //! top of the screen, not because the data had nowhere else to go.
 
+mod tabs;
+
 use anyhow::Result;
 use gtk4::{gdk, glib, prelude::*, Application, ApplicationWindow, CssProvider, Label, Orientation};
 use gtk4_layer_shell::{Edge, Layer, LayerShell};
-use khadi_core::{disks::Filesystem, metrics::Metrics, net::Network, Theme};
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use khadi_core::{disks::Filesystem, hypr, metrics::Metrics, net::Network, Theme};
+use std::{cell::RefCell, path::PathBuf, rc::Rc, time::Duration};
 
 const APP_ID: &str = "org.khadi.bar";
 
@@ -94,23 +96,8 @@ fn build(app: &Application) {
     // Left: the PANEL label and the skewed tab strip.
     let left = gtk4::Box::new(Orientation::Horizontal, 0);
     left.append(&cell("label", "PANEL"));
-    let tabs = gtk4::Box::new(Orientation::Horizontal, 0);
-    tabs.add_css_class("tabs");
-    for (i, name) in ["MAIN SHELL", "EMPTY", "EMPTY", "EMPTY"].iter().enumerate() {
-        // Each tab is a skewed box with an un-skewed label inside it, which is
-        // precisely how eDEX does it: skewX(35deg) on the <li>, skewX(-35deg)
-        // on the text so it stays upright.
-        let tab = gtk4::Box::new(Orientation::Horizontal, 0);
-        tab.add_css_class("tab");
-        if i == 0 {
-            tab.add_css_class("active");
-        }
-        let inner = Label::new(Some(name));
-        inner.add_css_class("tab-label");
-        tab.append(&inner);
-        tabs.append(&tab);
-    }
-    left.append(&tabs);
+    let tabs = tabs::TabStrip::new();
+    left.append(tabs.widget());
     root.set_start_widget(Some(&left));
 
     // Centre: the clock, in the display face.
@@ -131,6 +118,24 @@ fn build(app: &Application) {
 
     window.set_child(Some(&root));
     window.present();
+
+    // Workspace tabs. The watcher blocks on Hyprland's event socket in its own
+    // thread and publishes the newest snapshot; this timer collects it. The
+    // interval bounds how late a tab can be, not how often anything is asked:
+    // an idle session does one mutex lock per tick and no IPC at all.
+    if hypr::available() {
+        let watcher = hypr::Watcher::spawn();
+        glib::timeout_add_local(Duration::from_millis(100), move || {
+            if let Some(snap) = watcher.take() {
+                tabs.apply(&snap);
+            }
+            glib::ControlFlow::Continue
+        });
+    } else {
+        // Running on another compositor — the bar still renders, the tabs just
+        // cannot mean anything.
+        eprintln!("khadi-bar: no Hyprland session — workspace tabs are static");
+    }
 
     // One timer, one refresh. khadi-core is the same code khadi-hud uses, so
     // the bar and the panels can never disagree about what the machine is
