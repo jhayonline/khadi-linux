@@ -364,7 +364,7 @@ answer.
 | **0 · Spike** | days | Design tokens extracted; pane layout hand-built; fonts, terminal and compositor locked | **Zellij frames can carry the bracket-tick motif** — or the chrome moves into `khadi-hud` earlier than planned |
 | **1 · Dotfiles** ✅ | weeks 1–3 | One config repo, scriptable onto any Arch install. No packaging, no ISO, no hosting | Someone else runs the script and gets your desktop — **passed mechanically (42 checks, clean VM); not yet by a third party** |
 | **2 · Theme engine** 🔄 | weeks 3–6 | `khadi-theme` plus base16 templates. Three shipped themes to prove the pipeline generalises | One file change restyles every app in the stack — **passed**, verified live in the VM |
-| **3 · khadi-hud** 🔄 | weeks 6–12 | 3a: the ratatui dashboard ✅. 3b: the layer-shell panel that retires Waybar 🔄 | The product no longer reads as someone else's desktop with new colours — **A/B faithful count 1 → 11 of 18, plus the skewed tab bar that only 3b can draw** |
+| **3 · khadi-hud** 🔄 | weeks 6–12 | 3a: the ratatui dashboard ✅. 3b: the layer-shell panel that retires Waybar 🔄 | The product no longer reads as someone else's desktop with new colours — **A/B faithful count 1 → 13 of 18; nothing in the backlog is still missing** |
 | **4 · Packaging** | weeks 10–14 | Signed repo, PKGBUILDs, keyring, meta-package, migrations | `pacman -S khadi` works on a clean Arch install |
 | **5 · Installer + ISO** | weeks 14–18 | archiso profile, Docker build, archinstall front-end, styled live TTY | A stranger installs from USB without asking you anything |
 | **6 · Operate** | ongoing | Breakage watch, migrations, release cadence, support load, hosting bill | No gate. This is the job from here on, and the part that decides whether Khadi survives |
@@ -1193,10 +1193,13 @@ Two details:
   24–200 and fails on a bar glyph adjacent to a digit.
 
 ### Remaining in 3a
-- [ ] Terminal/tab headers — item 10/13. These sit around the terminal pane,
-      so they may belong to the zellij layout rather than to `khadi-hud`.
-- [ ] The angled tab bar (item 11) stays impossible in a cell grid; it is 3b
-      work, on the GTK panel.
+- [x] **Terminal header — item 10.** It belongs to the zellij layout, as
+      suspected: a two-row pane above the shell running `khadi-hud header`.
+      See section 10f.
+- [x] **Prompt pill — item 13.** A starship config, and the angled edge turned
+      out to be drawable. See section 10f.
+- [x] The angled tab bar (item 11) stays impossible in a cell grid; it is 3b
+      work, on the GTK panel — **done**, see section 10e.
 
 ---
 
@@ -1361,6 +1364,91 @@ prints it.
 - [ ] The bar duplicates readouts `khadi-hud` already shows. eDEX puts chrome
       along the top, so this is faithful, but it is worth asking whether both
       should exist on a small screen.
+
+---
+
+## 10f. Phase 3c — the last two A/B items
+
+Items 10 and 13 were the only two the Phase 0 backlog still listed as missing,
+and neither belonged to `khadi-hud` or to `khadi-bar`. Both are now done, which
+takes the A/B to **13 faithful of 18** with nothing left in the backlog.
+
+| | Phase 0 | 3a | Now |
+| --- | --- | --- | --- |
+| Faithful | 1 | 11 | **13** |
+| Missing | 13 | 2 | **0** |
+
+### Item 10 — the terminal header is a pane
+
+`TERMINAL / MAIN SHELL` is chrome for the shell pane, and neither candidate
+owner would draw it. The Phase 0 gate ruled out zellij's frame glyphs, and
+anything the shell itself prints scrolls away with the first screenful of
+output. So it gets a pane of its own, two rows tall, running `khadi-hud
+header` — the same answer the three panels got, and the correction the gate
+forced: **every pane draws its own chrome.**
+
+**The pane is `size=3` for a two-row header.** zellij's horizontal divider eats
+a row the way its `│` eats a column, which the layout already allowed for in
+the side columns and nobody had carried over. At `size=2` the pane gets a
+one-row pty, `Header`'s height guard fires and the header ships **blank** — not
+degraded, blank. That shipped once before it was caught, which is why there is
+now a test pinning the two-row minimum: a widget that silently draws nothing
+reads as a broken binary, not as a sizing mistake.
+
+Focus now starts on the shell. It had been starting on the SYSTEM readout,
+because zellij focuses the first pane in the layout and nothing said otherwise.
+
+### Item 13 — eDEX ships no prompt
+
+**The pill in `screenshot_default.png` is the screenshot author's own PS1.**
+There is nothing in the eDEX source to copy — no CSS, no shell integration,
+nothing. So the A/B had been scoring Khadi against a stranger's dotfiles, and
+item 13 is Khadi's to define rather than to reproduce.
+
+**The angled edge is drawable, which the A/B assumed it was not.** U+E0B0 is
+present in Iosevka Term — measured with fontconfig, not hoped for. The skew
+that is structurally impossible for a tab bar across a cell grid is available
+for a one-glyph prompt terminator, because one glyph is all it needs.
+
+The pill is a **recess, not a chip**: the reference fill is darker than the
+terminal ground, which is what `role.ground_deep` is for. The path is fish-style
+abbreviated — leaf in full, every ancestor at one character — which is what the
+reference shows and what starship's `fish_style_pwd_dir_length` already does.
+
+**starship, not a shell function.** Khadi does not own the login shell; `fish`
+is in the manifest as "interactive default only". A fish-only prompt would be
+absent for most users on the day they install, so the prompt is cross-shell and
+the init block goes in the **interactive rc** — `.bashrc`, `.zshrc`,
+`fish/conf.d` — not the login profile the PATH block uses. On every shell those
+are different files.
+
+The written block guards itself with `command -v starship`. Khadi does not
+install packages, so starship may be missing at install time or removed later,
+and an unguarded init line turns that into an error on every shell start.
+
+### Two checks, because both failures are silent
+
+- **`khadi-check` now validates the starship config.** starship **always exits
+  0**, even on a file it could not parse — it warns on stderr and carries on
+  with its defaults, so a prompt that silently lost its pill looks like a
+  working command. stderr is the exit status here. Verified against two
+  negative controls: an unknown key warns, a malformed file errors.
+- **`khadi-fontcheck` now checks glyph coverage, not just family resolution.**
+  A family that resolves can still lack the glyph, which is the same silent
+  substitution one level down — the terminal draws tofu and reports success.
+  Phase 4 replaces the 446 MiB `ttc-iosevka` with a two-face subset, and a
+  subset is exactly where a private-use codepoint goes missing without anyone
+  deciding to drop it. Negative control: Liberation Mono resolves as a family
+  and fails the glyph check.
+
+### A bug the wiring turned up
+
+`khadi-install` called `return 0` at top level to end the fish branch of the
+PATH block. `return` outside a function fails, `set -e` sees it, and the
+installer **exits 2 right there** — so a fish user got the PATH block and then
+no fonts, no prompt, and a non-zero exit. Reproduced in six lines of bash
+before fixing it. Both install paths and the uninstall round trip are now
+exercised against a throwaway `$HOME`.
 
 ---
 
