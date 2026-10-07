@@ -76,7 +76,7 @@ templates/            the source of every config; config/ is build output
 config/               mirrors ~/.config — GENERATED, do not edit
 fonts/                Rajdhani and Orbitron, vendored with their OFL licences
 packages.txt          dependency manifest, official repos only
-vm/gate.sh            42 checks inside a clean Arch VM
+vm/gate.sh            the install gate, run inside a clean Arch VM
 .github/workflows/    the rolling-release watch — khadi-check, daily, on Arch
 PLAN.md               the actual plan, and the evidence behind it
 ```
@@ -114,10 +114,11 @@ Three caveats worth stating plainly:
 
 - **The A/B is scored by the author**, against one screenshot, by eye. It is a
   disciplined count, not an independent one.
-- `bash vm/gate.sh` runs 42 checks inside a clean VM and all of them pass. What
-  that does **not** prove is the gate's own wording — "someone else runs the
-  script and gets your desktop". It has been passed by the author's VM, which
-  is not the same thing.
+- `bash vm/gate.sh` last passed at 42 checks, 0 failures, inside a clean VM.
+  The gate has grown since and has not been re-run there. And what it never
+  proved is its own wording — "someone else runs the script and gets your
+  desktop". It has been passed by the author's VM, which is not the same
+  thing.
 - Phases 4 to 6 — packaging, installer, ISO, and actually operating a repo —
   are not started. Khadi is a config layer you clone, not something you
   `pacman -S` yet.

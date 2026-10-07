@@ -75,7 +75,14 @@ Mechanised as `gate.sh` and run inside the guest:
 bash ~/khadi/vm/gate.sh
 ```
 
-**Current result: 42 passed, 0 failed.** It checks packages, config links,
+**Last measured: 42 passed, 0 failed** — and that number is now out of date.
+The gate has since grown: the config-link and binary lists are derived from
+`khadi-install` rather than kept here (six links and three binaries were going
+unchecked), and there is a new prompt section. It has not been re-run in the
+VM since. On the author's host, against a throwaway `$HOME`, the new sections
+pass.
+
+It checks packages, config links,
 `foot`/`fuzzel --check-config`, the yazi theme, `Super`-scope discipline,
 duplicate bindings, frames-off, the column budget read from the real
 framebuffer, and Hyprland's *loaded* state — binds actually registered, live

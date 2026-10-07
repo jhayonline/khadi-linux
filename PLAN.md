@@ -1505,6 +1505,12 @@ runs only locally, so "loaded state, not just the file on disk" remains a
 manual gate. CI checks that the configs are *valid*; the VM checks that they
 are *in effect*.
 
+The gate itself has outgrown its last measurement. Its config-link and binary
+lists are now derived from `khadi-install` instead of being a second copy —
+which found six config links and three binaries it had never been checking, a
+gate drifting in the direction that passes — and it has a prompt section. The
+clean-VM number is still the old 42 and needs re-running.
+
 ---
 
 ## 11. Risks and open decisions
