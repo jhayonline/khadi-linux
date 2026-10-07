@@ -294,6 +294,22 @@ a90 = "#9abbbd"
         assert_eq!(buf[(19, 0)].symbol(), "B", "right label is flush right");
     }
 
+    /// The header needs two rows and silently draws nothing with one, which
+    /// is how the TERMINAL pane shipped blank the first time: zellij's
+    /// horizontal divider ate a row and `size=2` left a one-row pty. The
+    /// layout now asks for three. This pins the boundary so the next pane that
+    /// hosts a header is sized against a stated requirement.
+    #[test]
+    fn a_one_row_header_draws_nothing() {
+        let t = theme();
+        let mut term = Terminal::new(TestBackend::new(20, 1)).unwrap();
+        term.draw(|f| f.render_widget(Header::new("A", "B", &t), f.area())).unwrap();
+        let buf = term.backend().buffer();
+        let row: String = (0..20).map(|x| buf[(x, 0)].symbol().to_string()).collect();
+        assert_eq!(row.trim(), "", "half a header is worse than none: {row:?}");
+        assert_eq!(Header::HEIGHT, 2, "the pane sizes in the layout depend on this");
+    }
+
     /// The clock was locked to HH:MM in Phase 0 because HH:MM:SS needs 39
     /// columns at a legible glyph width and the panel is 34.
     #[test]

@@ -9,6 +9,7 @@
 //!   khadi-hud dash        the system column (Phase 3a)
 //!   khadi-hud net         the network column
 //!   khadi-hud fs          the filesystem strip
+//!   khadi-hud header      the two-row label pair above the shell
 //!   <cmd> --once          render one frame and exit — for screenshots and CI
 
 mod dash;
@@ -38,6 +39,12 @@ enum Panel {
     Dash,
     Net,
     Fs,
+    /// A/B item 10: `TERMINAL / MAIN SHELL`. It is chrome for the shell pane,
+    /// and the shell cannot draw it — anything printed into the terminal
+    /// scrolls away with the first screenful of output. The Phase 0 gate ruled
+    /// out zellij's own frames, so it gets a pane of its own, two rows tall,
+    /// which is the same answer the other three panels got.
+    Header { left: String, right: String },
 }
 
 fn render_once<F>(w: u16, h: u16, draw: F) -> Result<String>
@@ -75,13 +82,15 @@ fn run(panel: Panel) -> Result<()> {
     let tick = Duration::from_millis(1000);
     let mut last = Instant::now();
     loop {
-        term.draw(|f| match panel {
+        term.draw(|f| match &panel {
             Panel::Dash => f.render_widget(
                 dash::Dash { m: &m, theme: &theme, clock: hhmm() }, f.area()),
             Panel::Net => f.render_widget(
                 net_panel::NetPanel { n: &n, theme: &theme }, f.area()),
             Panel::Fs => f.render_widget(
                 fs_panel::FsPanel { fs: &fsys, theme: &theme }, f.area()),
+            Panel::Header { left, right } => f.render_widget(
+                widgets::Header::new(left, right, &theme), f.area()),
         })?;
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(k) = event::read()? {
@@ -95,6 +104,8 @@ fn run(panel: Panel) -> Result<()> {
                 Panel::Dash => m.refresh(),
                 Panel::Net => n.refresh(),
                 Panel::Fs => fsys.refresh(),
+                // Static. ratatui redraws it on resize and that is all it owes.
+                Panel::Header { .. } => {}
             }
             last = Instant::now();
         }
@@ -108,12 +119,19 @@ fn run(panel: Panel) -> Result<()> {
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("dash");
+    // Positional labels, flags excluded, so `header --once` and
+    // `header TERMINAL "MAIN SHELL" --once` both mean what they look like.
+    let mut labels = args.iter().skip(1).filter(|a| !a.starts_with('-'));
     let panel = match cmd {
         "dash" => Panel::Dash,
         "net" => Panel::Net,
         "fs" => Panel::Fs,
+        "header" => Panel::Header {
+            left: labels.next().cloned().unwrap_or_else(|| "TERMINAL".into()),
+            right: labels.next().cloned().unwrap_or_else(|| "MAIN SHELL".into()),
+        },
         other => {
-            eprintln!("khadi-hud: unknown command {other:?} (want: dash, net, fs)");
+            eprintln!("khadi-hud: unknown command {other:?} (want: dash, net, fs, header)");
             std::process::exit(2);
         }
     };
@@ -121,8 +139,14 @@ fn main() -> Result<()> {
         return run(panel);
     }
     let theme = Theme::load()?;
-    let w: u16 = std::env::var("KHADI_COLS").ok().and_then(|s| s.parse().ok()).unwrap_or(34);
-    let h: u16 = std::env::var("KHADI_ROWS").ok().and_then(|s| s.parse().ok()).unwrap_or(44);
+    // The side panels are 34 columns by measurement; the header spans the
+    // shell column, so it has no business defaulting to a panel's width.
+    let (dw, dh) = match panel {
+        Panel::Header { .. } => (80, widgets::Header::HEIGHT),
+        _ => (34, 44),
+    };
+    let w: u16 = std::env::var("KHADI_COLS").ok().and_then(|s| s.parse().ok()).unwrap_or(dw);
+    let h: u16 = std::env::var("KHADI_ROWS").ok().and_then(|s| s.parse().ok()).unwrap_or(dh);
     let out = match panel {
         Panel::Dash => {
             let mut m = Metrics::new();
@@ -149,6 +173,9 @@ fn main() -> Result<()> {
                 f.render_widget(fs_panel::FsPanel { fs: &fsys, theme: &theme }, f.area())
             })?
         }
+        Panel::Header { ref left, ref right } => render_once(w, h, |f| {
+            f.render_widget(widgets::Header::new(left, right, &theme), f.area())
+        })?,
     };
     print!("{out}");
     Ok(())
