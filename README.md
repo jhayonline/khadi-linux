@@ -76,6 +76,8 @@ templates/            the source of every config; config/ is build output
 config/               mirrors ~/.config — GENERATED, do not edit
 fonts/                Rajdhani and Orbitron, vendored with their OFL licences
 packages.txt          dependency manifest, official repos only
+vm/gate.sh            42 checks inside a clean Arch VM
+.github/workflows/    the rolling-release watch — khadi-check, daily, on Arch
 PLAN.md               the actual plan, and the evidence behind it
 ```
 

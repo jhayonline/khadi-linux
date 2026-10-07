@@ -1066,9 +1066,9 @@ that is only ever added to is not a build directory.
 
 - [ ] `khadi-theme` and `khadi-check` ship as repo scripts, not packages.
       That is Phase 4 work.
-- [ ] `khadi-check` is not wired to anything that runs automatically. It is
-      invoked by the gate; a real CI trigger on upstream package bumps is the
-      remaining half of the section 11 mitigation.
+- [x] **`khadi-check` now runs automatically** — `.github/workflows/check.yml`,
+      daily on a schedule and on every push. That was the remaining half of
+      the section 11 mitigation. See section 10g.
 
 ---
 
@@ -1452,12 +1452,67 @@ exercised against a throwaway `$HOME`.
 
 ---
 
+## 10g. The rolling-release watch
+
+Section 11's top risk had half a mitigation. `khadi-check` renders every theme
+and validates the output with each app's own checker, but nothing ran it except
+a human, and a check nobody runs is documentation.
+
+`.github/workflows/check.yml` runs it daily on real Arch.
+
+### Daily, because there is no event to subscribe to
+
+A rolling release publishes no "upstream bumped" signal. There is no release
+feed to hook, no dependabot equivalent, nothing to be notified by — so the
+schedule *is* the trigger. Daily rather than weekly because the stated goal is
+"a failing build, not a user report", and a week-old break has already been a
+user report.
+
+### On Arch, in a container, or it proves nothing
+
+Every validator `khadi-check` runs is the app's own: `foot --check-config`,
+`fuzzel --check-config`, `starship prompt`. None of them exist on a stock
+GitHub runner, where the whole suite would report **skipped** and the build
+would go green having checked nothing.
+
+That is what `--strict` is for. A skipped validator is a failure, because on a
+box that has just installed the entire manifest, "not installed" can only mean
+the install did not do what it said.
+
+### Installing the manifest is itself a test
+
+`khadi-check` asks whether each package name still *resolves*. The workflow
+asks the harder question of whether they still *install together*, which is
+where a new conflict or a dropped package shows up. A name that moved to the
+AUR is a break Khadi cannot fix at install time — the manifest promises
+official repos only — and it should fail a build the day it happens.
+
+The cost is `ttc-iosevka`, 446 MiB for 189 faces, pulled on every run. That is
+the price of asking the font and glyph questions for real rather than skipping
+them, and Phase 4's two-face subset removes it.
+
+### What this would have caught
+
+This session found Hyprland 0.56 replacing hyprctl's string dispatch with a Lua
+API (section 10e). Nothing in Khadi broke, because the keybinds are `bind`
+lines the config parser still accepts and `khadi-bar` reads the IPC socket
+rather than shelling out. But that was luck confirmed after the fact by hand,
+on one developer's machine, a month after the release. It is exactly the class
+of change the schedule exists to surface on day one.
+
+**What it does not cover.** `vm/gate.sh` needs a running compositor and still
+runs only locally, so "loaded state, not just the file on disk" remains a
+manual gate. CI checks that the configs are *valid*; the VM checks that they
+are *in effect*.
+
+---
+
 ## 11. Risks and open decisions
 
 | Risk | Why it bites | Mitigation |
 | --- | --- | --- |
 | **"Omarchy with a theme"** | The chassis is public config. Without something original, Khadi is a fork of someone else's taste | `khadi-hud` plus the pane-centric workflow. Both architectural, not cosmetic |
-| **Rolling-release theme breakage** | Any upstream can change its config format with no notice. Ten apps means ten chances a week | CI that renders every template and diffs output on each upstream bump. Breakage becomes a failing build, not a user report |
+| **Rolling-release theme breakage** | Any upstream can change its config format with no notice. Ten apps means ten chances a week | **Done.** `khadi-check` renders every theme and runs each app's own validator; `.github/workflows/check.yml` runs it daily on real Arch. Breakage is a failing build, not a user report. Section 10g |
 | **Chrome eats the screen** | ~40% of the eDEX screenshot is decoration. Beautiful in a screenshot, cramped on a 13-inch laptop | Ship a `Super+f` focus layout that drops to bare terminal. The aesthetic must be dismissible |
 | **Solo maintenance** | Distros die when one person burns out. eDEX is the cautionary tale — three years, then archived | The whole architecture minimises this. Resist every feature that moves work from upstream to Khadi |
 | **Hosting cost and uptime** | A repo users depend on cannot go down. The bill grows with adoption | Cheap object storage plus CDN from day one. Know the per-GB number before launch |
