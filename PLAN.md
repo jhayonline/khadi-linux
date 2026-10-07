@@ -1279,6 +1279,60 @@ them is now Phase 3b work, ahead of packaging.
 A check belongs with it: the gate should fail if a font the theme names is not
 resolvable, because silent substitution is exactly the failure mode here.
 
+### The tabs are Hyprland's workspaces
+
+eDEX's tabs are shells: tab 0 reads `MAIN SHELL`, the other four read `EMPTY`
+until something runs in them. Khadi's equivalent of a shell is a workspace, and
+`hyprland.conf` binds exactly five to `Super+1..5` — so the mapping is one tab
+per bound workspace, and the count lands on eDEX's five without being chosen to.
+
+**Event-driven, not polled.** A thread blocks on `.socket2.sock` and re-queries
+`.socket.sock` only on the events that can move a tab; the UI collects the
+newest snapshot every 100ms. An idle session does one mutex lock per tick and no
+IPC at all. Polling the query socket instead would either lag a workspace switch
+or spend two roundtrips a second discovering nothing had changed. Snapshots are
+not queued — a stale one has no value — so a burst of events costs the bar one
+update, not one per event.
+
+**The label vocabulary.** A workspace the user has named keeps its name; that is
+information the numeric fallback does not have. Hyprland names unnamed ones
+after their own id, and a bare "3" is not a label, so those get `MAIN SHELL` and
+`SHELL n`. Empty reads `EMPTY` — and so does absent, because **Hyprland drops a
+workspace from `j/workspaces` the moment its last window closes**. Those are the
+same state to a user and must not look different on the bar.
+
+A sixth tab, hidden by default, appears when a workspace outside `1..5` is
+focused. `Super+1..5` cannot reach one, but a scratchpad or a scripted dispatch
+can, and a strip showing no active tab at all reads as a broken strip.
+
+**Verified on real hardware**, not in the VM: the active tab tracked a focus
+change between workspaces, and renaming a workspace from outside the process
+repainted its label within the tick. Workspace 3 was empty throughout and read
+`EMPTY`, which is the absent-vs-empty case above, observed rather than reasoned
+about. Two ignored tests (`cargo test -p khadi-core hypr -- --ignored`) keep the
+live check runnable, since the unit tests prove the parsing and the event filter
+and nothing about whether the socket path and JSON shape still match upstream.
+
+### Hyprland 0.56 broke `hyprctl dispatch`, and the bar did not notice
+
+Testing this turned up the section 11 risk in the wild. Hyprland 0.56 replaced
+hyprctl's string dispatch with a Lua API:
+
+```
+hyprctl dispatch workspace 2                  # 0.55: works. 0.56: syntax error
+hyprctl dispatch 'hl.dsp.focus{ workspace = 2 }'   # 0.56
+```
+
+Nothing in Khadi broke, for two reasons worth keeping. The keybindings are
+`bind` lines in `hyprland.conf`, which the config parser still accepts; and
+`khadi-bar` talks to the IPC socket directly rather than shelling out to
+`hyprctl`. **The sockets, the request strings and the JSON shape did not
+change** — only the CLI wrapper did. A bar built on `hyprctl` output would have
+gone blank on this upgrade.
+
+That is an argument for the general rule: read the protocol, not the tool that
+prints it.
+
 ### Not yet done
 - [x] **`khadi-fonts` vendored** — `fonts/` carries Rajdhani (Light, Regular,
       Medium) and Orbitron with their OFL licences, 1.2 MB. `khadi-install`
@@ -1300,8 +1354,8 @@ resolvable, because silent substitution is exactly the failure mode here.
       The first version had a false negative: it compared family alone, so
       `Rajdhani Light` (family `Rajdhani`, style `Light`) failed against a
       correctly installed font. It now compares family and style.
-- [ ] Workspace tabs are static placeholders. They should reflect Hyprland's
-      actual workspaces over its IPC socket.
+- [x] **Workspace tabs are live** — `khadi-core/src/hypr.rs` reads Hyprland's
+      IPC and `khadi-bar/src/tabs.rs` renders it. See above.
 - [ ] No click handling. eDEX's tabs are clickable; Khadi is keyboard-driven,
       so this may stay as it is deliberately.
 - [ ] The bar duplicates readouts `khadi-hud` already shows. eDEX puts chrome
