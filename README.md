@@ -5,9 +5,11 @@ A keyboard-driven, terminal-first Arch desktop with an
 
 Not a fork of Arch. A pacman repo and a config layer on top of it.
 
-**Status: Phase 1 complete.** The chassis installs and runs on a clean Arch
-machine — verified in a VM, 42 automated checks, 0 failures. It does not yet
-look like eDEX; that is Phase 3's job, and [PLAN.md](PLAN.md) explains why.
+**Status: Phase 3 complete.** The chassis installs and runs on a clean Arch
+machine, and it now looks like eDEX: measured against the reference screenshot
+it scores 13 faithful elements of 18, up from 1 when the chassis was pure
+config. [PLAN.md](PLAN.md) has the element-by-element scoring and the evidence
+behind every number here.
 
 ---
 
@@ -20,8 +22,9 @@ git clone git@github.com:jhayonline/khadi-linux.git khadi-linux && cd khadi-linu
 
 Runs the reference layout straight from the repo. Touches nothing in `~`.
 
-Needs `zellij`, `foot` and `btop`. **Use a terminal at 180 columns or wider** —
-below that the side panels crowd out the shell. See *Why 180 columns* below.
+Needs `zellij`, `foot`, and `khadi-hud` built: `cargo build --release`.
+**Use a terminal at 180 columns or wider** — below that the side panels crowd
+out the shell. See *Why 180 columns* below.
 
 ## Install
 
@@ -59,42 +62,63 @@ files, so it cannot drift from what the system actually does.
 ```
 bin/khadi-dev         run from the repo, no install
 bin/khadi-install     link into ~/.config and ~/.local/bin
-bin/khadi-panel       btop wrapper, keeps paths out of the layout
+bin/khadi-theme       render every app config from one theme file
+bin/khadi-check       render every theme, validate with each app's own checker
+bin/khadi-fontcheck   do the theme's fonts — and glyphs — actually resolve?
+bin/khadi-panel       panel wrapper, keeps paths out of the zellij layout
 bin/khadi-cheatsheet  Super+/ overlay
+crates/khadi-core     theme, metrics and Hyprland IPC — no UI dependencies
+crates/khadi-hud      the ratatui panels: the motifs no off-the-shelf TUI draws
+crates/khadi-bar      the Wayland layer-shell panel, for the motifs a cell
+                      grid cannot draw at all
 themes/tron.toml      the design system — one file, everything derives from it
-config/               mirrors ~/.config
-spike/motif.py        throwaway Phase 0 instrument
+templates/            the source of every config; config/ is build output
+config/               mirrors ~/.config — GENERATED, do not edit
+fonts/                Rajdhani and Orbitron, vendored with their OFL licences
 packages.txt          dependency manifest, official repos only
 PLAN.md               the actual plan, and the evidence behind it
 ```
 
 ## Why 180 columns
 
-btop will not render its CPU box below 60 columns or its process box below 44,
-measured. eDEX's side columns are ~17% of screen width, so the proportions only
-work on a wide terminal: usable from 180 columns, faithful at 247. At 1920x1080
-with Iosevka Term at size 10 you get 284.
+eDEX's side columns are ~17% of screen width, so the proportions only work on a
+wide terminal: usable from 180 columns, eDEX's own split reached at 217. At
+1920x1080 with Iosevka Term at size 10 you get 284.
 
-This is one of several things Phase 0 measured rather than assumed. The others
-are in [PLAN.md](PLAN.md) section 10 — including why zellij's pane frames can
-never carry the eDEX bracket-tick motif, and what that means for the roadmap.
+That number used to be 247, and the reason it moved is the reason `khadi-hud`
+exists. btop will not render its CPU box below 60 columns or its process box
+below 44, measured — so it could never hold an eDEX side column at all.
+`khadi-hud` draws the clock, hardware block, per-core graphs, memory grid and
+process list in **34**, which is the reference proportion. btop is no longer in
+the layout.
+
+This is one of several things measured rather than assumed. The others are in
+[PLAN.md](PLAN.md) section 10 — including why zellij's pane frames can never
+carry the eDEX bracket-tick motif, and what that means for the roadmap.
 
 ## Honest status
 
-Phase 1 ships a chassis: compositor, terminal, panes, system monitor and
-editor, themed from one token file, with a keyboard model that does not
-collide. Measured against the reference screenshot it scores **1 faithful
-element of 18**. Colour transfers; structure approximates; the design language
-does not transfer at all.
+Measured against the reference screenshot, Khadi scores **13 faithful elements
+of 18**, from 1 when the chassis was pure config. The remaining four are
+approximations rather than gaps, and the file browser is deliberately yazi's —
+an icon grid needs a Nerd Font Khadi does not ship.
 
-That is expected, not a surprise. Off-the-shelf TUIs draw their own chrome and
-none of it looks like eDEX. The missing 13 elements are the specification for
-`khadi-hud`, the one component Khadi writes from scratch, in Phase 3.
+The thirteen are not configuration. Off-the-shelf TUIs draw their own chrome
+and none of it looks like eDEX, so the ones that carry the design language are
+written here: `khadi-hud` for the panels, `khadi-bar` for the two motifs a cell
+grid structurally cannot draw.
 
-The install side is verified: `bash vm/gate.sh` runs 42 checks inside a clean
-VM and all of them pass. What that does **not** prove is the gate's own
-wording — "someone else runs the script and gets your desktop". It has been
-passed by the author's VM, which is not the same thing.
+Three caveats worth stating plainly:
+
+- **The A/B is scored by the author**, against one screenshot, by eye. It is a
+  disciplined count, not an independent one.
+- `bash vm/gate.sh` runs 42 checks inside a clean VM and all of them pass. What
+  that does **not** prove is the gate's own wording — "someone else runs the
+  script and gets your desktop". It has been passed by the author's VM, which
+  is not the same thing.
+- Phases 4 to 6 — packaging, installer, ISO, and actually operating a repo —
+  are not started. Khadi is a config layer you clone, not something you
+  `pacman -S` yet.
 
 ## Licence
 
