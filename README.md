@@ -69,10 +69,12 @@ bin/khadi-check       render every theme, validate with each app's own checker
 bin/khadi-fontcheck   do the theme's fonts — and glyphs — actually resolve?
 bin/khadi-panel       panel wrapper, keeps paths out of the zellij layout
 bin/khadi-cheatsheet  Super+/ overlay
+bin/khadi-boot        install the boot splash (needs root; run from --system)
 crates/khadi-core     theme, metrics and Hyprland IPC — no UI dependencies
 crates/khadi-hud      the ratatui panels: the motifs no off-the-shelf TUI draws
 crates/khadi-bar      the Wayland layer-shell panel, for the motifs a cell
                       grid cannot draw at all
+crates/khadi-greet    the login screen, speaking greetd's IPC
 themes/tron.toml      the design system — one file, everything derives from it
 templates/            the source of every config; config/ is build output
 config/               mirrors ~/.config — GENERATED, do not edit
@@ -84,6 +86,24 @@ vm/gate.sh            the install gate, run inside a clean Arch VM
 .github/workflows/    the rolling-release watch — khadi-check, daily, on Arch
 PLAN.md               the actual plan, and the evidence behind it
 ```
+
+## From power-on to desktop
+
+Every stage is themed from the same `themes/*.toml`, and every one was checked
+by photographing a real boot in a VM rather than by reading the config back.
+
+| | |
+| --- | --- |
+| **Boot** | a Plymouth splash: wordmark, progress bar, and the real systemd unit it is waiting on |
+| **Login** | `khadi-greet` — written, not configured, because nothing off the shelf draws the bracket-tick header or the block clock |
+| **Desktop** | Hyprland, one terminal, a zellij layout of `khadi-hud` panels, `khadi-bar` on top |
+| **Idle** | `hypridle` locks at 10 minutes and blanks at 11. It does **not** suspend — see `hypridle.conf` for why |
+| **Lock** | `hyprlock`, themed rather than replaced: it is what stands between a locked machine and its data |
+
+GUI apps work too — Khadi is terminal-**first**, not terminal-only. Portals are
+installed and configured (both backends: the Hyprland one does not implement
+the file chooser), and GTK gets the dark preference, the UI font and the
+palette.
 
 ## Why 180 columns
 
