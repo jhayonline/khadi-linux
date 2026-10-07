@@ -1316,15 +1316,23 @@ about. Two ignored tests (`cargo test -p khadi-core hypr -- --ignored`) keep the
 live check runnable, since the unit tests prove the parsing and the event filter
 and nothing about whether the socket path and JSON shape still match upstream.
 
-### Hyprland 0.56 broke `hyprctl dispatch`, and the bar did not notice
+### Hyprland 0.56 changed `hyprctl dispatch`, and the bar did not notice
 
-Testing this turned up the section 11 risk in the wild. Hyprland 0.56 replaced
-hyprctl's string dispatch with a Lua API:
+Testing this turned up the section 11 risk in the wild. Hyprland 0.56 added a
+Lua config manager, and `hyprctl dispatch` follows whichever config manager is
+active:
 
 ```
-hyprctl dispatch workspace 2                  # 0.55: works. 0.56: syntax error
-hyprctl dispatch 'hl.dsp.focus{ workspace = 2 }'   # 0.56
+hyprctl dispatch workspace 2                       # classic config
+hyprctl dispatch 'hl.dsp.focus{ workspace = 2 }'   # Lua config
 ```
+
+**Corrected later.** This section first recorded it as "0.56 replaced string
+dispatch with a Lua API", full stop. That is what it looks like from the
+development machine, which runs Omarchy and therefore a Lua config — but it is
+the config manager that decides, not the version. Khadi ships a classic
+`hyprland.conf`, so classic dispatch is the correct form on a Khadi machine.
+Measured both ways in the VM when hypridle needed `dpms` (section 10p).
 
 Nothing in Khadi broke, for two reasons worth keeping. The keybindings are
 `bind` lines in `hyprland.conf`, which the config parser still accepts; and
@@ -2057,6 +2065,72 @@ on this config the obvious way.
 **Not done:** nothing locks automatically. There is no idle daemon in the
 manifest, so the lock is keybind-only. `hypridle` is the matching piece and is
 its own decision about timeouts.
+
+---
+
+## 10p. hypridle — what happens when you walk away
+
+The lock screen in 10o protected a machine you remembered to lock. `hypridle`
+is the piece that locks it for you.
+
+### The timeouts, and the one everybody ships that is wrong here
+
+| | |
+| --- | --- |
+| 10 min | `loginctl lock-session` |
+| 11 min | screen off, back on at any input |
+| before suspend | lock |
+
+**No automatic suspend**, which is the default nearly every dotfiles repo
+ships. A terminal-first machine is routinely left running a build, a VM or a
+long ssh session; suspending that because nobody touched the keyboard for half
+an hour loses work, and loses it silently. The config carries the stanza
+commented out with a note about when to want it.
+
+No backlight dimming either: that needs `brightnessctl`, which is not in the
+manifest, and a config calling a program Khadi does not install is the
+`chromium` bug from 10j.
+
+### The lock path goes through logind on purpose
+
+A listener calls `loginctl lock-session`, logind emits `Lock`, hypridle catches
+it and runs `lock_cmd`. The indirection means `loginctl lock-session` from
+anywhere — a script, a lid switch, another tool — locks the same way the idle
+timeout does, instead of there being one path that works and one that quietly
+does nothing. `lock_cmd` is guarded with `pidof hyprlock ||` because without it
+a second lock screen stacks on the first and dismissing one leaves you looking
+at the other.
+
+### hypridle's own example is wrong on a Khadi machine
+
+`/usr/share/hypr/hypridle.conf` (hypridle 0.1.8) uses
+`hyprctl dispatch 'hl.dsp.dpms({action = "off"})'`. On Khadi that returns
+**"Invalid dispatcher"** and the screen simply never turns off, with nothing in
+any log.
+
+**This corrected section 10e.** That section recorded Hyprland 0.56 as having
+"replaced string dispatch with a Lua API". It has not: 0.56 added a Lua *config
+manager*, and `hyprctl dispatch` follows whichever config manager is active.
+The development machine runs Omarchy, which uses a Lua config — so from there
+the change looks total. Khadi ships a classic `hyprland.conf`, so classic
+dispatch is correct on a Khadi machine, and the finding was a measurement taken
+on the wrong desktop.
+
+Both forms were measured in the guest:
+
+```
+hyprctl dispatch 'hl.dsp.dpms({action = "off"})'   -> Invalid dispatcher, screen stays on
+hyprctl dispatch dpms off                          -> ok, framebuffer mean 0.0002
+hyprctl dispatch dpms on                           -> ok, framebuffer mean 0.0369
+```
+
+### Verified by waiting
+
+A copy of the shipped config with the minutes turned into seconds, run in a real
+session: locked at ~7s against a 6s timeout, framebuffer at mean 0.0002 after
+the screen-off listener, no errors in hypridle's log. The `pidof` guard was
+caught working in that log too — it found an existing hyprlock and declined to
+start a second.
 
 ---
 

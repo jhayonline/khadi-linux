@@ -23,6 +23,9 @@ exec-once = mako
 # khadi-bar replaces waybar (Phase 3b). It carries the two motifs a cell grid
 # cannot: the faithful sub-pixel bracket tick and the skewX(35deg) tab bar.
 exec-once = khadi-bar 2>$HOME/.cache/khadi-bar.log
+# Idle. Without this the lock screen only protects a machine you remembered to
+# lock. Config in hypridle.conf, including why it does not suspend.
+exec-once = hypridle 2>$HOME/.cache/khadi-idle.log
 
 # GUI APPS. Khadi is terminal-first, not terminal-only — PLAN.md section 6 is
 # explicit that windows exist for browsers and graphical apps. Two lines are
