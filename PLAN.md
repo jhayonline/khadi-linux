@@ -1854,55 +1854,64 @@ after reboot. Until now nothing acted on it: a Khadi machine booted to the
 stock Arch console.
 
 `templates/plymouth/khadi/` is a Plymouth **script** theme generated from the
-theme file like every other config, and installed by `khadi-boot` — invoked
-from `khadi-install --system`, which was already the root-level opt-in, so
-there is one root entry point rather than two.
+theme file like every other config, installed by `khadi-boot` — invoked from
+`khadi-install --system`, which was already the root-level opt-in, so there is
+one root entry point rather than two.
 
-### Real messages, not a fake log
+### Composed after Omarchy's, not eDEX's
 
-eDEX's boot screen is `assets/misc/boot_log.txt`: 85 lines of invented macOS
-kernel messages replayed with a delay and a sound per line. It opens *"Welcome
-to eDEX-UI!"* and talks about kexts.
+A centred wordmark over a thin progress bar on the theme ground. eDEX's boot
+screen is `assets/misc/boot_log.txt`: 85 lines of invented macOS kernel
+messages replayed with a delay and a sound per line, opening *"Welcome to
+eDEX-UI!"*. A fake log is theatre; a wordmark is just a wordmark.
 
-systemd feeds plymouth genuine unit status through `SetUpdateStatusFunction`,
-so the scrolling log costs nothing to make true. A desktop whose pitch is
-"measured, not assumed" should not open with theatre.
+**One real status line** sits under the bar, which the reference does not have.
+It is the one addition worth making — a boot screen that says nothing while it
+hangs is a support ticket — and systemd feeds plymouth genuine unit status
+through `SetUpdateStatusFunction`, so it costs nothing and it is true.
 
-### No image assets
+### No image assets, which forced the wordmark's shape
 
-Plymouth script has no rectangle primitive, so themes ship PNGs for their bars
-and rules — Omarchy's ships five. Khadi's chrome is characters, so the splash
-is entirely `Image.Text` and restyles from `themes/*.toml` like everything else.
-Added one generator filter, `rgbf`, because plymouth wants 0..1 floats.
+Plymouth script has no rectangle primitive, so themes ship PNGs for their logos
+and bars; Omarchy's ships five. Khadi's wordmark is drawn from characters, so
+the splash has no image assets at all and restyles from `themes/*.toml` like
+every other config. One generator filter was added, `rgbf`, because plymouth
+wants 0..1 floats.
 
-### Two failures, both found only by looking at a real boot
+**There is only one font size available.** `Image.Text` takes its size from a
+font string, and a font string cannot be resolved inside an initramfs (below),
+so the wordmark cannot be set larger than the status line under it — it can
+only be built from *more marks*. It is a 5x7 block face with each pixel two
+characters wide and the row spacing closed to 13px against a ~16px line height,
+which is what turns a sparse dot grid into letters. The leftover texture
+between rows reads as dot-matrix, which is the same language as the globe and
+the memory grid.
 
-**It came up black.** `Image.Text` takes a font string and `"Iosevka Term 13"`
-resolves fine on a running system. Inside an initramfs it cannot: mkinitcpio's
-hook resolves the font with `fc-match` **on the host** and copies the file in
-as `/usr/share/fonts/Plymouth-monospace.ttf` — renamed, with no fontconfig in
+### Three failures, none of which appears in any log
+
+**It came up black.** `Image.Text`'s font argument resolves fine on a running
+system and cannot inside an initramfs: mkinitcpio's hook resolves the font with
+`fc-match` **on the host** and copies the file in as
+`/usr/share/fonts/Plymouth-monospace.ttf` — renamed, with no fontconfig in
 there to look a family up by name. Every label came back empty. Omitting the
-argument uses the theme's configured font, which is the file plymouth actually
-copied.
+argument uses the font plymouth actually copied.
 
 **Then the rule came up as tofu.** An initramfs carries only
 `label-freetype.so`; `label-pango.so` would drag in pango, harfbuzz and
 fontconfig. That renderer draws Latin and returns `.notdef` for everything
-multi-byte — so "KHADI" and "BOOT" rendered in the right face above a row of
-empty boxes. **The font was never at fault**: Iosevka Term is correctly baked
-in, verified by extracting the initramfs and querying it, and it does carry
-U+2500. The rule is ASCII for that reason and no other.
+multi-byte. **The font was never at fault** — Iosevka Term is correctly baked
+in and carries U+2500, verified by extracting the initramfs and querying it.
+Everything the splash draws is ASCII for that reason and no other.
 
-Neither failure appears in any log. `plymouth-start` reported active and the
-journal had no parse error in both cases; the only way to find either was to
-screenshot a real boot — `khadi-vm shot` captures the guest framebuffer over
-QMP, which works before any compositor exists.
+**Then the wordmark was a sparse dot grid**, because the first version used one
+character per pixel at the default leading. See above.
 
-### What it cost to find out
-
-Three VM reboots with a timed capture loop. Worth recording because the obvious
-alternative — install it on real hardware and look — is a reboot of the machine
-you are working on, each time, with no way to capture what you saw.
+`plymouth-start` reported active and the journal had no parse error in all
+three cases. The only way to find any of them was to screenshot a real boot —
+`khadi-vm shot` captures the guest framebuffer over QMP, which works before any
+compositor exists. Six VM reboots with a timed capture loop. Worth recording,
+because the obvious alternative is rebooting the machine you are working on,
+each time, with no way to capture what you saw.
 
 **Glyph coverage moved earlier too.** `khadi-fontcheck` now checks U+2500,
 U+252C, U+2588 and U+00B7 alongside U+E0B0, and `khadi-boot` runs it before
