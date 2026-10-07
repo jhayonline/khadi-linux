@@ -1993,6 +1993,73 @@ by Hyprland, four panels, the bar and mako. Splash, greeter, desktop.
 
 ---
 
+## 10o. The lock screen
+
+`Super+Shift+X` ran `hyprlock` with **no config at all** — stock hyprlock,
+which is a blurred screenshot and a round input field, and nothing like Khadi.
+The keybind had been there since Phase 1 and the check added in 10j did not
+catch it, because `hyprlock` really is in the manifest. What was missing was
+not the program but the theme.
+
+### Themed, not replaced — unlike the greeter
+
+`khadi-greet` exists because nothing off the shelf could draw the design
+language on a login screen. The lock screen is a different calculation and
+lands the other way:
+
+- it is what stands between a locked machine and its data
+- `hyprlock` is purpose-built for `ext-session-lock-v1` and handles that
+  protocol's failure modes, including the one where the locker dies and the
+  compositor must stay locked
+- section 12 says to resist every feature that moves work from upstream to
+  Khadi, and that applies hardest here
+
+So this is a config. hyprlock turns out to carry the motifs fine: it renders
+labels through pango with a real font, so the ticked hairline is just text —
+the same trick the TUI uses, and the one the boot splash could **not** use
+because an initramfs has no pango.
+
+Flat ground rather than the default blurred screenshot. A blur is a different
+design language, and it leaves a readable impression of whatever was on screen
+when you walked away.
+
+### A third aspect ratio, and the block clock does not survive it
+
+The panel and the greeter draw the clock one glyph per pixel, which works where
+a cell is exactly half as wide as it is tall. hyprlock renders through pango,
+which adds leading between lines and exposes no way to remove it — so each
+pixel becomes a wide rectangle with a gap under it and the digits come out as
+crude bars. Doubling the width to compensate trades one distortion for another;
+both were tried and photographed before `$TIME` at a large size won.
+
+That is three media with three different constraints on the same motif:
+
+| surface | constraint | result |
+| --- | --- | --- |
+| `khadi-hud`, `khadi-greet` | cell grid, 1:2 | block digits, exact |
+| boot splash | no pango, ASCII only, one font size | block wordmark from `#` |
+| `hyprlock` | pango leading, not removable | large `$TIME`, no block digits |
+
+The `khadi-hud clock` subcommand written to feed hyprlock was removed with it
+rather than left as a second way to draw a clock that nothing calls.
+
+### Verified by locking and unlocking
+
+The lock was raised in a real session, photographed, and released by typing the
+password through `khadi-vm type` — the same QMP keystroke path the greeter
+needed, for the same reason: a lock screen cannot be driven over ssh.
+
+One thing learned the hard way: `pkill hyprlock` while the session is locked
+leaves Hyprland locked with no locker, and it shows a recovery screen for
+exactly that. Not a Khadi bug, and worth knowing before anyone tries to iterate
+on this config the obvious way.
+
+**Not done:** nothing locks automatically. There is no idle daemon in the
+manifest, so the lock is keybind-only. `hypridle` is the matching piece and is
+its own decision about timeouts.
+
+---
+
 ## 11. Risks and open decisions
 
 | Risk | Why it bites | Mitigation |
