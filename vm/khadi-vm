@@ -13,6 +13,7 @@
 #   khadi-vm shot     screenshot the guest framebuffer via QMP
 #   khadi-vm ssh      shell into the guest once Arch is installed
 #   khadi-vm push     copy this repo into the guest
+#   khadi-vm autologin start a session on tty1 so gate.sh can check loaded state
 #   khadi-vm status   what exists so far
 #   khadi-vm clean    delete the disk (keeps the ISO)
 set -euo pipefail
@@ -250,6 +251,14 @@ cmd_push() {
     # which silently shipped a stale binary and cost a debugging round. The
     # guest has no Rust toolchain (302 MiB) and should not need one — Phase 4
     # ships these as prebuilt packages for the same reason.
+    #
+    # They land in target/release/, NOT in ~/.local/bin. khadi-install is the
+    # only thing that installs, and it links ~/.local/bin/<b> -> this path.
+    # Writing to ~/.local/bin here instead gave two installers one path: push
+    # copied the current binary, khadi-install then replaced it with a symlink
+    # to the stale target/release/ the tar had never updated, and the session
+    # came up with three dead panels reporting an error string from two phases
+    # ago. Deliver the artefact; let the installer install it.
     local b
     for b in khadi-hud khadi-bar; do
         [[ -x "$ROOT/target/release/$b" ]] || continue
@@ -257,15 +266,15 @@ cmd_push() {
         # empty file. The checksum below exists because that looked like success.
         ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
-            "mkdir -p ~/.local/bin; cat > ~/.local/bin/.$b.new && chmod 755 ~/.local/bin/.$b.new && mv ~/.local/bin/.$b.new ~/.local/bin/$b" \
+            "mkdir -p ~/khadi/target/release; cat > ~/khadi/target/release/.$b.new && chmod 755 ~/khadi/target/release/.$b.new && mv ~/khadi/target/release/.$b.new ~/khadi/target/release/$b" \
             < "$ROOT/target/release/$b"
         local want got
         want="$(md5sum < "$ROOT/target/release/$b" | cut -d' ' -f1)"
         got="$(ssh -n -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
-               "md5sum < ~/.local/bin/$b | cut -d' ' -f1")"
+               "md5sum < ~/khadi/target/release/$b | cut -d' ' -f1")"
         if [[ "$want" == "$got" ]]; then
-            echo "  ✓ $b installed in the guest"
+            echo "  ✓ $b delivered to the guest"
         else
             echo "  ✗ $b checksum mismatch: host $want, guest $got" >&2
         fi
@@ -281,6 +290,44 @@ cmd_push() {
          export HYPRLAND_INSTANCE_SIGNATURE=$(ls -1t $XDG_RUNTIME_DIR/hypr 2>/dev/null|head -1);
          command -v hyprctl >/dev/null && [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] && hyprctl reload >/dev/null' \
         2>/dev/null && echo "  ✓ hyprctl reload" || true
+}
+
+# The loaded-state half of the gate needs a compositor, and the compositor
+# needs a seat — which ssh does not give you. For a long time that meant those
+# checks simply never ran: `gate.sh` reported "Hyprland not running" and the
+# other 50-odd checks passed, which looked like a pass.
+#
+# This makes the session start on boot so the gate can be run for real. It is
+# TEST SCAFFOLDING, written into the guest and nowhere near the repo: Khadi's
+# own session manager is greetd, which asks for a password on purpose.
+cmd_autologin() {
+    local rc
+    rc=$(cat <<'GUEST'
+set -e
+sudo mkdir -p /etc/systemd/system/getty@tty1.service.d
+printf '[Service]\nExecStart=\nExecStart=-/usr/bin/agetty --autologin %s --noclear %%I $TERM\n' "$USER" \
+    | sudo tee /etc/systemd/system/getty@tty1.service.d/autologin.conf >/dev/null
+if ! grep -q KHADI-VM-TEST ~/.bash_profile 2>/dev/null; then
+cat >> ~/.bash_profile <<'EOF'
+
+# >>> KHADI-VM-TEST >>> scaffolding, not part of Khadi. Starts a session on
+# tty1 so gate.sh can run its loaded-state checks against a real compositor.
+if [[ -z $WAYLAND_DISPLAY && $(tty) == /dev/tty1 ]]; then
+    export WLR_RENDERER=pixman WLR_NO_HARDWARE_CURSORS=1
+    exec start-hyprland > ~/.cache/hypr-start.log 2>&1
+fi
+# <<< KHADI-VM-TEST <<<
+EOF
+fi
+sudo systemctl daemon-reload
+sudo systemctl restart getty@tty1
+GUEST
+)
+    echo "  Enabling autologin + session on tty1 in the guest…"
+    ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" "bash -s" <<<"$rc"
+    echo "  ✓ session starting. Give it ~20s, then:"
+    echo "      KHADI_VM_USER=${KHADI_VM_USER:-root} ./vm/khadi-vm ssh 'bash -lc \"bash ~/khadi/vm/gate.sh\"'"
 }
 
 cmd_status() {
@@ -309,6 +356,7 @@ case "${1:-status}" in
     stop) cmd_stop ;;
     shot) shift; cmd_shot "$@" ;;
     ssh) shift; cmd_ssh "$@" ;;
+    autologin) cmd_autologin ;;
     push) cmd_push ;;
     status) cmd_status ;;
     clean) cmd_clean ;;

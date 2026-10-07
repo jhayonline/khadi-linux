@@ -1782,6 +1782,71 @@ nothing guaranteed. Both are now listed.
 
 ---
 
+## 10l. The gate finally ran against a session
+
+Phase 1's gate is *"someone else runs the script and gets your desktop"*, and
+its loaded-state half had **never run**. Those checks need a compositor, a
+compositor needs a seat, and ssh does not give you one — so `gate.sh` reported
+*"Hyprland not running — loaded-state checks skipped"* and the other fifty-odd
+passed, which looks exactly like a pass.
+
+`khadi-vm autologin` fixes that: it writes a getty autologin override and a
+marked block into the guest's profile so a session starts on tty1. Scaffolding,
+written into the guest and nowhere near the repo — Khadi's own session manager
+is greetd, which asks for a password on purpose.
+
+**Result: 75 passed, 0 failed**, in a real Khadi session built by
+`khadi-install`. Binds loaded 36/36, `gaps_out` in effect, the portal on the
+session bus, `XDG_CURRENT_DESKTOP` in the activation environment, and
+`prefer-dark` live — the three GUI fixes from section 10j confirmed working
+rather than merely configured.
+
+### The file picker opens
+
+The thing section 10j listed as unverified. Asked over D-Bus in the live
+session:
+
+```
+before: ['foot']
+after:  [('foot', '… | MAIN SHELL'), ('xdg-desktop-portal-gtk', 'Khadi verification')]
+```
+
+A real GTK file chooser mapped as a window in Hyprland. Routing, backend
+capability, config parsing and now the dialog itself.
+
+### Looking at the screen found what 71 passing checks did not
+
+The first screenshot of that session showed three of the four panels dead:
+
+```
+khadi-hud: unknown command "header" (want: dash)
+khadi-hud: unknown command "net"    (want: dash)
+khadi-hud: unknown command "fs"     (want: dash)
+```
+
+`(want: dash)` is an error string from two phases ago — a stale binary. **And
+the gate said 71/71 while this was on screen**, because it checked that
+`khadi-hud` was on PATH and never asked it to draw anything.
+
+**The cause was a bug introduced one commit earlier.** `khadi-vm push` copied
+the current binary to `~/.local/bin/khadi-hud`; the new `RUSTBINS` code in
+`khadi-install` then replaced that file with a symlink to
+`~/khadi/target/release/`, which the tar excludes and had never updated. Two
+installers owning one path, the second silently winning and pointing at
+something old — the same shape as the gate keeping its own copy of the
+installer's lists (10g), created while fixing exactly that class of bug.
+
+`push` now delivers to `target/release/` and leaves installing to
+`khadi-install`. One installer.
+
+And the gate now asks each panel to render instead of trusting PATH. Negative
+control: a stub emitting the old error string fails all four.
+
+**On PATH is not the same as working** — the general lesson, and the reason
+this section exists rather than a one-line fix.
+
+---
+
 ## 11. Risks and open decisions
 
 | Risk | Why it bites | Mitigation |

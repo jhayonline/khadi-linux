@@ -83,6 +83,25 @@ else
 fi
 echo
 
+# ON PATH IS NOT THE SAME AS WORKING. A stale khadi-hud passed every check
+# here while three of the four panels were dead -- the layout showed
+# `unknown command "net"` and the gate said 71/71, because nothing asked the
+# binary to do anything. Only looking at the screen caught it. So ask.
+echo "  Panels render"
+if command -v khadi-hud >/dev/null; then
+    for sub in dash net fs header; do
+        if out=$(KHADI_COLS=34 KHADI_ROWS=20 khadi-hud "$sub" --once 2>&1) \
+           && [[ -n "${out//[[:space:]]/}" ]]; then
+            ok "khadi-hud $sub"
+        else
+            no "khadi-hud $sub drew nothing: ${out%%$'\n'*}"
+        fi
+    done
+else
+    no "khadi-hud not on PATH — cannot ask it to draw"
+fi
+echo
+
 echo "  Theme pipeline"
 if [[ -x "$HOME/khadi/bin/khadi-theme" ]]; then
     t="$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$XDG_CONFIG_HOME/khadi/theme.toml" | head -1)"
