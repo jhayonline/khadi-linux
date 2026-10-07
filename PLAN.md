@@ -1539,13 +1539,49 @@ broken install and the second is a broken invocation.
 
 ---
 
+## 10h. Focus mode
+
+Section 11's answer to "chrome eats the screen" was a `Super+f` focus layout.
+The key is `Alt+f`, not `Super+f`, and the reason is the keyboard model: **each
+layer owns exactly one modifier**, and the chrome being dropped is zellij's
+panes. `Super` reaching into zellij would be the first exception in a model
+whose whole value is having none. The note in section 11 predated the model.
+
+It needed no new zellij code — `ToggleFocusFullscreen` was already bound — but
+it was labelled "zoom pane" in the cheatsheet, which is what it does rather
+than what it is for. A dismissibility feature nobody can find is not a
+mitigation. It now reads `FOCUS MODE — bare terminal`.
+
+### The bar cannot see it, so it watches something else
+
+A zellij pane zoom is internal to zellij. The compositor never hears about it,
+so `khadi-bar` has no signal to react to and no amount of wiring will give it
+one. The bar instead hides when **Hyprland** reports a fullscreen window, which
+it learns from the same event socket the workspace tabs already use.
+
+Two levels, each owned by the layer that can actually see the thing it drops:
+
+| | drops | owner |
+| --- | --- | --- |
+| `Alt+f` | panels, terminal header, dividers — the ~40% | zellij |
+| `Super+F` | the bar, with its exclusive zone | Hyprland |
+
+Hiding releases the exclusive zone with it, so the window below grows into the
+strip instead of leaving a band of wallpaper where the bar was.
+
+Measured rather than eyeballed: the bar's strip reads mean luminance 0.1119
+normally, 0.0367 with a window fullscreen, and 0.1119 again afterwards —
+identical to before, so nothing is lost on the way back.
+
+---
+
 ## 11. Risks and open decisions
 
 | Risk | Why it bites | Mitigation |
 | --- | --- | --- |
 | **"Omarchy with a theme"** | The chassis is public config. Without something original, Khadi is a fork of someone else's taste | `khadi-hud` plus the pane-centric workflow. Both architectural, not cosmetic |
 | **Rolling-release theme breakage** | Any upstream can change its config format with no notice. Ten apps means ten chances a week | **Done.** `khadi-check` renders every theme and runs each app's own validator; `.github/workflows/check.yml` runs it daily on real Arch. Breakage is a failing build, not a user report. Section 10g |
-| **Chrome eats the screen** | ~40% of the eDEX screenshot is decoration. Beautiful in a screenshot, cramped on a 13-inch laptop | Ship a `Super+f` focus layout that drops to bare terminal. The aesthetic must be dismissible |
+| **Chrome eats the screen** | ~40% of the eDEX screenshot is decoration. Beautiful in a screenshot, cramped on a 13-inch laptop | **Done.** `Alt+f` drops to bare terminal; `Super+F` takes the bar with it. Section 10h |
 | **Solo maintenance** | Distros die when one person burns out. eDEX is the cautionary tale — three years, then archived | The whole architecture minimises this. Resist every feature that moves work from upstream to Khadi |
 | **Hosting cost and uptime** | A repo users depend on cannot go down. The bill grows with adoption | Cheap object storage plus CDN from day one. Know the per-GB number before launch |
 | **NVIDIA on Hyprland** | Still the top source of support load on Wayland distros | Support it, document it, do not contort the product for it |

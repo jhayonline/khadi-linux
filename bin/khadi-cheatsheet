@@ -87,7 +87,7 @@ def hypr_binds():
         label = {'exec': _exec_label(arg),
                  'killactive': 'close window', 'exit': 'quit Hyprland',
                  'movefocus': f'focus {arg}', 'movewindow': f'move {arg}',
-                 'fullscreen': 'fullscreen (dismiss the chrome)',
+                 'fullscreen': 'fullscreen (and hides the bar)',
                  'togglefloating': 'float', 'workspace': f'workspace {arg}',
                  'movetoworkspace': f'send to workspace {arg}'}.get(act, f'{act} {arg}'.strip())
         out.append((combo, label))
@@ -104,7 +104,7 @@ def zellij_binds():
         act, arg = m.group(2), m.group(3) or ''
         label = {'NewPane': f'new pane {arg}'.strip(), 'CloseFocus': 'close pane',
                  'MoveFocus': f'focus {arg}', 'MoveFocusOrTab': f'focus/tab {arg}',
-                 'Resize': f'resize {arg}', 'ToggleFocusFullscreen': 'zoom pane',
+                 'Resize': f'resize {arg}', 'ToggleFocusFullscreen': 'FOCUS MODE — bare terminal',
                  'NewTab': 'new tab', 'CloseTab': 'close tab', 'Quit': 'detach',
                  'TogglePaneFrames': 'toggle frames'}.get(act, f'{act} {arg}'.strip())
         out.append((keys[0], label))

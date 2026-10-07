@@ -125,9 +125,18 @@ fn build(app: &Application) {
     // an idle session does one mutex lock per tick and no IPC at all.
     if hypr::available() {
         let watcher = hypr::Watcher::spawn();
+        let win = window.clone();
         glib::timeout_add_local(Duration::from_millis(100), move || {
             if let Some(snap) = watcher.take() {
                 tabs.apply(&snap);
+                // Section 11: "the aesthetic must be dismissible". Alt+f drops
+                // the zellij chrome and cannot reach this surface -- a pane
+                // zoom is internal to zellij and the compositor never hears
+                // about it -- so the bar takes its cue from the one signal it
+                // can see. Hiding releases the exclusive zone with it, so the
+                // window below actually grows into the strip rather than
+                // leaving a band of wallpaper.
+                win.set_visible(!snap.fullscreen);
             }
             glib::ControlFlow::Continue
         });

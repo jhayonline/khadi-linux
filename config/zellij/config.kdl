@@ -29,6 +29,14 @@ keybinds clear-defaults=true {
         bind "Alt k" "Alt Up"    { MoveFocus "Up"; }
         bind "Alt =" { Resize "Increase"; }
         bind "Alt -" { Resize "Decrease"; }
+        // FOCUS MODE. Section 11 lists "chrome eats the screen" as a
+        // standing risk — ~40% of the eDEX screenshot is decoration, which
+        // is fine in a screenshot and cramped on a 13-inch laptop — and the
+        // answer is that the aesthetic has to be dismissible. This is it:
+        // one key and the panels, the header and the dividers are gone,
+        // leaving the shell with the whole terminal. Press it again to come
+        // back. It belongs to zellij because the chrome it drops is zellij's
+        // panes, and Alt is zellij's modifier.
         bind "Alt f" { ToggleFocusFullscreen; }
         bind "Alt t" { NewTab; }
         bind "Alt w" { CloseTab; }

@@ -37,6 +37,9 @@ pub struct Workspace {
 pub struct Snapshot {
     pub workspaces: Vec<Workspace>,
     pub active: i32,
+    /// Something on the active workspace is fullscreen. The bar uses this to
+    /// get out of the way: section 11's "the aesthetic must be dismissible".
+    pub fullscreen: bool,
 }
 
 impl Snapshot {
@@ -90,6 +93,8 @@ pub fn snapshot() -> Result<Snapshot> {
     #[derive(Deserialize)]
     struct Active {
         id: i32,
+        #[serde(default)]
+        hasfullscreen: bool,
     }
 
     let raw = request("j/workspaces")?;
@@ -101,7 +106,7 @@ pub fn snapshot() -> Result<Snapshot> {
     let raw = request("j/activeworkspace")?;
     let active: Active = serde_json::from_str(&raw).context("parse j/activeworkspace")?;
 
-    Ok(Snapshot { workspaces, active: active.id })
+    Ok(Snapshot { workspaces, active: active.id, fullscreen: active.hasfullscreen })
 }
 
 /// Events that change what the tab strip shows. Everything else on the stream
@@ -124,6 +129,8 @@ fn affects_workspaces(line: &str) -> bool {
             | "closewindow"
             | "movewindow"
             | "activespecial"
+            // Not a workspace move, but the bar hides on it.
+            | "fullscreen"
     )
 }
 
@@ -218,6 +225,7 @@ mod tests {
             "closewindow>>8a1",
             "focusedmonv2>>eDP-1,2",
             "activespecial>>,eDP-1",
+            "fullscreen>>1",
         ] {
             assert!(affects_workspaces(line), "dropped {line}");
         }
@@ -289,6 +297,7 @@ mod tests {
                 Workspace { id: 4, name: "code".into(), windows: 2 },
             ],
             active: 4,
+            fullscreen: false,
         };
         assert_eq!(s.workspace(4).unwrap().name, "code");
         assert!(s.workspace(2).is_none());
