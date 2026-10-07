@@ -114,11 +114,11 @@ Three caveats worth stating plainly:
 
 - **The A/B is scored by the author**, against one screenshot, by eye. It is a
   disciplined count, not an independent one.
-- `bash vm/gate.sh` last passed at 42 checks, 0 failures, inside a clean VM.
-  The gate has grown since and has not been re-run there. And what it never
-  proved is its own wording — "someone else runs the script and gets your
-  desktop". It has been passed by the author's VM, which is not the same
-  thing.
+- `bash vm/gate.sh` passes 53 checks, 0 failures, inside a clean VM — with the
+  four loaded-state checks excluded, since that measurement was headless and
+  they need a running compositor. What the gate has never proved is its own
+  wording: "someone else runs the script and gets your desktop". It has been
+  passed by the author's VM, which is not the same thing.
 - Phases 4 to 6 — packaging, installer, ISO, and actually operating a repo —
   are not started. Khadi is a config layer you clone, not something you
   `pacman -S` yet.

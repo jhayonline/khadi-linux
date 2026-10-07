@@ -8,6 +8,10 @@
 # you pass by wishful thinking.
 #
 #   bash ~/khadi/vm/gate.sh
+#
+# Run it from a LOGIN shell. The installer puts ~/.local/bin on PATH from the
+# login profile, and `ssh host 'bash gate.sh'` reads neither that nor
+# /etc/profile — so use `ssh host 'bash -lc "bash ~/khadi/vm/gate.sh"'`.
 set -uo pipefail
 
 : "${XDG_CONFIG_HOME:=$HOME/.config}"
@@ -61,7 +65,17 @@ if (( ${#BINS[@]} == 0 )); then
     no "could not read BINS from khadi-install — this gate is checking nothing"
 else
     for b in "${BINS[@]}"; do
-        command -v "$b" >/dev/null && ok "$b" || no "$b not on PATH"
+        if command -v "$b" >/dev/null; then
+            ok "$b"
+        elif [[ -x "$HOME/.local/bin/$b" ]]; then
+            # Installed, but this shell never sourced the profile the PATH
+            # block went into. `ssh host 'bash gate.sh'` is neither a login
+            # nor an interactive shell, so it reads neither — and all six
+            # binaries then report "not on PATH" on a perfectly good install.
+            no "$b installed but ~/.local/bin is not on this shell's PATH — run the gate from a login shell"
+        else
+            no "$b not on PATH and not in ~/.local/bin"
+        fi
     done
 fi
 echo

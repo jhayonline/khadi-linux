@@ -1523,11 +1523,19 @@ runs only locally, so "loaded state, not just the file on disk" remains a
 manual gate. CI checks that the configs are *valid*; the VM checks that they
 are *in effect*.
 
-The gate itself has outgrown its last measurement. Its config-link and binary
-lists are now derived from `khadi-install` instead of being a second copy —
-which found six config links and three binaries it had never been checking, a
-gate drifting in the direction that passes — and it has a prompt section. The
-clean-VM number is still the old 42 and needs re-running.
+The gate itself grew. Its config-link and binary lists are now derived from
+`khadi-install` instead of being a second copy — which found six config links
+and three binaries it had never been checking, a gate drifting in the direction
+that passes — and it has a prompt section. **Re-measured in the VM: 53 passed,
+0 failed**, up from 42, with the four loaded-state checks excluded because that
+run was headless.
+
+That re-run also found a trap in the gate itself. `ssh host 'bash gate.sh'` is
+neither a login nor an interactive shell, so it sources neither `/etc/profile`
+nor the login profile the PATH block goes into, and all six binaries report
+missing on a correct install. The gate now distinguishes "not installed" from
+"installed, and this shell never read the profile", because the first is a
+broken install and the second is a broken invocation.
 
 ---
 

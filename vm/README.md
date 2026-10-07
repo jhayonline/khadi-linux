@@ -75,12 +75,24 @@ Mechanised as `gate.sh` and run inside the guest:
 bash ~/khadi/vm/gate.sh
 ```
 
-**Last measured: 42 passed, 0 failed** — and that number is now out of date.
-The gate has since grown: the config-link and binary lists are derived from
-`khadi-install` rather than kept here (six links and three binaries were going
-unchecked), and there is a new prompt section. It has not been re-run in the
-VM since. On the author's host, against a throwaway `$HOME`, the new sections
-pass.
+**Current result: 53 passed, 0 failed**, measured in this VM after a
+`provision.sh` run. It was 42 before the config-link and binary lists were
+derived from `khadi-install` instead of kept here — six links and three
+binaries had been going unchecked — and before the prompt section.
+
+The four **loaded-state** checks are not in that 53: they need a running
+Hyprland and the measurement was taken headless over ssh.
+
+**Run it from a login shell.** The installer puts `~/.local/bin` on PATH from
+the login profile, and `ssh host 'bash gate.sh'` is neither a login nor an
+interactive shell, so it reads neither that nor `/etc/profile` — every binary
+then reports missing on a perfectly good install. Use:
+
+```sh
+KHADI_VM_USER=khadi ./vm/khadi-vm ssh 'bash -lc "bash ~/khadi/vm/gate.sh"'
+```
+
+The gate now says so when it happens, rather than just "not on PATH".
 
 It checks packages, config links,
 `foot`/`fuzzel --check-config`, the yazi theme, `Super`-scope discipline,
