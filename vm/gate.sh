@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Khadi — Phase 1 gate check. Runs INSIDE the guest.
+# Khadi — install gate. Runs INSIDE the guest.
+#
+# Phase 1's gate was "someone else runs the script and gets your desktop", and
+# that is still what this answers; it has grown with the thing it gates.
 #
 # The checklist from vm/README.md, mechanised. A gate you run by eye is a gate
 # you pass by wishful thinking.
@@ -14,7 +17,7 @@ no()   { printf '  \033[31m✗\033[0m %s\n' "$*"; fail=$((fail+1)); }
 note() { printf '    %s\n' "$*"; }
 
 echo
-echo "  KHADI — PHASE 1 GATE"
+echo "  KHADI — INSTALL GATE"
 echo "  ────────────────────────────────────────────────────────"
 echo
 
@@ -25,19 +28,34 @@ while read -r p _; do
 done < "$HOME/khadi/packages.txt"
 echo
 
+# The lists come from the INSTALLER, not from a copy kept here. A gate with its
+# own list drifts from the thing it is gating, and it drifts in the direction
+# that passes: the gate checked six config links while the installer made nine,
+# so three could have been broken for a phase without a failing check.
+CONFIGS=(); BINS=()
+eval "$(grep -E '^(CONFIGS|BINS)=\(' "$HOME/khadi/bin/khadi-install")"
+
 echo "  Config linked"
-for c in foot zellij btop hypr yazi fuzzel; do
-    t="$XDG_CONFIG_HOME/$c"
-    if [[ -e "$t" ]]; then ok "$c -> $(readlink -f "$t" | sed "s|$HOME|~|")"
-    else no "$c missing"; fi
-done
+if (( ${#CONFIGS[@]} == 0 )); then
+    no "could not read CONFIGS from khadi-install — this gate is checking nothing"
+else
+    for c in "${CONFIGS[@]}"; do
+        t="$XDG_CONFIG_HOME/$c"
+        if [[ -e "$t" ]]; then ok "$c -> $(readlink -f "$t" | sed "s|$HOME|~|")"
+        else no "$c missing"; fi
+    done
+fi
 [[ -e "$XDG_CONFIG_HOME/khadi/theme.toml" ]] && ok "theme.toml" || no "theme.toml missing"
 echo
 
 echo "  Binaries on PATH"
-for b in khadi-panel khadi-cheatsheet khadi-dev; do
-    command -v "$b" >/dev/null && ok "$b" || no "$b not on PATH"
-done
+if (( ${#BINS[@]} == 0 )); then
+    no "could not read BINS from khadi-install — this gate is checking nothing"
+else
+    for b in "${BINS[@]}"; do
+        command -v "$b" >/dev/null && ok "$b" || no "$b not on PATH"
+    done
+fi
 echo
 
 echo "  Theme pipeline"
@@ -92,6 +110,30 @@ except Exception as e: print('   ',e); sys.exit(1)
 PY
 echo
 
+echo "  Prompt"
+# A/B item 13. The prompt is the one piece of Khadi that lives in a file the
+# installer APPENDS to rather than replaces, so it is the one most likely to be
+# half-applied — and a shell with no pill looks like a theme problem.
+RC=""
+for c in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.config/fish/conf.d/khadi-prompt.fish"; do
+    grep -qsF '# >>> khadi prompt >>>' "$c" && RC="$c"
+done
+if [[ -n "$RC" ]]; then
+    ok "prompt block in ${RC/#$HOME/\~}"
+else
+    no "no khadi prompt block in any interactive rc"
+fi
+if command -v starship >/dev/null 2>&1; then
+    # starship exits 0 on a config it could not parse and warns on stderr, so
+    # stderr is the exit status. Same reason khadi-check reads it that way.
+    err="$(STARSHIP_CONFIG="$XDG_CONFIG_HOME/khadi/starship.toml" starship prompt 2>&1 >/dev/null)"
+    [[ -z "$err" ]] && ok "starship renders the khadi config" \
+                    || { no "starship rejected the installed config"; note "$err"; }
+else
+    no "starship not installed — the prompt is inert"
+fi
+echo
+
 echo "  Keybinding discipline"
 leak=$(grep -E '^bind' "$XDG_CONFIG_HOME/hypr/hyprland.conf" 2>/dev/null | grep -vE '\$mod' | wc -l)
 [[ "$leak" -eq 0 ]] && ok "every Hyprland bind is Super-scoped" || no "$leak binds escape Super"
@@ -107,8 +149,11 @@ echo
 echo "  Display"
 read -r W H < <(tr ',' ' ' < /sys/class/graphics/fb0/virtual_size 2>/dev/null)
 cols=$(( W * 72 / (10 * 96) * 2 ))
-if   [[ "${cols:-0}" -ge 247 ]]; then ok "${W}x${H} -> ~$cols cols (faithful proportions)"
-elif [[ "${cols:-0}" -ge 180 ]]; then ok "${W}x${H} -> ~$cols cols (usable, below 247)"
+# 217, not 247. The threshold moved when khadi-hud replaced btop in the side
+# columns: btop needed 60 for its CPU box, khadi-hud draws the same content in
+# 34, and the columns went 84 -> 74. See PLAN.md section 10d.
+if   [[ "${cols:-0}" -ge 217 ]]; then ok "${W}x${H} -> ~$cols cols (faithful proportions)"
+elif [[ "${cols:-0}" -ge 180 ]]; then ok "${W}x${H} -> ~$cols cols (usable, below 217)"
 else no "${W}x${H} -> ~$cols cols, layout needs >=180"; fi
 echo
 
