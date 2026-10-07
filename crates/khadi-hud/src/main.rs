@@ -14,6 +14,7 @@
 
 mod dash;
 mod fs_panel;
+mod globe;
 mod net_panel;
 mod widgets;
 
@@ -81,12 +82,21 @@ fn run(panel: Panel) -> Result<()> {
 
     let tick = Duration::from_millis(1000);
     let mut last = Instant::now();
+    // The globe turns on wall time, not on frame count, so it keeps the same
+    // rate whatever the terminal is doing. The draw loop already runs at the
+    // event-poll interval, so there is no new timer here.
+    let started = Instant::now();
     loop {
         term.draw(|f| match &panel {
             Panel::Dash => f.render_widget(
                 dash::Dash { m: &m, theme: &theme, clock: hhmm() }, f.area()),
             Panel::Net => f.render_widget(
-                net_panel::NetPanel { n: &n, theme: &theme }, f.area()),
+                net_panel::NetPanel {
+                    n: &n,
+                    theme: &theme,
+                    spin: started.elapsed().as_secs_f64() * globe::DEG_PER_SEC,
+                },
+                f.area()),
             Panel::Fs => f.render_widget(
                 fs_panel::FsPanel { fs: &fsys, theme: &theme }, f.area()),
             Panel::Header { left, right } => f.render_widget(
@@ -163,7 +173,12 @@ fn main() -> Result<()> {
             std::thread::sleep(Duration::from_millis(250));
             n.refresh();
             render_once(w, h, |f| {
-                f.render_widget(net_panel::NetPanel { n: &n, theme: &theme }, f.area())
+                // Fixed angle: --once exists for screenshots and CI, and a
+                // frame that depends on when it ran cannot be diffed.
+                f.render_widget(
+                    net_panel::NetPanel { n: &n, theme: &theme, spin: 0.0 },
+                    f.area(),
+                )
             })?
         }
         Panel::Fs => {

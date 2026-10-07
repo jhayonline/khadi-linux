@@ -1575,6 +1575,70 @@ identical to before, so nothing is lost on the way back.
 
 ---
 
+## 10i. The globe turns
+
+The Phase 0 A/B listed the world-view globe as **dropped, non-goal**, and
+section 12 said so too. That conflated two things: WebGL, which a cell grid
+genuinely cannot do, and *a turning sphere*, which it can. What reads on screen
+in eDEX is not the shading or the bloom — it is a dot matrix rotating. A
+braille canvas has 2x4 subpixels per cell, which is enough.
+
+It does not move the A/B count: the globe was never one of the eighteen
+in-scope elements. It was listed below the line as dropped, and it is not.
+
+### The land is eDEX's, not an approximation of it
+
+`ratatui` ships coastline data but keeps it in a private module, so it is not
+reachable. The better source was already in the tree: eDEX's own
+`src/assets/misc/grid.json`, the 3937-tile mesh encom-globe draws its
+continents from. Khadi is GPL-3.0 and so is eDEX, so the authentic grid is
+available rather than a lookalike.
+
+**Its `lat`/`lon` fields are not geographic.** Taken at face value they put
+land in the Indian Ocean and none in Antarctica. The usable position is each
+tile's 3D boundary — a real point on a sphere of radius 500 — and the frame was
+then *solved for* against known coordinates rather than guessed:
+
+    polar axis = Y,  lon = atan2(x, z) + 85 degrees,  not mirrored
+
+Eight land probes and six ocean probes, 14 of 14. `spike/globe-land.py`
+regenerates the data and refuses to write a file that fails its own check; a
+unit test pins the same probes so the committed data cannot quietly rot.
+
+### Two things that had to be measured
+
+**Thinning, not quantising.** The source mesh is ~1.6 subpixels apart at panel
+size, which braille renders as a solid blob, so the points have to be thinned.
+Snapping them to a lattice was tried first and aliased against the mesh into
+**moiré stripes** that read as a rendering defect. The thinning is a stable
+hash per point instead — no lattice, nothing to beat against, and keyed on the
+coordinates so the pattern holds still while the globe moves under it.
+
+**It shipped as an egg.** Braille packs 2 subpixels across a cell and 4 down,
+so a subpixel is square only if the cell is exactly 2:1. Iosevka Term has a
+0.5 em advance and the cell lands nearer 2.75:1, which makes a subpixel
+1 : 1.375 — and the first render measured **0.72 as wide as it was tall**. The
+canvas is now scaled in subpixel *widths* on both axes, so a circle is a
+circle. A test measures the rendered bounding box, because this is exactly the
+kind of thing that looks fine until someone sees it.
+
+### It is the cheapest panel, not the most expensive
+
+eDEX's reputation was for burning a CPU, so the animation was measured rather
+than assumed. Ten seconds each, release build, 38x44:
+
+| panel | cost |
+| --- | --- |
+| `net` — spinning globe at 10 fps | **0.6%** of one core |
+| `dash` — no animation at all | 3.1% |
+| `fs` — no animation at all | 0.1% |
+
+The animated one is five times cheaper than the static one. Projecting 2400
+points is nothing; `dash` enumerates every process once a second, and that is
+what costs. Worth remembering before optimising anything here on instinct.
+
+---
+
 ## 11. Risks and open decisions
 
 | Risk | Why it bites | Mitigation |
@@ -1617,10 +1681,13 @@ will ask for, and the answer is no.
   MaxMind (`netstat.class.js`: *"Prevent geoip lookup attempt until maxminddb
   is loaded"*); GeoLite2 now needs an account and carries redistribution terms
   an ISO should not take on.
-  **But a world map is not a globe.** ratatui ships one — braille over ~5000
-  points — so `khadi-hud net` draws eDEX's WORLD VIEW silhouette with no
-  pins, no geolocation and no new dependency. The panel is labelled
-  `NO GEOIP`, because a pin would be a claim the data does not support.
+  **Both fences still stand, and the globe got built anyway.** What the first
+  reading got wrong was treating "no WebGL" as "no globe". WebGL is how eDEX
+  drew a turning sphere, not what a turning sphere *is* — and a braille canvas
+  has 2x4 subpixels per cell to spend on one. `khadi-hud net` turns a dotted
+  globe with no browser engine, no new dependency and no geolocation; it is
+  labelled `NO GEOIP` because a pin would be a claim the data does not
+  support. See section 10i.
 - **No on-screen keyboard.** ~15% of the eDEX screen, useless without a
   touchscreen, on a system whose entire premise is the physical keyboard.
   Already dropped upstream.

@@ -3,33 +3,25 @@
 //! eDEX's right column is NETWORK STATUS, WORLD VIEW and NETWORK TRAFFIC.
 //!
 //! The world view is the interesting one. eDEX drew a WebGL globe
-//! ([encom-globe](https://github.com/arscan/encom-globe), MIT, 975 KB of JS
-//! plus 940 KB of grid data) and pinned connection endpoints resolved through
-//! MaxMind. Neither survives into Khadi: a cell grid cannot render WebGL at
-//! any price, and GeoLite2 needs an account and carries redistribution terms
-//! that an ISO should not take on.
-//!
-//! What a terminal CAN do is a world map, because ratatui ships one — braille
-//! markers over ~5000 points. So the panel keeps eDEX's silhouette without
-//! the browser engine and without claiming to know where anyone is.
+//! ([encom-globe](https://github.com/arscan/encom-globe)) and pinned
+//! connection endpoints resolved through MaxMind. The globe is in `globe.rs`
+//! — a cell grid cannot render WebGL, but it can turn a dotted sphere, which
+//! is the part that actually reads. The geolocation stays gone: GeoLite2
+//! needs an account and carries redistribution terms an ISO should not take
+//! on, so the panel shows the world without claiming to know where anyone is.
 
 use khadi_core::{net::{rate, total, Network}, Theme};
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::Style,
-    symbols::Marker,
-    widgets::{
-        canvas::{Canvas, Map, MapResolution},
-        Widget,
-    },
-};
+use ratatui::{buffer::Buffer, layout::Rect, style::Style, widgets::Widget};
 
-use crate::widgets::{col, pair, Header, Spark};
+use crate::globe::Globe;
+use crate::widgets::{pair, Header, Spark};
 
 pub struct NetPanel<'a> {
     pub n: &'a Network,
     pub theme: &'a Theme,
+    /// Globe rotation in degrees. The panel does not own a clock — `--once`
+    /// has to be able to render the same frame twice.
+    pub spin: f64,
 }
 
 impl Widget for NetPanel<'_> {
@@ -67,16 +59,12 @@ impl Widget for NetPanel<'_> {
         room!(Header::HEIGHT);
         Header::new("WORLD VIEW", "NO GEOIP", t).render(Rect::new(area.x, y, w, 2), buf);
         y += Header::HEIGHT;
-        let map_h = 9u16.min(bottom.saturating_sub(y));
+        // The globe wants every row it can get: the disc radius is set by the
+        // smaller of the two subpixel axes, so height is what limits it in a
+        // 34-column panel.
+        let map_h = 14u16.min(bottom.saturating_sub(y));
         if map_h >= 4 {
-            let line = col(t.a(50));
-            Canvas::default()
-                .marker(Marker::Braille)
-                .x_bounds([-180.0, 180.0])
-                .y_bounds([-90.0, 90.0])
-                .paint(|ctx| {
-                    ctx.draw(&Map { resolution: MapResolution::High, color: line });
-                })
+            Globe { theme: t, spin: self.spin }
                 .render(Rect::new(area.x, y, w, map_h), buf);
             y += map_h + 1;
         }
