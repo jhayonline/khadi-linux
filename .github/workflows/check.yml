@@ -1,0 +1,70 @@
+# Khadi — the rolling-release watch.
+#
+# PLAN.md section 11 names upstream theme breakage as a standing risk: any
+# upstream can change its config format with no notice, and ten apps means ten
+# chances a week. The stated mitigation was "CI that renders every template and
+# diffs output on each upstream bump, so breakage is a failing build rather
+# than a user report". `khadi-check` was the first half of that. This is the
+# other half — the thing that actually runs it.
+#
+# A rolling release publishes no "upstream bumped" event to subscribe to, so
+# the SCHEDULE is the trigger. Daily, because a week-old break is a user
+# report, which is the outcome the mitigation exists to avoid.
+name: check
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    # Arch, because every validator khadi-check runs is the app's OWN checker —
+    # `foot --check-config`, `fuzzel --check-config`, `starship prompt` — and
+    # those only exist on the distro Khadi targets. On the default runner they
+    # would every one of them report "skipped", which is why --strict exists:
+    # a run that validated nothing must not be able to go green.
+    container: archlinux:latest
+
+    steps:
+      - name: Base tools
+        # Before checkout, which needs git. fontconfig is what khadi-fontcheck
+        # asks "what would you actually use for this family" — the question
+        # that caught a whole phase of rendering in substitute faces.
+        run: pacman -Syu --noconfirm --needed git base-devel rust python fontconfig
+
+      - uses: actions/checkout@v4
+
+      - name: Install the manifest
+        # Installing it IS a test, and a different one from khadi-check's.
+        # khadi-check asks whether each name still resolves; this asks whether
+        # they still install TOGETHER, which is where a new conflict shows up.
+        #
+        # This pulls ttc-iosevka, 446 MiB for 189 faces. That is the cost of
+        # being able to ask the font and glyph questions for real, and Phase 4
+        # replaces it with a two-face subset.
+        run: pacman -S --noconfirm --needed $(awk '{sub(/#.*/,"")} NF {print $1}' packages.txt)
+
+      - name: Build and test
+        # Release too, not just test: khadi-bar links GTK4 and gtk4-layer-shell
+        # from the manifest installed above, so an upstream API break lands
+        # here as a failing build rather than as a panel that will not start.
+        run: |
+          cargo build --workspace --release
+          cargo test --workspace
+
+      - name: khadi-check
+        # --drift   config/ is build output. A hand-edit there is a silent
+        #           divergence from templates/, which is the single source.
+        # --strict  a skipped validator means nothing was checked, and on a box
+        #           that just installed the whole manifest that can only mean
+        #           the install did not do what it said.
+        run: ./bin/khadi-check --drift --strict
