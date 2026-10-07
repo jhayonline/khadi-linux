@@ -768,7 +768,16 @@ desktop.**
       which is what the gate actually says. That distinction is the honest
       reading, and it is the oldest open item in this document.
 - [ ] Hyprland 0.57 config migration: the `.conf` format is removed and the
-      window-rule syntax changes again.
+      window-rule syntax changes again. **A second reason surfaced on
+      2026-10-07**: when hyprlock dies while the session is locked, Hyprland
+      shows a recovery screen whose documented escape is
+      `hyprctl eval 'hl.clear_crashed_lockscreen()'` — and `eval` answers
+      *"eval is only supported with the lua config manager"*. On a classic
+      `.conf` config, which is what Khadi ships, there is no way out of that
+      state from inside the session; the only recovery is a reboot. Measured
+      on 0.56.2 in the VM, twice, by killing hyprlock while locked. So the
+      migration is not only about a format deadline — it is the difference
+      between a recoverable lock screen and an unrecoverable one.
 - [x] **mako urgency variants confirmed** — all three photographed together in
       a real session, visibly distinct on the one-colour ramp. Section 10q.
 - [x] **The VT is no longer a limit.** This read "tuigreet is the one surface

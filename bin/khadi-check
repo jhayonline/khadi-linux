@@ -215,6 +215,28 @@ for theme in themes/*.toml; do
         else no "starship rejected its config"; printf '    %s\n' "$err"; fi
     else sk "starship"; fi
 
+    # The lock screen's labels are shell-outs to khadi/lockinfo.sh. hyprlock
+    # renders an empty label for a command that fails, so a field that stops
+    # answering leaves a blank where the battery used to be and nothing says
+    # so. Ask the script for exactly the fields the config asks it for.
+    #
+    # The config is also where a field gets ADDED, so the list is read from it
+    # rather than written out twice.
+    fields=$(grep -o '\$info [a-z]*' config/hypr/hyprlock.conf | awk '{print $2}' | sort -u)
+    if [[ -z "$fields" ]]; then
+        no "hyprlock.conf asks lockinfo.sh for nothing — did the \$info alias change?"
+    else
+        bad=""
+        for f in $fields; do
+            out=$(sh config/khadi/lockinfo.sh "$f" 2>/dev/null) || bad="$bad $f(exit)"
+            [[ -n "$out" ]] || bad="$bad $f(empty)"
+        done
+        # And the other direction: a field the script answers but nothing asks
+        # for is dead code, not a failure, so it is not checked here.
+        if [[ -z "$bad" ]]; then ok "lockinfo answers every field the lock screen asks for"
+        else no "lockinfo.sh failed:$bad"; fi
+    fi
+
     python3 - <<'PY' && ok "toml outputs parse" || no "a TOML output is malformed"
 import tomllib, sys
 for f in ("config/yazi/theme.toml", "config/yazi/yazi.toml",
