@@ -8,7 +8,7 @@
 use khadi_core::{disks::Filesystem, net::total, Theme};
 use ratatui::{buffer::Buffer, layout::Rect, style::Style, widgets::Widget};
 
-use crate::widgets::{col, Header};
+use crate::widgets::{bar, col, Header};
 
 const LABEL_W: u16 = 18;
 const PCT_W: u16 = 4;
@@ -63,11 +63,7 @@ impl Widget for FsPanel<'_> {
             let barx = cx + LABEL_W + GAP;
             let barw = sizes_x.saturating_sub(barx + GAP);
             if barw > 2 {
-                let fill = (m.frac() * barw as f64).round() as u16;
-                let bar: String = (0..barw)
-                    .map(|k| if k < fill { '█' } else { '░' })
-                    .collect();
-                buf.set_string(barx, cy, &bar, Style::default().fg(col(t.rule)));
+                bar(buf, barx, cy, barw, m.frac(), t);
             }
             buf.set_string(sizes_x, cy, &sizes, Style::default().fg(col(t.text_muted)));
             let p = format!("{pct:>3}%");
@@ -135,7 +131,7 @@ a90 = "#9abbbd"
                 // A bar glyph immediately followed by a digit means the bar
                 // overran into the size column.
                 assert!(
-                    !row.contains("░5") && !row.contains("█5") && !row.contains("░9"),
+                    !row.contains("█5") && !row.contains("█9") && !row.contains("█1"),
                     "bar collided with text at width {w}: {row:?}"
                 );
             }

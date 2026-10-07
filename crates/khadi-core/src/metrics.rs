@@ -19,6 +19,7 @@ pub struct Hardware {
     pub chassis: String,
     pub cpu_model: String,
     pub cores: usize,
+    pub host: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -62,6 +63,44 @@ fn clean_cpu(brand: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// SMBIOS chassis type -> a word.
+///
+/// `/sys/class/dmi/id/chassis_type` is a NUMBER from the SMBIOS spec, and the
+/// panel was showing it raw: a laptop reported "10". eDEX reads the same file
+/// and prints "Notebook", which is the only reason its hardware row reads as
+/// information rather than as a serial number.
+///
+/// Only the types a desktop Linux plausibly runs on are named; anything else
+/// keeps its number, which is still more honest than guessing.
+fn chassis_name(raw: &str) -> String {
+    match raw.trim() {
+        "3" => "Desktop",
+        "4" => "Low Profile",
+        "6" => "Mini Tower",
+        "7" => "Tower",
+        "8" => "Portable",
+        "9" => "Laptop",
+        "10" => "Notebook",
+        "11" => "Hand Held",
+        "13" => "All In One",
+        "14" => "Sub Notebook",
+        "15" => "Space-saving",
+        "23" => "Rack Mount",
+        "30" => "Tablet",
+        "31" => "Convertible",
+        "32" => "Detachable",
+        "34" => "Embedded",
+        "35" => "Mini PC",
+        "36" => "Stick PC",
+        // 1 "Other" and 2 "Unknown" are what a VM reports, and both are more
+        // useful spelled out than left as a digit.
+        "1" => "Other",
+        "2" => "Unknown",
+        other => return other.to_string(),
+    }
+    .to_string()
+}
+
 fn read_trim(p: &str) -> String {
     fs::read_to_string(p).map(|s| s.trim().to_string()).unwrap_or_default()
 }
@@ -80,13 +119,14 @@ impl Metrics {
             // MANUFACTURER / MODEL / CHASSIS, so we read it directly.
             vendor: read_trim("/sys/class/dmi/id/sys_vendor"),
             model: read_trim("/sys/class/dmi/id/product_name"),
-            chassis: read_trim("/sys/class/dmi/id/chassis_type"),
+            chassis: chassis_name(&read_trim("/sys/class/dmi/id/chassis_type")),
             cpu_model: sys
                 .cpus()
                 .first()
                 .map(|c| clean_cpu(c.brand()))
                 .unwrap_or_default(),
             cores,
+            host: System::host_name().unwrap_or_default(),
         };
         Self {
             sys,
@@ -134,7 +174,12 @@ impl Metrics {
             .collect();
         ps.sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap_or(std::cmp::Ordering::Equal));
         self.tasks = ps.len();
-        ps.truncate(16);
+        // Enough to fill a tall side column rather than a fixed sixteen. The
+        // panel stops drawing when it runs out of rows, so the cost of extra
+        // entries is a short sort, and the benefit is that the band reaches the
+        // bottom of the screen instead of trailing off into empty space —
+        // which is most of what makes eDEX's panels look finished.
+        ps.truncate(40);
         self.procs = ps;
 
         self.temp_c = Self::hottest_zone();

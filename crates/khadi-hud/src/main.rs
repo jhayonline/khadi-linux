@@ -24,12 +24,16 @@ use khadi_core::{metrics::Metrics, Theme};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io, time::{Duration, Instant}};
 
-/// Local wall-clock HH:MM.
+/// Local wall-clock, with seconds.
 ///
-/// Phase 0 locked HH:MM over HH:MM:SS: eight glyphs at a legible width need 39
-/// columns and the panel is 34.
-fn hhmm() -> String {
-    chrono::Local::now().format("%H:%M").to_string()
+/// Phase 0 locked `HH:MM`, having measured eight glyphs of the old solid-block
+/// face at 39 columns against a 34-column panel. That measurement was right
+/// and the conclusion blamed the wrong variable: the cost was the width of the
+/// face, not the count of glyphs. The seven-segment face is 3 columns a digit
+/// and 1 for the colon, so `HH:MM:SS` is 27 and the seconds come back — which
+/// matters because a clock that does not move is a picture of a clock.
+fn hms() -> String {
+    chrono::Local::now().format("%H:%M:%S").to_string()
 }
 
 enum Panel {
@@ -85,7 +89,7 @@ fn run(panel: Panel) -> Result<()> {
     loop {
         term.draw(|f| match &panel {
             Panel::Dash => f.render_widget(
-                dash::Dash { m: &m, theme: &theme, clock: hhmm() }, f.area()),
+                dash::Dash { m: &m, theme: &theme, clock: hms() }, f.area()),
             Panel::Net => f.render_widget(
                 net_panel::NetPanel {
                     n: &n,
@@ -160,7 +164,7 @@ fn main() -> Result<()> {
             std::thread::sleep(Duration::from_millis(250));
             m.refresh();
             render_once(w, h, |f| {
-                f.render_widget(dash::Dash { m: &m, theme: &theme, clock: hhmm() }, f.area())
+                f.render_widget(dash::Dash { m: &m, theme: &theme, clock: hms() }, f.area())
             })?
         }
         Panel::Net => {

@@ -101,10 +101,14 @@ impl Widget for Panel<'_> {
 
         // The clock, as prominent here as it is on the system panel — eDEX's
         // single most dominant element.
-        let clock = Local::now().format("%H:%M").to_string();
-        let cw = (clock.chars().count() as u16) * 6;
+        // Seconds, and the same seven-segment face the system panel uses. The
+        // loop already wakes every 500ms to poll for keys, so the hand moves.
+        let clock = Local::now().format("%H:%M:%S").to_string();
+        // The widget centres itself in whatever it is given, so the box width
+        // is the honest argument — the old `len * 6` was the width of a face
+        // this no longer draws.
         BigClock { text: &clock, theme: t }
-            .render(Rect::new(x + (w.saturating_sub(cw)) / 2, y + 3, cw.min(w), BigClock::HEIGHT), buf);
+            .render(Rect::new(x, y + 3, w, BigClock::HEIGHT), buf);
 
         let date = Local::now().format("%a %d %b %Y").to_string().to_uppercase();
         let dx = x + (w.saturating_sub(date.chars().count() as u16)) / 2;
