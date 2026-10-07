@@ -23,19 +23,15 @@ set -euo pipefail
 : "${XDG_CONFIG_HOME:=$HOME/.config}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [[ -d "$XDG_CONFIG_HOME/btop/khadi" ]]; then
-    BT="$XDG_CONFIG_HOME/btop"
-else
-    BT="$(cd "$HERE/../config/btop" && pwd)"
-fi
-
 # Prefer an installed khadi-hud; fall back to a release build in the repo so
-# the dev loop works without installing.
+# the dev loop works without installing. The `exec` matters: these are
+# long-lived panes, and a wrapper shell that lingers for each one is three
+# processes doing nothing.
 hud() {
     if command -v khadi-hud >/dev/null 2>&1; then
-        command khadi-hud "$@"
+        exec khadi-hud "$@"
     elif [[ -x "$HERE/../target/release/khadi-hud" ]]; then
-        "$HERE/../target/release/khadi-hud" "$@"
+        exec "$HERE/../target/release/khadi-hud" "$@"
     else
         echo "khadi-panel: khadi-hud not found. Build it: cargo build --release" >&2
         exit 1
@@ -43,9 +39,9 @@ hud() {
 }
 
 case "${1:-system}" in
-    system) exec "$(command -v khadi-hud || echo "$HERE/../target/release/khadi-hud")" dash ;;
-    net)    exec "$(command -v khadi-hud || echo "$HERE/../target/release/khadi-hud")" net ;;
-    fs)     exec "$(command -v khadi-hud || echo "$HERE/../target/release/khadi-hud")" fs ;;
-    header) exec "$(command -v khadi-hud || echo "$HERE/../target/release/khadi-hud")" header ;;
+    system) hud dash ;;
+    net)    hud net ;;
+    fs)     hud fs ;;
+    header) hud header ;;
     *)      echo "khadi-panel: unknown panel '${1}' (want: system, net, fs, header)" >&2; exit 2 ;;
 esac
