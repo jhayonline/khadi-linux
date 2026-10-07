@@ -1737,6 +1737,51 @@ compositor.
 
 ---
 
+## 10k. The installer never shipped the two components Khadi writes
+
+Found while adding the check for the `chromium` keybind, by generalising it
+from "what a keybind launches" to "what the config launches":
+
+**`khadi-install` installed neither `khadi-hud` nor `khadi-bar`.** `BINS` held
+six shell scripts from `bin/`; the Rust binaries live in `target/release/` and
+nothing linked them. On a clean install:
+
+- `khadi-panel` printed *"khadi-hud not found. Build it: cargo build --release"*,
+  so the layout had no system, network or filesystem panel
+- `exec-once = khadi-bar` failed silently, so the session had no bar
+
+That is Phase 3a and 3b — the entire original half of the product — absent from
+an install that reported success.
+
+**The gate did not catch it, and the reason matters more than the bug.**
+`vm/khadi-vm push` builds and installs both binaries into the guest as part of
+getting the repo there. So the gate ran against a machine provisioned by a
+*different route* than `khadi-install`, and had been passing on a state the
+installer could not produce. Phase 1's gate is "someone else runs the script
+and gets your desktop"; the script was never the thing being tested.
+
+The installer now links both from `target/release/`, and says so plainly when
+they are not built rather than leaving `exec-once` to fail without a word —
+Khadi does not build for you any more than it installs packages for you, but
+it does have to say which it is. The gate derives `RUSTBINS` from the installer
+alongside `CONFIGS` and `BINS`, so the two cannot drift again.
+
+### The check that found it
+
+"Every program the config launches must be something the install provides" —
+from a keybind *or* from `exec-once`, because both fail the same way and the
+second fails more quietly. A program counts as provided if it is in
+`packages.txt`, in `bin/`, in `crates/`, or **owned by a manifest package**:
+a binary's name is often not its package's, and asking `pacman -Qo` resolved
+`dbus-update-activation-environment` to `dbus` and `gsettings` to `glib2`.
+
+Which immediately found two more gaps. Neither `dbus` nor `glib2` was in the
+manifest, and the session had just started calling both — so the portal
+environment fix and the colour-scheme fix would each have depended on a package
+nothing guaranteed. Both are now listed.
+
+---
+
 ## 11. Risks and open decisions
 
 | Risk | Why it bites | Mitigation |

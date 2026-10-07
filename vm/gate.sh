@@ -36,13 +36,13 @@ echo
 # own list drifts from the thing it is gating, and it drifts in the direction
 # that passes: the gate checked six config links while the installer made nine,
 # so three could have been broken for a phase without a failing check.
-CONFIGS=(); BINS=()
-LISTS="$(grep -E '^(CONFIGS|BINS)=\(' "$HOME/khadi/bin/khadi-install")"
+CONFIGS=(); BINS=(); RUSTBINS=()
+LISTS="$(grep -E '^(CONFIGS|BINS|RUSTBINS)=\(' "$HOME/khadi/bin/khadi-install")"
 # Both definitions must be one line each and closed on it. A wrapped array
 # would grep to a fragment, eval to a SHORTER list, and pass -- which is the
 # same silent-drift failure this block exists to remove.
-if [[ "$(grep -c . <<<"$LISTS")" -ne 2 ]] || grep -qv ')$' <<<"$LISTS"; then
-    no "CONFIGS/BINS in khadi-install are not two single-line arrays — not parsing them"
+if [[ "$(grep -c . <<<"$LISTS")" -ne 3 ]] || grep -qv ')$' <<<"$LISTS"; then
+    no "CONFIGS/BINS/RUSTBINS in khadi-install are not three single-line arrays — not parsing them"
 else
     eval "$LISTS"
 fi
@@ -64,7 +64,10 @@ echo "  Binaries on PATH"
 if (( ${#BINS[@]} == 0 )); then
     no "could not read BINS from khadi-install — this gate is checking nothing"
 else
-    for b in "${BINS[@]}"; do
+    # RUSTBINS included deliberately. khadi-hud and khadi-bar are the two
+    # components Khadi writes, the installer did not ship either, and this
+    # gate passed anyway because khadi-vm push installs them by another route.
+    for b in "${BINS[@]}" "${RUSTBINS[@]}"; do
         if command -v "$b" >/dev/null; then
             ok "$b"
         elif [[ -x "$HOME/.local/bin/$b" ]]; then

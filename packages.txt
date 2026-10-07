@@ -30,6 +30,10 @@ wl-clipboard       # clipboard
 xdg-desktop-portal          # the frontend every GUI app talks to
 xdg-desktop-portal-hyprland # screencast, screenshot, global shortcuts
 xdg-desktop-portal-gtk      # file chooser, print, settings (colour scheme)
+dbus                        # the portal is D-Bus activated, and the session's
+                            # dbus-update-activation-environment is from here.
+                            # Nothing in the manifest depended on it directly.
+glib2                       # gsettings, which is how the colour scheme is set
 chromium                    # what Super+B launches. The keybind already
                             # committed to it; the manifest now says so.
 

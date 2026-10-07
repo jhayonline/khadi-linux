@@ -50,6 +50,13 @@ act()  { if (( APPLY )); then "$@"; fi; }
 
 CONFIGS=(foot zellij btop hypr yazi fuzzel helix mako khadi gtk-3.0 gtk-4.0 xdg-desktop-portal)
 BINS=(khadi-panel khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontcheck)
+# The compiled half. These are the two components Khadi actually writes, and
+# the installer shipped neither: a clean --apply produced a desktop with no
+# panels and no bar. The VM gate never caught it because `khadi-vm push`
+# installs them separately — so the gate was passing on a state the installer
+# could not produce, which is the hole in "someone else runs the script and
+# gets your desktop".
+RUSTBINS=(khadi-hud khadi-bar)
 
 # ---------------------------------------------------------------- uninstall
 if (( UNINSTALL )); then
@@ -83,7 +90,7 @@ STRIP
         b="$(ls -d "$t".khadi-backup-* 2>/dev/null | sort | tail -1 || true)"
         if [[ -n "$b" ]]; then say "restore $b -> $t"; act mv "$b" "$t"; fi
     done
-    for b in "${BINS[@]}"; do
+    for b in "${BINS[@]}" "${RUSTBINS[@]}"; do
         t="$BIN/$b"
         [[ -L "$t" ]] && { say "unlink  $t"; act rm "$t"; }
     done
@@ -167,6 +174,26 @@ for b in "${BINS[@]}"; do
     say "link    $BIN/$b"
     act ln -sf "$ROOT/bin/$b" "$BIN/$b"
 done
+# Khadi does not build for you, the same way it does not install packages for
+# you — it says what is missing and prints the command. Silence here is the
+# expensive case: `exec-once = khadi-bar` fails without a word and the session
+# just comes up without a bar.
+missing_rust=0
+for b in "${RUSTBINS[@]}"; do
+    if [[ -x "$ROOT/target/release/$b" ]]; then
+        say "link    $BIN/$b"
+        act ln -sf "$ROOT/target/release/$b" "$BIN/$b"
+    else
+        say "MISSING $b — not built"
+        missing_rust=$((missing_rust+1))
+    fi
+done
+if (( missing_rust )); then
+    say ""
+    say "  $missing_rust of ${#RUSTBINS[@]} compiled components are not built."
+    say "  Without them the layout has no panels and the session has no bar:"
+    say "      cargo build --release        then re-run this script"
+fi
 
 # Arch's /etc/profile adds /usr/local/bin but NOT ~/.local/bin, so in a login
 # shell khadi-panel is unfindable and the zellij layout fails to spawn its

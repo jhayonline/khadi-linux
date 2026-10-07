@@ -40,8 +40,10 @@ deleted. `--uninstall` removes the links and restores the newest backups.
 > **If you already run Hyprland** — Omarchy, end-4, your own dotfiles —
 > Khadi links over `~/.config/hypr`. Read the dry run before you `--apply`.
 
-Khadi will not install packages for you. The dry run lists what is missing and
-prints the `pacman` line to run.
+Khadi will not install packages for you, and will not build for you. The dry
+run lists what is missing and prints the command — `pacman` for packages,
+`cargo build --release` for `khadi-hud` and `khadi-bar`, which are the panels
+and the bar.
 
 ## Keys
 
