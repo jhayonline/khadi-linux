@@ -49,7 +49,7 @@ say()  { printf '  %s\n' "$*"; }
 act()  { if (( APPLY )); then "$@"; fi; }
 
 CONFIGS=(foot zellij btop hypr yazi fuzzel helix mako khadi gtk-3.0 gtk-4.0 xdg-desktop-portal)
-BINS=(khadi-panel khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontcheck)
+BINS=(khadi-panel khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontcheck khadi-boot)
 # The compiled half. These are the two components Khadi actually writes, and
 # the installer shipped neither: a clean --apply produced a desktop with no
 # panels and no bar. The VM gate never caught it because `khadi-vm push`
@@ -332,6 +332,16 @@ if (( SYSTEM )); then
         sudo systemctl daemon-reload
         sudo systemctl enable greetd.service >/dev/null 2>&1
         say "greetd enabled — it takes over tty1 on next boot"
+    fi
+
+    # The boot splash. Its own script because it is a lot of steps and worth
+    # running alone, but invoked from here so there is ONE root-level entry
+    # point rather than two installers to remember.
+    echo
+    if (( APPLY )); then
+        sudo "$ROOT/bin/khadi-boot" --apply
+    else
+        "$ROOT/bin/khadi-boot"
     fi
 fi
 

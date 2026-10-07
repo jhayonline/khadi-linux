@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# khadi-boot — install the Khadi boot splash. NEEDS ROOT.
+#
+# A Plymouth theme lives in /usr/share, its hook lives in mkinitcpio.conf, and
+# the result has to be baked into an initramfs — none of which the user-level
+# half of khadi-install touches.
+#
+# `khadi-install --system` is already the root-level opt-in (it installs the
+# greetd config and enables the service), so this runs FROM there rather than
+# being a second root-level installer. Two tools owning one job is the drift
+# that has bitten this repo twice: the gate keeping its own copy of the
+# installer's lists, and khadi-vm push writing to a path khadi-install also
+# owned. One entry point.
+#
+# Still runnable on its own, for someone who wants the splash and nothing else:
+#
+#   khadi-boot            dry run — prints every change, makes none
+#   khadi-boot --apply    do it
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APPLY=0
+[[ "${1:-}" == "--apply" ]] && APPLY=1
+THEME_SRC="$ROOT/config/plymouth/khadi"
+THEME_DST=/usr/share/plymouth/themes/khadi
+MKINIT=/etc/mkinitcpio.conf
+STAMP="$(date +%Y%m%d-%H%M%S)"
+
+say()  { printf '  %s\n' "$*"; }
+act()  { if (( APPLY )); then "$@"; fi; }
+die()  { printf '  \033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
+
+echo
+echo "Khadi boot splash $( ((APPLY)) || echo '(dry run)' )"
+echo
+
+command -v plymouth >/dev/null || die "plymouth is not installed: pacman -S plymouth"
+[[ -d "$THEME_SRC" ]] || die "no generated theme at $THEME_SRC — run: khadi-theme build tron"
+
+# THE FONT CHECK COMES FIRST, and it is not decoration. mkinitcpio's plymouth
+# hook resolves the theme's font with `fc-match`, which ALWAYS answers: if
+# Iosevka Term is missing it silently bakes something else into the initramfs
+# and the chrome renders as tofu at boot, where there is no log anyone reads
+# and no way to tell it apart from a broken theme. Khadi lost a whole phase to
+# exactly this failure once (PLAN.md section 10e).
+if ! "$ROOT/bin/khadi-fontcheck" --only mono "$ROOT/config/khadi/theme.toml" >/dev/null 2>&1; then
+    "$ROOT/bin/khadi-fontcheck" --only mono "$ROOT/config/khadi/theme.toml" 2>&1 | sed "s/^/  /"
+    die "the theme's fonts do not resolve — fix that before baking an initramfs"
+fi
+say "fonts and glyphs resolve"
+
+echo
+echo "Theme:"
+say "copy    $THEME_SRC/ -> $THEME_DST/"
+if (( APPLY )); then
+    [[ -d "$THEME_DST" ]] && mv "$THEME_DST" "$THEME_DST.khadi-backup-$STAMP"
+    mkdir -p "$THEME_DST"
+    cp "$THEME_SRC"/* "$THEME_DST/"
+fi
+
+echo
+echo "initramfs:"
+if grep -qE '^HOOKS=.*\bplymouth\b' "$MKINIT"; then
+    say "plymouth hook already in HOOKS"
+else
+    # After `udev` (or `systemd`, whichever this machine uses) and before the
+    # encrypt hook, which is what asks for the LUKS password — the splash has
+    # to be up before anything prompts or the prompt lands on a blank console.
+    say "add     plymouth to HOOKS in $MKINIT"
+    if (( APPLY )); then
+        cp "$MKINIT" "$MKINIT.khadi-backup-$STAMP"
+        sed -i -E 's/^(HOOKS=\(.*\b(systemd|udev)\b)/\1 plymouth/' "$MKINIT"
+        grep -qE '^HOOKS=.*\bplymouth\b' "$MKINIT" \
+            || die "could not place the plymouth hook — add it to HOOKS by hand"
+    fi
+fi
+
+say "set     default theme to khadi and rebuild the initramfs"
+act plymouth-set-default-theme -R khadi
+
+echo
+echo "Kernel command line:"
+# NOT edited here. Bootloaders differ, a wrong edit is an unbootable machine,
+# and this is the one step a person should make themselves.
+if grep -qE '\bsplash\b' /proc/cmdline; then
+    say "'splash' is already on the running kernel command line"
+else
+    say "MISSING 'quiet splash' on the kernel command line — the splash will"
+    say "        not show until it is there. Add it to your bootloader entry:"
+    say "          systemd-boot  /boot/loader/entries/*.conf   options line"
+    say "          GRUB          GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub"
+    say "                        then: grub-mkconfig -o /boot/grub/grub.cfg"
+fi
+
+echo
+if (( APPLY )); then
+    say "Done. Reboot to see it."
+else
+    say "Dry run. Nothing changed. Re-run with --apply (as root)."
+fi

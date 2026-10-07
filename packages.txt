@@ -15,6 +15,9 @@ gtk4-layer-shell   # the layer-shell protocol binding khadi-bar needs
 hyprlock           # lock screen
 greetd             # login daemon
 greetd-tuigreet    # TUI greeter — a text-mode login matches the aesthetic
+plymouth           # the boot splash. PLAN.md section 8: the first impression
+                   # starts at boot, not after reboot. Installed by the
+                   # separate `khadi-boot`, which needs root.
 libnotify          # notify-send; a desktop without it is incomplete
 grim               # screenshot
 slurp              # region select

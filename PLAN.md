@@ -1847,6 +1847,70 @@ this section exists rather than a one-line fix.
 
 ---
 
+## 10m. The boot splash
+
+PLAN.md section 8 has always said the first impression starts at boot, not
+after reboot. Until now nothing acted on it: a Khadi machine booted to the
+stock Arch console.
+
+`templates/plymouth/khadi/` is a Plymouth **script** theme generated from the
+theme file like every other config, and installed by `khadi-boot` — invoked
+from `khadi-install --system`, which was already the root-level opt-in, so
+there is one root entry point rather than two.
+
+### Real messages, not a fake log
+
+eDEX's boot screen is `assets/misc/boot_log.txt`: 85 lines of invented macOS
+kernel messages replayed with a delay and a sound per line. It opens *"Welcome
+to eDEX-UI!"* and talks about kexts.
+
+systemd feeds plymouth genuine unit status through `SetUpdateStatusFunction`,
+so the scrolling log costs nothing to make true. A desktop whose pitch is
+"measured, not assumed" should not open with theatre.
+
+### No image assets
+
+Plymouth script has no rectangle primitive, so themes ship PNGs for their bars
+and rules — Omarchy's ships five. Khadi's chrome is characters, so the splash
+is entirely `Image.Text` and restyles from `themes/*.toml` like everything else.
+Added one generator filter, `rgbf`, because plymouth wants 0..1 floats.
+
+### Two failures, both found only by looking at a real boot
+
+**It came up black.** `Image.Text` takes a font string and `"Iosevka Term 13"`
+resolves fine on a running system. Inside an initramfs it cannot: mkinitcpio's
+hook resolves the font with `fc-match` **on the host** and copies the file in
+as `/usr/share/fonts/Plymouth-monospace.ttf` — renamed, with no fontconfig in
+there to look a family up by name. Every label came back empty. Omitting the
+argument uses the theme's configured font, which is the file plymouth actually
+copied.
+
+**Then the rule came up as tofu.** An initramfs carries only
+`label-freetype.so`; `label-pango.so` would drag in pango, harfbuzz and
+fontconfig. That renderer draws Latin and returns `.notdef` for everything
+multi-byte — so "KHADI" and "BOOT" rendered in the right face above a row of
+empty boxes. **The font was never at fault**: Iosevka Term is correctly baked
+in, verified by extracting the initramfs and querying it, and it does carry
+U+2500. The rule is ASCII for that reason and no other.
+
+Neither failure appears in any log. `plymouth-start` reported active and the
+journal had no parse error in both cases; the only way to find either was to
+screenshot a real boot — `khadi-vm shot` captures the guest framebuffer over
+QMP, which works before any compositor exists.
+
+### What it cost to find out
+
+Three VM reboots with a timed capture loop. Worth recording because the obvious
+alternative — install it on real hardware and look — is a reboot of the machine
+you are working on, each time, with no way to capture what you saw.
+
+**Glyph coverage moved earlier too.** `khadi-fontcheck` now checks U+2500,
+U+252C, U+2588 and U+00B7 alongside U+E0B0, and `khadi-boot` runs it before
+baking an initramfs — `fc-match` always answers, and a substitution baked into
+an initramfs is a font failure with no console to report it on.
+
+---
+
 ## 11. Risks and open decisions
 
 | Risk | Why it bites | Mitigation |

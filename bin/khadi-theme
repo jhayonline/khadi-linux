@@ -135,6 +135,10 @@ FILTERS = {
     "r":     lambda v: str(rgb(str(v))[0]),
     "g":     lambda v: str(rgb(str(v))[1]),
     "b":     lambda v: str(rgb(str(v))[2]),
+    # Plymouth's script module takes colour channels as 0..1 floats, and
+    # Image.Text/SetBackgroundTopColor want them as three separate arguments —
+    # so this expands to "r, g, b" and drops straight into a call.
+    "rgbf":  lambda v: ", ".join(f"{c / 255:.4f}" for c in rgb(str(v))),
     "upper": lambda v: str(v).upper(),
     "raw":   lambda v: str(v),
 }

@@ -13,6 +13,10 @@
 #
 #   khadi-fontcheck                   is this MACHINE able to render the theme?
 #   khadi-fontcheck <theme.toml>      same, for a specific theme
+#   khadi-fontcheck --only mono ...   check one slot and the glyphs. The boot
+#                                     splash renders entirely in the mono face,
+#                                     and should not be blocked by a UI font it
+#                                     never asks for.
 #   khadi-fontcheck --vendored <dir> <theme.toml>
 #                                     is the font OBTAINABLE at all — shipped
 #                                     in the repo, or resolvable from a package?
@@ -23,6 +27,11 @@
 set -uo pipefail
 
 : "${XDG_CONFIG_HOME:=$HOME/.config}"
+ONLY=""
+if [[ "${1:-}" == "--only" ]]; then
+    ONLY="${2:?--only needs a font key}"
+    shift 2
+fi
 VENDORED=""
 if [[ "${1:-}" == "--vendored" ]]; then
     VENDORED="${2:?--vendored needs a directory}"
@@ -47,6 +56,7 @@ while IFS= read -r line; do
     want="$(printf '%s' "$want" | sed 's/^[[:space:]]*"//; s/"[[:space:]]*$//')"
     [[ -z "$want" ]] && continue
     [[ "$key" == "mono" ]] && MONO="$want"
+    [[ -n "$ONLY" && "$key" != "$ONLY" ]] && continue
 
     # fc-match ALWAYS answers. A family that is absent comes back as whatever
     # the default is, which is why comparing the answer is the whole test.
@@ -87,7 +97,13 @@ done < <(awk '/^\[font\]/{f=1;next} /^\[/{f=0} f && /=/' "$THEME")
 # what made the pill possible at all — but Phase 4 replaces the 446 MiB package
 # with a two-face subset, and a subset is exactly where a private-use codepoint
 # goes missing without anyone deciding to drop it.
-GLYPHS="e0b0"
+# U+E0B0 is the prompt's angled edge. The rest are the chrome: the hairline
+# and its tick, the meter block, the dot-matrix fill. khadi-hud draws them in
+# the terminal where a missing glyph is at least visible — the Plymouth splash
+# draws them in an initramfs, where the font is chosen by `fc-match` and
+# nobody is watching. fc-match always answers, which is the whole reason this
+# script exists.
+GLYPHS="e0b0 2500 252c 2588 00b7"
 if [[ -n "${MONO:-}" ]]; then
     for cp in $GLYPHS; do
         if fc-list ":family=$MONO:charset=$cp" family 2>/dev/null | grep -q .; then
