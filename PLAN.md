@@ -732,7 +732,9 @@ desktop.**
       `config/fuzzel/fuzzel.ini`. Neither package is installed here, so they
       were written against the upstream schema at the exact packaged version
       (yazi v26.9.1, fuzzel 1.15.0) and cross-checked key by key. See below.
-- [ ] Configs for the remaining uninstalled pieces: mako, helix
+- [x] **Configs for the remaining uninstalled pieces: mako, helix** — both
+      written and rendering; mako's urgency variants were finally photographed
+      in section 10q, which is what this item was really waiting on.
       *(waybar retired in Phase 3b; see section 10e)*
 - [x] **VM tooling written** — `vm/khadi-vm`, `vm/provision.sh`,
       `vm/README.md`. Plain QEMU, no libvirt: one script, no daemon, nothing
@@ -761,8 +763,10 @@ desktop.**
 **Still open**
 
 - [ ] **A third party has not run it.** The gate passes *mechanically* on a
-      clean machine, 42 checks. It has not been passed *socially*, which is
-      what the gate actually says. That distinction is the honest reading.
+      clean machine — 75 checks now, including the loaded-state half that had
+      never run at all until section 10l. It has not been passed *socially*,
+      which is what the gate actually says. That distinction is the honest
+      reading, and it is the oldest open item in this document.
 - [ ] Hyprland 0.57 config migration: the `.conf` format is removed and the
       window-rule syntax changes again.
 - [x] **mako urgency variants confirmed** — all three photographed together in
