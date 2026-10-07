@@ -46,6 +46,7 @@ while IFS= read -r line; do
     want="${line#*=}"
     want="$(printf '%s' "$want" | sed 's/^[[:space:]]*"//; s/"[[:space:]]*$//')"
     [[ -z "$want" ]] && continue
+    [[ "$key" == "mono" ]] && MONO="$want"
 
     # fc-match ALWAYS answers. A family that is absent comes back as whatever
     # the default is, which is why comparing the answer is the whole test.
@@ -79,6 +80,25 @@ while IFS= read -r line; do
         fail=$((fail+1))
     fi
 done < <(awk '/^\[font\]/{f=1;next} /^\[/{f=0} f && /=/' "$THEME")
+
+# A FAMILY THAT RESOLVES CAN STILL LACK THE GLYPH, which is the same silent
+# failure one level down: the terminal draws tofu and reports success. The
+# prompt's angled edge is U+E0B0. Stock Iosevka carries it — measured, which is
+# what made the pill possible at all — but Phase 4 replaces the 446 MiB package
+# with a two-face subset, and a subset is exactly where a private-use codepoint
+# goes missing without anyone deciding to drop it.
+GLYPHS="e0b0"
+if [[ -n "${MONO:-}" ]]; then
+    for cp in $GLYPHS; do
+        if fc-list ":family=$MONO:charset=$cp" family 2>/dev/null | grep -q .; then
+            printf '  \033[32m✓\033[0m %-10s U+%s in %s\n' "glyph" "${cp^^}" "$MONO"
+        else
+            printf '  \033[31m✗\033[0m %-10s U+%s absent from %s — the prompt terminator renders as tofu\n' \
+                   "glyph" "${cp^^}" "$MONO"
+            fail=$((fail+1))
+        fi
+    done
+fi
 
 if (( fail )); then
     echo

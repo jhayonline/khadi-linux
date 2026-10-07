@@ -26,6 +26,9 @@ yazi               # file browser
 helix              # editor — pending the Phase 1 open decision vs neovim
 git
 fish               # not the login shell; interactive default only
+starship           # the prompt (A/B item 13). Cross-shell, because Khadi does
+                   # not own the login shell and a fish-only prompt would be
+                   # absent for most users on the day they install.
 
 # --- fonts -------------------------------------------------------------
 # Rajdhani and Orbitron are NOT in the official repos and are vendored by

@@ -69,11 +69,23 @@ for theme in themes/*.toml; do
             && ok "fuzzel" || no "fuzzel rejected its config"
     else sk "fuzzel"; fi
 
+    # starship ALWAYS EXITS 0, even on a config it could not parse — it warns
+    # on stderr and carries on with its defaults, so a prompt that silently
+    # lost its pill looks like a working command. stderr is the exit status
+    # here. Verified with two negative controls: an unknown key warns, a
+    # malformed file errors, and both leave stderr non-empty.
+    if have starship; then
+        err="$(STARSHIP_CONFIG="$ROOT/config/khadi/starship.toml" starship prompt 2>&1 >/dev/null)"
+        if [[ -z "$err" ]]; then ok "starship"
+        else no "starship rejected its config"; printf '    %s\n' "$err"; fi
+    else sk "starship"; fi
+
     python3 - <<'PY' && ok "toml outputs parse" || no "a TOML output is malformed"
 import tomllib, sys
 for f in ("config/yazi/theme.toml", "config/yazi/yazi.toml",
           "config/helix/config.toml", "config/helix/themes/khadi.toml",
-          "config/greetd/config.toml", "config/khadi/theme.toml"):
+          "config/greetd/config.toml", "config/khadi/theme.toml",
+          "config/khadi/starship.toml"):
     try: tomllib.load(open(f, "rb"))
     except Exception as e: print(f"    {f}: {e}"); sys.exit(1)
 PY

@@ -60,13 +60,19 @@ if (( UNINSTALL )); then
         act rm "$fd"
     fi
     for prof in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile" \
-                "$HOME/.zprofile" "$HOME/.config/fish/conf.d/khadi-path.fish"; do
-        [[ -f "$prof" ]] && grep -qsF '# >>> khadi path >>>' "$prof" || continue
+                "$HOME/.zprofile" "$HOME/.bashrc" "$HOME/.zshrc" \
+                "$HOME/.config/fish/conf.d/khadi-path.fish" \
+                "$HOME/.config/fish/conf.d/khadi-prompt.fish"; do
+        [[ -f "$prof" ]] && grep -qsE '# >>> khadi (path|prompt) >>>' "$prof" || continue
         say "strip   khadi block from $prof"
         act python3 - "$prof" <<'STRIP'
 import re, sys
 p = sys.argv[1]; s = open(p).read()
-open(p, 'w').write(re.sub(r'\n?# >>> khadi path >>>.*?# <<< khadi path <<<\n', '', s, flags=re.S))
+# Both blocks, in whichever file they landed in: the PATH block goes to the
+# login profile and the prompt block to the interactive rc, and on zsh and
+# bash those are different files.
+open(p, 'w').write(
+    re.sub(r'\n?# >>> khadi (path|prompt) >>>.*?# <<< khadi \1 <<<\n', '', s, flags=re.S))
 STRIP
     done
     for c in "${CONFIGS[@]}"; do
@@ -207,6 +213,57 @@ esac
 export PATH
 # <<< khadi path <<<
 PROF
+        fi
+    fi
+fi
+
+# ----------------------------------------------------------------- prompt
+# A/B item 13, the prompt pill. starship rather than a shell function because
+# Khadi does not own the login shell: a fish-only prompt would be absent for
+# most users on the day they install.
+#
+# This goes in the INTERACTIVE rc, not the login profile the PATH block uses.
+# A prompt is interactive-only, and the two files are different ones on every
+# shell — .zshrc vs .zprofile, .bashrc vs .bash_profile.
+interactive_rc() {
+    case "$(basename "${SHELL:-/bin/bash}")" in
+        zsh)  echo "$HOME/.zshrc" ;;
+        fish) echo "$HOME/.config/fish/conf.d/khadi-prompt.fish" ;;
+        *)    echo "$HOME/.bashrc" ;;
+    esac
+}
+RC="$(interactive_rc)"
+SH="$(basename "${SHELL:-bash}")"
+PMARK="# >>> khadi prompt >>>"
+if ! grep -qsF "$PMARK" "$RC" 2>/dev/null; then
+    echo
+    echo "Prompt:"
+    say "append  $RC  (starship, khadi config)"
+    command -v starship >/dev/null 2>&1 \
+        || say "NOTE    starship is not installed; the block is inert until it is"
+    if (( APPLY )); then
+        mkdir -p "$(dirname "$RC")"
+        [[ -e "$RC" ]] && cp "$RC" "$RC.khadi-backup-$STAMP"
+        # The block guards itself. Khadi does not install packages, so
+        # starship may be missing now or removed later, and an unguarded init
+        # line turns that into an error on every single shell start.
+        if [[ "$RC" == *.fish ]]; then
+            cat >> "$RC" <<FISHRC
+$PMARK
+set -gx STARSHIP_CONFIG "$XDG_CONFIG_HOME/khadi/starship.toml"
+if type -q starship
+    starship init fish | source
+end
+# <<< khadi prompt <<<
+FISHRC
+        else
+            cat >> "$RC" <<RCB
+
+$PMARK
+export STARSHIP_CONFIG="$XDG_CONFIG_HOME/khadi/starship.toml"
+command -v starship >/dev/null 2>&1 && eval "\$(starship init $SH)"
+# <<< khadi prompt <<<
+RCB
         fi
     fi
 fi
