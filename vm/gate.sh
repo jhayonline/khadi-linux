@@ -33,7 +33,15 @@ echo
 # that passes: the gate checked six config links while the installer made nine,
 # so three could have been broken for a phase without a failing check.
 CONFIGS=(); BINS=()
-eval "$(grep -E '^(CONFIGS|BINS)=\(' "$HOME/khadi/bin/khadi-install")"
+LISTS="$(grep -E '^(CONFIGS|BINS)=\(' "$HOME/khadi/bin/khadi-install")"
+# Both definitions must be one line each and closed on it. A wrapped array
+# would grep to a fragment, eval to a SHORTER list, and pass -- which is the
+# same silent-drift failure this block exists to remove.
+if [[ "$(grep -c . <<<"$LISTS")" -ne 2 ]] || grep -qv ')$' <<<"$LISTS"; then
+    no "CONFIGS/BINS in khadi-install are not two single-line arrays — not parsing them"
+else
+    eval "$LISTS"
+fi
 
 echo "  Config linked"
 if (( ${#CONFIGS[@]} == 0 )); then
