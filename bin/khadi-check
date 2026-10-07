@@ -102,6 +102,26 @@ if [[ -d "$PORTALS" ]]; then
     fi
     if (( bad == 0 )); then ok "every portal backend named exists and implements what it is given"
     else no "$bad portal backend problem(s)"; fi
+
+    # And then ask the portal itself. Every other validator here is the app's
+    # own -- foot's, fuzzel's, starship's -- and xdg-desktop-portal is no
+    # different: it is the only authority on how it reads its own config.
+    #
+    # On an ISOLATED bus. dbus-run-session gives it a private session so it
+    # cannot collide with, or take over from, the portal the user is running.
+    if [[ -x /usr/lib/xdg-desktop-portal ]] && have dbus-run-session; then
+        plog=$(dbus-run-session -- env XDG_CONFIG_HOME="$ROOT/config" \
+                 XDG_CURRENT_DESKTOP=Hyprland timeout 4 /usr/lib/xdg-desktop-portal -v 2>&1)
+        want="Preferred portals for interface 'org.freedesktop.impl.portal.FileChooser': gtk"
+        if ! grep -qF "$PCONF" <<<"$plog"; then
+            no "the portal did not read $PCONF"
+        elif grep -qF "$want" <<<"$plog"; then
+            ok "the portal itself routes FileChooser to gtk"
+        else
+            no "the portal did not route FileChooser to gtk"
+            grep -F "Preferred portals" <<<"$plog" | sed 's/^/    /'
+        fi
+    else sk "xdg-desktop-portal binary"; fi
 else sk "xdg-desktop-portal"; fi
 echo
 

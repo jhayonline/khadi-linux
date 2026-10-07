@@ -1705,9 +1705,35 @@ or in `bin/`. `chromium` is in the manifest because the keybind already
 committed to it; if Khadi should not ship a browser, the fix is to drop the
 bind instead, and the check holds either way.
 
-**Not yet verified:** that a file picker actually opens. That needs a running
-Khadi session, and the loaded-state gate checks for it exist but have only been
-exercised against the host's own compositor.
+### Ask the portal, not a parser
+
+The first version of the check parsed `hyprland-portals.conf` with Python and
+asserted things about it. That is the wrong authority. Every other validator
+here is the app's own — `foot --check-config`, `fuzzel --check-config`,
+`starship prompt` — and `xdg-desktop-portal` is the only thing that knows how
+it reads its own config.
+
+So `khadi-check` runs the real portal under `dbus-run-session`, on a private
+bus where it cannot collide with or take over from the one the user is running,
+and reads its verdict back:
+
+```
+XDP: Using portal configuration file '…/config/xdg-desktop-portal/hyprland-portals.conf'
+XDP: Preferred portals for interface 'org.freedesktop.impl.portal.FileChooser': gtk
+XDP: Using gtk.portal for org.freedesktop.impl.portal.Lockdown (default config)
+```
+
+That third line is the `default=hyprland;gtk` ordering being exercised:
+interfaces Hyprland does not implement fall through to GTK instead of going
+unanswered. Routing FileChooser to `hyprland` makes the real portal say
+`FileChooser: hyprland`, and the check fails with the portal's own output as
+the diagnostic.
+
+**What is still unverified** is the last step only: that a file picker visibly
+opens in a running Khadi session. The routing, the backend capabilities and the
+config parsing are now all confirmed by upstream's own implementation; the
+loaded-state gate checks exist but have been exercised only against the host's
+compositor.
 
 ---
 
