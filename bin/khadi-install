@@ -188,13 +188,15 @@ if ! grep -qsF "$MARK" "$PROFILE" 2>/dev/null; then
         act mkdir -p "$(dirname "$PROFILE")"
         [[ -e "$PROFILE" ]] && cp "$PROFILE" "$PROFILE.khadi-backup-$STAMP"
         if [[ "$PROFILE" == *.fish ]]; then
+            # NOT `return`. This is top-level, not a function, so `return`
+            # fails and `set -e` kills the installer right here — a fish user
+            # got the PATH block and no fonts, and the script exited 2.
             cat >> "$PROFILE" <<'FISHP'
 # >>> khadi path >>>
 fish_add_path -g "$HOME/.local/bin"
 # <<< khadi path <<<
 FISHP
-            return 0
-        fi
+        else
         cat >> "$PROFILE" <<PROF
 
 $MARK
@@ -205,6 +207,7 @@ esac
 export PATH
 # <<< khadi path <<<
 PROF
+        fi
     fi
 fi
 
