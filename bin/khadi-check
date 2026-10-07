@@ -189,6 +189,21 @@ for theme in themes/*.toml; do
             && ok "fuzzel" || no "fuzzel rejected its config"
     else sk "fuzzel"; fi
 
+    # mako parses its config BEFORE it touches Wayland, so it can be asked
+    # about the file on a machine with no display and in CI. It exits 0 either
+    # way, so the signal is the message, not the status — and the two failures
+    # are distinguishable: a bad file says "Failed to parse config", a good one
+    # on a headless box complains about Wayland or the service name instead.
+    if have mako; then
+        mout=$(env -u WAYLAND_DISPLAY -u DISPLAY timeout 5 mako -c config/mako/config 2>&1)
+        if grep -q "Failed to parse" <<<"$mout"; then
+            no "mako rejected its config"
+            grep "Failed to parse" <<<"$mout" | head -2 | sed 's/^/    /'
+        else
+            ok "mako"
+        fi
+    else sk "mako"; fi
+
     # starship ALWAYS EXITS 0, even on a config it could not parse — it warns
     # on stderr and carries on with its defaults, so a prompt that silently
     # lost its pill looks like a working command. stderr is the exit status

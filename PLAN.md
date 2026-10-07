@@ -765,11 +765,14 @@ desktop.**
       what the gate actually says. That distinction is the honest reading.
 - [ ] Hyprland 0.57 config migration: the `.conf` format is removed and the
       window-rule syntax changes again.
-- [ ] mako urgency variants untested — the test passed `urgency: <byte 2>` for
-      all three levels, so only the base styling is confirmed.
-- [ ] `tuigreet` is the one surface that cannot be truecolor-themed: it runs on
-      a bare VT with 16 ANSI colours, so the ramp is approximated.
-- [ ] greetd + tuigreet — the login surface, not yet touched
+- [x] **mako urgency variants confirmed** — all three photographed together in
+      a real session, visibly distinct on the one-colour ramp. Section 10q.
+- [x] **The VT is no longer a limit.** This read "tuigreet is the one surface
+      that cannot be truecolor-themed". `khadi-greet` repaints the console's
+      sixteen palette entries from the theme ramp, so the quantisation lands on
+      Khadi's own colours. Section 10n.
+- [x] **The login surface is `khadi-greet`**, written rather than configured.
+      Section 10n.
 - [ ] Resolve the editor decision (helix vs neovim) and write that config
 - [ ] Test on a clean Arch install — the gate. Until someone who is not the
       author runs it, Phase 1 is not done.
@@ -2131,6 +2134,56 @@ session: locked at ~7s against a 6s timeout, framebuffer at mean 0.0002 after
 the screen-off listener, no errors in hypridle's log. The `pidof` guard was
 caught working in that log too — it found an existing hyprlock and declined to
 start a second.
+
+---
+
+## 10q. The notifications were already themed. Nobody had looked.
+
+The answer to "add a notification daemon theme" turned out to be that there has
+been one since Phase 1: `templates/mako/config.tmpl` sets the ground, the
+hairline border, `border-radius=0`, the UI face and three urgency variants off
+the ramp.
+
+What was missing was evidence. Section 10b has carried this since Phase 1:
+
+> mako urgency variants untested — the test passed `urgency: <byte 2>` for all
+> three levels, so only the base styling is confirmed.
+
+So the variants were written, shipped, and never seen — the same shape as the
+fonts in 10e, which rendered in substitutes for a whole phase because nothing
+looked.
+
+### Seen, finally
+
+All three sent into a real session and photographed together. They are visibly
+distinct and the hierarchy is the one the config describes:
+
+| urgency | border | text |
+| --- | --- | --- |
+| critical | `ramp.a90`, brightest | `role.text` |
+| normal | `role.rule` | `role.text` |
+| low | `role.rule_faint`, faintest | `role.text_muted` |
+
+Holding them still needed a trick: the first attempts photographed one
+notification, because `default-timeout=6000` expired the other two inside the
+ssh round trip. The capture uses the shipped config with only the timeout
+changed, so what is in the picture is the real styling and not a mock-up.
+
+The stack also sits clear of `khadi-bar` rather than over it, which was worth
+checking: mako is on the `overlay` layer and the bar is on `top`, so nothing
+structurally stops a notification covering the clock.
+
+### mako had no validator
+
+Nine apps are themed and `khadi-check` asked eight of them. mako parses its
+config **before** it touches Wayland, so it can be asked on a headless box and
+in CI — and the two failures are distinguishable: a bad file says "Failed to
+parse config", a good one on a headless box complains about Wayland or the
+service name instead. It exits 0 either way, so the signal is the message.
+
+Negative control: a colour mako cannot parse, injected into the *template* —
+the first attempt edited `config/` and proved nothing, because `khadi-check`
+regenerates from templates before validating.
 
 ---
 
