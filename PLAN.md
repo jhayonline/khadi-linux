@@ -1491,6 +1491,24 @@ The cost is `ttc-iosevka`, 446 MiB for 189 faces, pulled on every run. That is
 the price of asking the font and glyph questions for real rather than skipping
 them, and Phase 4's two-face subset removes it.
 
+### Verified, not just written
+
+The workflow was run step for step in an `archlinux` container before being
+committed as working — a CI file that has never executed is a guess, and the
+first thing it would do is fail on a push.
+
+| Step | Result |
+| --- | --- |
+| Install the manifest | all 21 packages, together, on fresh Arch |
+| `cargo build --release` | khadi-bar links GTK4 and gtk4-layer-shell from it, 2m44s |
+| `cargo test` | 24 passed, 2 ignored — the live Hyprland tests, correctly skipped with no compositor |
+| `khadi-check --drift --strict` | **27 passed, 0 failed, 0 skipped** |
+
+The zero in that last column is the one that matters. Under `--strict` a skip
+is a failure, so zero skips means every validator actually ran: `foot`,
+`fuzzel` and `starship` against all four themes. That is the difference between
+a green build and a green build that checked something.
+
 ### What this would have caught
 
 This session found Hyprland 0.56 replacing hyprctl's string dispatch with a Lua
