@@ -89,7 +89,11 @@ while read -r app; do
 done < <({ grep -oE '^bind.*exec, *[a-zA-Z0-9._-]+' config/hypr/hyprland.conf 2>/dev/null \
              | sed -E 's/.*exec, *//'
            grep -oE '^exec-once *= *[a-zA-Z0-9._-]+' config/hypr/hyprland.conf 2>/dev/null \
-             | sed -E 's/.*= *//'; } | sort -u)
+             | sed -E 's/.*= *//'
+           # greetd launches the greeter, and the greeter failing to exist is
+           # the one that locks you out rather than merely looking broken.
+           grep -oE '^command *= *"[a-zA-Z0-9._-]+' config/greetd/config.toml 2>/dev/null \
+             | sed -E 's/.*"//'; } | sort -u)
 if (( miss == 0 )); then ok "all $n programs the config launches are provided"
 else no "$miss of $n programs the config launches are provided by nothing"; fi
 echo

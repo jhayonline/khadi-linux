@@ -56,7 +56,7 @@ BINS=(khadi-panel khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontc
 # installs them separately — so the gate was passing on a state the installer
 # could not produce, which is the hole in "someone else runs the script and
 # gets your desktop".
-RUSTBINS=(khadi-hud khadi-bar)
+RUSTBINS=(khadi-hud khadi-bar khadi-greet)
 
 # ---------------------------------------------------------------- uninstall
 if (( UNINSTALL )); then
@@ -332,6 +332,21 @@ if (( SYSTEM )); then
         sudo systemctl daemon-reload
         sudo systemctl enable greetd.service >/dev/null 2>&1
         say "greetd enabled — it takes over tty1 on next boot"
+    fi
+
+    # The greeter runs as the `greeter` user, which cannot read anyone's home
+    # directory. A link into ~/.local/bin is therefore useless to it: both the
+    # binary and the theme have to exist somewhere system-wide.
+    say "install khadi-greet -> /usr/local/bin/khadi-greet"
+    say "install resolved theme -> /etc/khadi/theme.toml"
+    if (( APPLY )); then
+        if [[ -x "$ROOT/target/release/khadi-greet" ]]; then
+            sudo install -Dm755 "$ROOT/target/release/khadi-greet" /usr/local/bin/khadi-greet
+        else
+            say "WARNING: khadi-greet is not built — the login screen will not start."
+            say "         cargo build --release, then re-run"
+        fi
+        sudo install -Dm644 "$ROOT/config/khadi/theme.toml" /etc/khadi/theme.toml
     fi
 
     # The boot splash. Its own script because it is a lot of steps and worth

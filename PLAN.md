@@ -1920,6 +1920,79 @@ an initramfs is a font failure with no console to report it on.
 
 ---
 
+## 10n. khadi-greet — the login screen
+
+The last surface wearing someone else's design. tuigreet themes its colours and
+draws a box; it cannot draw the bracket-tick header or the block clock, and the
+login screen is what you see most often after the splash.
+
+`crates/khadi-greet` speaks greetd's IPC and draws with **khadi-hud's own
+widgets** — the clock here and the clock on the system panel are the same code.
+That is why `khadi-hud` is now a lib as well as a bin: a second implementation
+of either motif would be a second thing to keep in step with the design.
+
+**greetd owns authentication.** This process collects a string, hands it over
+and is told yes or no; PAM is never touched here, the string is never logged,
+and the buffer is dropped as soon as it is sent. That boundary is what makes a
+hand-written greeter a reasonable thing to own at all.
+
+The protocol was read from `greetd-ipc(7)` rather than remembered. Two details
+earn their tests: the length prefix is **native** byte order, not network — get
+it wrong and the greeter hangs rather than erroring — and the spec is explicit
+that *"there are no limits on the number and type of messages that may be
+required and a greeter should not make any assumptions"*, so the flow is driven
+by what arrives rather than a fixed username-then-password script.
+
+### The VT has sixteen colours. So repaint them.
+
+The greeter runs on a bare Linux console. The shipped greetd config said so and
+concluded *"this is the one Khadi surface that cannot be truecolor-themed"* —
+and the first working version proved it, coming up plain white on black with
+the whole flattened ramp collapsed to one step.
+
+The palette is not fixed, though. OSC `P<n><rrggbb>` redefines a console
+palette entry, so `khadi-greet` paints **all sixteen** from the theme's ramp on
+startup and lets the console quantise into Khadi's own colours. The widgets
+never learn they are on a VT. `\e]R` hands the console back on exit, because
+the session that follows is not the greeter's to restyle.
+
+Only on `TERM=linux`. Under a terminal emulator the truecolor is used directly
+and repainting someone's palette would be vandalism.
+
+### Two installs, because the greeter is not a user
+
+`greetd` runs the greeter as the `greeter` user, which cannot read anyone's
+home directory. A link into `~/.local/bin` is therefore useless to it, and so
+is a theme under `$XDG_CONFIG_HOME`. `khadi-install --system` installs the
+binary to `/usr/local/bin` and a copy of the resolved theme to
+`/etc/khadi/theme.toml`, which `Theme::load` now falls back to.
+
+### A third copy of the same list
+
+`khadi-vm push` kept its own list of which Rust binaries to deliver, so adding
+`khadi-greet` to the installer shipped a VM with **greetd enabled and the
+greeter binary absent** — the one failure mode that locks you out rather than
+looking wrong. It now derives the list from `khadi-install`, like the gate
+does. That is the third instance of this exact bug in two days (10g, 10l); the
+pattern is worth naming: *any list of what Khadi installs belongs in
+khadi-install and nowhere else.*
+
+### Driven for real
+
+`khadi-vm type` sends keystrokes to the guest console over QMP, because the
+greeter is the one surface that cannot be driven over ssh — it owns a VT and
+reads a keyboard. Without it, "can anyone actually log in" stays untested,
+which for a login screen is the only question that matters.
+
+Verified end to end in the VM: username accepted, greetd returned its auth
+message, the password masked to its length and nothing else, and
+`pam_unix(greetd:session): session opened for user khadi(uid=1000)` — followed
+by Hyprland, four panels, the bar and mako. Splash, greeter, desktop.
+
+`greetd-tuigreet` leaves the manifest, as waybar did when khadi-bar landed.
+
+---
+
 ## 11. Risks and open decisions
 
 | Risk | Why it bites | Mitigation |

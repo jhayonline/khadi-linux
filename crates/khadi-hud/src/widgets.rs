@@ -20,8 +20,10 @@ pub fn col(c: Rgb) -> Color {
 /// The signature motif: an uppercase label pair over a hairline that
 /// terminates in a tick at each end.
 ///
-///     PANEL                    SYSTEM
-///     ┬──────────────────────────────┬
+/// ```text
+/// PANEL                    SYSTEM
+/// ┬──────────────────────────────┬
+/// ```
 ///
 /// Phase 0 measured both variants. The two-row form is faithful to the CSS
 /// (`╷ … ╷` on its own line) but costs 43% of screen height across nine

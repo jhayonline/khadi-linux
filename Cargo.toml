@@ -4,9 +4,10 @@
 #             surfaces consume it: a ratatui TUI (Phase 3a) and a GTK
 #             layer-shell panel (Phase 3b). Anything that knows about a cell
 #             grid or a widget tree does not belong here.
-# khadi-hud   the binary. `dash` today; `panel` in 3b.
+# khadi-hud   the panels. Also a lib: khadi-greet draws the same chrome.
+# khadi-greet the login screen, speaking greetd's IPC.
 [workspace]
-members = ["crates/khadi-core", "crates/khadi-hud", "crates/khadi-bar"]
+members = ["crates/khadi-core", "crates/khadi-hud", "crates/khadi-bar", "crates/khadi-greet"]
 resolver = "2"
 
 [workspace.package]

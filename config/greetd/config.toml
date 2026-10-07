@@ -7,16 +7,23 @@
 # warning, because the session launches through the shipped wrapper rather
 # than bare Hyprland from a shell profile.
 #
-# CONSTRAINT: tuigreet runs on a bare VT, which has only the 16 ANSI colours.
-# themes/tron.toml's flattened ramp is unavailable here, so the palette is
-# approximated: `cyan` for the accent, `darkgray` for rules, `black` ground.
-# This is the one Khadi surface that cannot be truecolor-themed.
+# CONSTRAINT: the greeter runs on a bare Linux VT, which has 16 ANSI colours.
+# khadi-greet draws in truecolor like every other Khadi surface and the console
+# quantises it; how far the flattened ramp survives that is measured in the VM
+# rather than assumed. This is the one Khadi surface that cannot be relied on
+# for the full palette.
+#
+# khadi-greet, not tuigreet. tuigreet themes its colours and draws a box; it
+# cannot draw the bracket-tick header or the block clock, which left the login
+# screen as the last surface wearing someone else's design. See PLAN.md 10n.
 
 [terminal]
 vt = 1
 
 [default_session]
-# tuigreet theme keys are the documented set: text, time, container, border,
-# title, greet, prompt, input, action, button.
-command = "tuigreet --remember --time --asterisks --greeting 'KHADI' --cmd start-hyprland --theme 'border=darkgray;title=cyan;text=cyan;time=darkgray;greet=cyan;prompt=cyan;input=white;action=darkgray;button=cyan;container=black'"
+# Installed to /usr/local/bin by `khadi-install --system`: the greeter runs as
+# the `greeter` user, which cannot read a home directory, so a link into
+# ~/.local/bin would be unreachable. Same reason the theme is copied to
+# /etc/khadi/theme.toml.
+command = "khadi-greet --cmd start-hyprland"
 user = "greeter"

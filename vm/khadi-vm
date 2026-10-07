@@ -14,6 +14,7 @@
 #   khadi-vm ssh      shell into the guest once Arch is installed
 #   khadi-vm push     copy this repo into the guest
 #   khadi-vm autologin start a session on tty1 so gate.sh can check loaded state
+#   khadi-vm type     type into the guest console over QMP (drives the greeter)
 #   khadi-vm status   what exists so far
 #   khadi-vm clean    delete the disk (keeps the ISO)
 set -euo pipefail
@@ -259,8 +260,15 @@ cmd_push() {
     # to the stale target/release/ the tar had never updated, and the session
     # came up with three dead panels reporting an error string from two phases
     # ago. Deliver the artefact; let the installer install it.
+    # The list comes from khadi-install, not from a copy kept here. Keeping a
+    # second one is how khadi-greet was added to the installer and silently not
+    # delivered — greetd enabled, greeter binary absent, which is the one
+    # failure mode that locks you out rather than looking wrong.
+    local RUSTBINS=()
+    eval "$(grep -E '^RUSTBINS=\(' "$ROOT/bin/khadi-install")"
+    [[ ${#RUSTBINS[@]} -gt 0 ]] || die "could not read RUSTBINS from bin/khadi-install"
     local b
-    for b in khadi-hud khadi-bar; do
+    for b in "${RUSTBINS[@]}"; do
         [[ -x "$ROOT/target/release/$b" ]] || continue
         # NOT ssh -n here: -n points stdin at /dev/null, which silently sent an
         # empty file. The checksum below exists because that looked like success.
@@ -300,6 +308,50 @@ cmd_push() {
 # This makes the session start on boot so the gate can be run for real. It is
 # TEST SCAFFOLDING, written into the guest and nowhere near the repo: Khadi's
 # own session manager is greetd, which asks for a password on purpose.
+# Type into the guest's console over QMP. The greeter is the one surface that
+# cannot be driven over ssh — it owns a VT and reads a keyboard — so without
+# this, "can anyone actually log in" stays untested, which for a login screen
+# is the only question that matters.
+#
+#   khadi-vm type khadi        send the literal string
+#   khadi-vm type khadi ret    trailing `ret` presses Enter
+cmd_type() {
+    [[ -S "$QMP" ]] || die "no QMP socket — is the VM running?"
+    python3 - "$QMP" "$@" <<'TPY'
+import socket, json, sys, time
+sock, args = sys.argv[1], sys.argv[2:]
+s = socket.socket(socket.AF_UNIX); s.connect(sock); s.recv(65536)
+def q(o):
+    s.sendall((json.dumps(o)+"\n").encode())
+    while True:
+        for ln in s.recv(65536).decode().splitlines():
+            d = json.loads(ln)
+            if "return" in d or "error" in d:
+                return d
+q({"execute": "qmp_capabilities"})
+SHIFTED = {"!":"1","@":"2","#":"3","$":"4","%":"5","^":"6","&":"7","*":"8","(":"9",")":"0",
+           "_":"minus","+":"equal",":":"semicolon","\"":"apostrophe","<":"comma",">":"dot","?":"slash"}
+PLAIN = {" ":"spc","-":"minus","=":"equal",".":"dot",",":"comma","/":"slash",";":"semicolon",
+         "'":"apostrophe","\n":"ret"}
+def keys_for(ch):
+    if ch in PLAIN: return [PLAIN[ch]], False
+    if ch in SHIFTED: return [SHIFTED[ch]], True
+    if ch.isdigit(): return [ch], False
+    if ch.isalpha(): return [ch.lower()], ch.isupper()
+    raise SystemExit(f"khadi-vm type: no key mapping for {ch!r}")
+for arg in args:
+    if arg in ("ret", "tab", "esc", "spc", "backspace"):
+        q({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": arg}]}})
+        time.sleep(0.08); continue
+    for ch in arg:
+        names, shift = keys_for(ch)
+        ks = ([{"type": "qcode", "data": "shift"}] if shift else []) + \
+             [{"type": "qcode", "data": n} for n in names]
+        q({"execute": "send-key", "arguments": {"keys": ks}})
+        time.sleep(0.05)
+TPY
+}
+
 cmd_autologin() {
     local rc
     rc=$(cat <<'GUEST'
@@ -357,6 +409,7 @@ case "${1:-status}" in
     shot) shift; cmd_shot "$@" ;;
     ssh) shift; cmd_ssh "$@" ;;
     autologin) cmd_autologin ;;
+    type) shift; cmd_type "$@" ;;
     push) cmd_push ;;
     status) cmd_status ;;
     clean) cmd_clean ;;

@@ -12,11 +12,7 @@
 //!   khadi-hud header      the two-row label pair above the shell
 //!   <cmd> --once          render one frame and exit — for screenshots and CI
 
-mod dash;
-mod fs_panel;
-mod globe;
-mod net_panel;
-mod widgets;
+use khadi_hud::{dash, fs_panel, globe, net_panel, widgets};
 
 use anyhow::Result;
 use crossterm::{

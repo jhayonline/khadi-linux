@@ -64,11 +64,27 @@ impl Theme {
         base.join("khadi").join("theme.toml")
     }
 
+    /// System-wide fallback. The greeter runs as the `greeter` user, which
+    /// cannot read anyone's home directory — so a theme that only ever lives
+    /// under `$XDG_CONFIG_HOME` leaves the login screen unthemed, or more
+    /// likely refusing to start. `khadi-install --system` writes a copy here.
+    pub const SYSTEM_PATH: &'static str = "/etc/khadi/theme.toml";
+
     pub fn load() -> Result<Self> {
-        let p = Self::path();
-        let text = std::fs::read_to_string(&p)
-            .with_context(|| format!("no theme at {}; run: khadi-theme build <name>", p.display()))?;
-        Self::from_str(&text)
+        let user = Self::path();
+        match std::fs::read_to_string(&user) {
+            Ok(text) => Self::from_str(&text),
+            Err(_) => {
+                let text = std::fs::read_to_string(Self::SYSTEM_PATH).with_context(|| {
+                    format!(
+                        "no theme at {} or {}; run: khadi-theme build <name>",
+                        user.display(),
+                        Self::SYSTEM_PATH
+                    )
+                })?;
+                Self::from_str(&text)
+            }
+        }
     }
 
     pub fn from_str(text: &str) -> Result<Self> {

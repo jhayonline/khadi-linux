@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+# A lib as well as a bin: khadi-greet draws the same header and block clock,
+# and two implementations of one motif is two chances to drift.
+[lib]
+name = "khadi_hud"
+path = "src/lib.rs"
+
 [[bin]]
 name = "khadi-hud"
 path = "src/main.rs"
