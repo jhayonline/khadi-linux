@@ -11,7 +11,10 @@ pane_frame_style "none"
 show_release_notes false
 show_startup_tips false
 mouse_hover_tips false
-default_layout "khadi"
+// The khadi layout is gone with khadi-hud: it existed to tile the panels, and
+// khadi-shell draws them itself. zellij is back to being a multiplexer you can
+// run inside a foot window, which is all it was ever good at here.
+default_layout "default"
 theme "khadi"
 
 // Keyboard model, PLAN.md section 6: each layer owns one modifier.

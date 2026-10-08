@@ -49,19 +49,25 @@ say()  { printf '  %s\n' "$*"; }
 act()  { if (( APPLY )); then "$@"; fi; }
 
 CONFIGS=(foot zellij btop hypr yazi fuzzel helix mako khadi gtk-3.0 gtk-4.0 xdg-desktop-portal)
-BINS=(khadi-panel khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontcheck khadi-boot)
-# khadi-shell is the odd one: Tauri embeds its whole frontend into the binary,
-# so there is still exactly one file to install and nothing to put beside it.
-# Building it needs node and npm, which is why `cargo build --release` alone no
-# longer produces a complete set — see shell/README.md.
+BINS=(khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontcheck khadi-boot)
+# khadi-shell is the odd one. Tauri embeds its whole frontend into the binary,
+# so there is still exactly one file to install and nothing to put beside it —
+# but it MUST be built through the Tauri CLI. `cargo build --release` produces
+# a khadi-shell that compiles, links, runs, opens a window and then shows
+# "Could not connect to localhost: Connection refused", because without the CLI
+# the frontend is never embedded and the binary falls back to the dev server.
+# It is a silent, plausible-looking failure and it cost a VM boot to find.
 #
-# The compiled half. These are the two components Khadi actually writes, and
-# the installer shipped neither: a clean --apply produced a desktop with no
-# panels and no bar. The VM gate never caught it because `khadi-vm push`
-# installs them separately — so the gate was passing on a state the installer
-# could not produce, which is the hole in "someone else runs the script and
-# gets your desktop".
-RUSTBINS=(khadi-hud khadi-bar khadi-greet khadi-shell)
+# The compiled half. khadi-shell is the desktop; khadi-bar is the strip above
+# it; khadi-greet is the login screen, which runs on a VT before any of this
+# exists and is therefore the one surface still drawn in a terminal.
+#
+# The installer once shipped NONE of these: a clean --apply produced a desktop
+# with no panels and no bar, and the VM gate never caught it because
+# `khadi-vm push` installs them separately — so the gate was passing on a state
+# the installer could not produce, which is the hole in "someone else runs the
+# script and gets your desktop".
+RUSTBINS=(khadi-shell khadi-bar khadi-greet)
 
 # ---------------------------------------------------------------- uninstall
 if (( UNINSTALL )); then
@@ -197,7 +203,8 @@ if (( missing_rust )); then
     say ""
     say "  $missing_rust of ${#RUSTBINS[@]} compiled components are not built."
     say "  Without them the layout has no panels and the session has no bar:"
-    say "      cargo build --release        then re-run this script"
+    say "      cargo build --release                      (khadi-bar, khadi-greet)"
+    say "      cd shell && npm install && npm run tauri build   (khadi-shell)"
 fi
 
 # Arch's /etc/profile adds /usr/local/bin but NOT ~/.local/bin, so in a login
@@ -349,7 +356,11 @@ if (( SYSTEM )); then
             sudo install -Dm755 "$ROOT/target/release/khadi-greet" /usr/local/bin/khadi-greet
         else
             say "WARNING: khadi-greet is not built — the login screen will not start."
-            say "         cargo build --release, then re-run"
+            if [[ "$b" == khadi-shell ]]; then
+                say "         cd shell && npm install && npm run tauri build, then re-run"
+            else
+                say "         cargo build --release, then re-run"
+            fi
         fi
         sudo install -Dm644 "$ROOT/config/khadi/theme.toml" /etc/khadi/theme.toml
     fi

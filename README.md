@@ -22,9 +22,14 @@ git clone git@github.com:jhayonline/khadi-linux.git khadi-linux && cd khadi-linu
 
 Runs the reference layout straight from the repo. Touches nothing in `~`.
 
-Needs `zellij`, `foot`, and `khadi-hud` built: `cargo build --release`.
-**Use a terminal at 180 columns or wider** — below that the side panels crowd
-out the shell. See *Why 180 columns* below.
+Needs `khadi-shell` built — and it has to go through the Tauri CLI, because
+`cargo build` alone links a binary with no frontend embedded in it:
+
+```sh
+cd shell && npm install && npm run tauri build
+```
+
+Needs `nodejs`, `npm` and `webkit2gtk-4.1` to build; only the last to run.
 
 ## Install
 
@@ -42,8 +47,8 @@ deleted. `--uninstall` removes the links and restores the newest backups.
 
 Khadi will not install packages for you, and will not build for you. The dry
 run lists what is missing and prints the command — `pacman` for packages,
-`cargo build --release` for `khadi-hud` and `khadi-bar`, which are the panels
-and the bar.
+`cargo build --release` for `khadi-bar` and `khadi-greet`, and
+`npm run tauri build` for `khadi-shell`, which is the desktop.
 
 ## Keys
 
@@ -67,18 +72,16 @@ bin/khadi-install     link into ~/.config and ~/.local/bin
 bin/khadi-theme       render every app config from one theme file
 bin/khadi-check       render every theme, validate with each app's own checker
 bin/khadi-fontcheck   do the theme's fonts — and glyphs — actually resolve?
-bin/khadi-panel       panel wrapper, keeps paths out of the zellij layout
 bin/khadi-cheatsheet  Super+/ overlay
 bin/khadi-boot        install the boot splash (needs root; run from --system)
 crates/khadi-core     theme, metrics and Hyprland IPC — no UI dependencies
-crates/khadi-hud      the ratatui panels: the motifs no off-the-shelf TUI draws
 crates/khadi-bar      the Wayland layer-shell panel, for the motifs a cell
                       grid cannot draw at all
 crates/khadi-greet    the login screen, speaking greetd's IPC
-shell/                khadi-shell — eDEX's interface as a Tauri app: React,
-                      TypeScript and Tailwind in a webview, Rust underneath.
-                      shell/README.md, and PLAN.md 10r for why the terminal
-                      panels were the ceiling.
+shell/                khadi-shell — THE DESKTOP. eDEX's interface as a Tauri
+                      app: React, TypeScript and Tailwind in a webview, Rust
+                      underneath. shell/README.md, and PLAN.md 10r for why the
+                      ratatui panels it replaced were the ceiling.
 themes/tron.toml      the design system — one file, everything derives from it
 templates/            the source of every config; config/ is build output
 config/               mirrors ~/.config — GENERATED, do not edit
@@ -100,7 +103,7 @@ by photographing a real boot in a VM rather than by reading the config back.
 | --- | --- |
 | **Boot** | a Plymouth splash: wordmark, progress bar, and the real systemd unit it is waiting on |
 | **Login** | `khadi-greet` — written, not configured, because nothing off the shelf draws the bracket-tick header or the block clock |
-| **Desktop** | Hyprland, one terminal, a zellij layout of `khadi-hud` panels, `khadi-bar` on top |
+| **Desktop** | Hyprland running `khadi-shell` — eDEX's interface as a Tauri app, with `khadi-bar` above it |
 | **Idle** | `hypridle` locks at 10 minutes and blanks at 11. It does **not** suspend — see `hypridle.conf` for why |
 | **Lock** | `hyprlock`, themed rather than replaced: it is what stands between a locked machine and its data |
 
@@ -109,44 +112,47 @@ installed and configured (both backends: the Hyprland one does not implement
 the file chooser), and GTK gets the dark preference, the UI font and the
 palette.
 
-## Why 180 columns
+## Why 17% columns
 
-eDEX's side columns are ~17% of screen width, so the proportions only work on a
-wide terminal: usable from 180 columns, eDEX's own split reached at 217. At
-1920x1080 with Iosevka Term at size 10 you get 284.
+eDEX's side columns are ~17% of screen width and its main shell is 65% wide by
+60.3% tall, with the file browser and keyboard across the bottom. `khadi-shell`
+uses those numbers literally — they are read out of `edex-ui/src/assets/css`,
+not estimated, and both projects are GPL-3.0.
 
-That number used to be 247, and the reason it moved is the reason `khadi-hud`
-exists. btop will not render its CPU box below 60 columns or its process box
-below 44, measured — so it could never hold an eDEX side column at all.
-`khadi-hud` draws the clock, hardware block, per-core graphs, memory grid and
-process list in **34**, which is the reference proportion. btop is no longer in
-the layout.
+Khadi spent Phase 3 drawing the same layout in a terminal, and the terminal was
+the ceiling. A cell is about 8x20 px and indivisible, so eDEX's `0.092vh`
+hairlines became two-pixel lines adrift in twenty-pixel rows, its proportional
+display face became a monospace, its SVG icons became block characters and its
+WebGL globe became braille dots. Its `2.04vh` background lattice could not be
+drawn at all: the colour has been in `themes/*.toml` marked `PORTED` since
+Phase 2 and was never once rendered, because a cell grid has nowhere to put it.
 
-This is one of several things measured rather than assumed. The others are in
-[PLAN.md](PLAN.md) section 10 — including why zellij's pane frames can never
-carry the eDEX bracket-tick motif, and what that means for the roadmap.
+That measurement, and what followed from it, is [PLAN.md](PLAN.md) section 10r.
 
 ## Honest status
 
-Measured against the reference screenshot, Khadi scores **13 faithful elements
-of 18**, from 1 when the chassis was pure config. The remaining four are
-approximations rather than gaps, and the file browser is deliberately yazi's —
-an icon grid needs a Nerd Font Khadi does not ship.
+The desktop is `khadi-shell`: eDEX's interface rebuilt as a Tauri app, with
+eDEX's own layout numbers and its own continent data. The scoring that used to
+live here — *13 faithful elements of 18* — was an A/B of the ratatui panels
+against a screenshot, and it is retired along with them. Scoring a port of the
+stylesheet against the stylesheet is not a measurement.
 
-The thirteen are not configuration. Off-the-shelf TUIs draw their own chrome
-and none of it looks like eDEX, so the ones that carry the design language are
-written here: `khadi-hud` for the panels, `khadi-bar` for the two motifs a cell
-grid structurally cannot draw.
+What is honest to say instead: the clock, the info grids, the CPU graphs, the
+memory matrix, the process list, the network block, the globe, the file browser
+and the keyboard are all present, laid out at eDEX's proportions, fed by
+`khadi-core`. The substitutions that remain are the fonts (Rajdhani for United
+Sans, which is commercial) and the file icons, which are five structural shapes
+against eDEX's ~1000 extension matches.
 
 Three caveats worth stating plainly:
 
-- **The A/B is scored by the author**, against one screenshot, by eye. It is a
-  disciplined count, not an independent one.
-- `bash vm/gate.sh` passes 75 checks, 0 failures, inside a clean VM running a
-  real session — including the loaded-state checks, which until now had never
-  run at all. What the gate has never proved is its own
-  wording: "someone else runs the script and gets your desktop". It has been
-  passed by the author's VM, which is not the same thing.
+- **The webview costs what a webview costs.** ~150 MB resident against the
+  ratatui panels' ~5 MB, and xterm.js is not foot — `Super+Return` opens a real
+  foot window, which stays the answer for anything that scrolls fast.
+- `bash vm/gate.sh` passes 75 checks, 0 failures, inside a clean VM that boots
+  into the real session. What the gate has never proved is its own wording:
+  "someone else runs the script and gets your desktop". It has been passed by
+  the author's VM, which is not the same thing.
 - Phases 4 to 6 — packaging, installer, ISO, and actually operating a repo —
   are not started. Khadi is a config layer you clone, not something you
   `pacman -S` yet.

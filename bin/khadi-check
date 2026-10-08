@@ -76,6 +76,9 @@ while read -r app; do
     grep -qE "^${app}( |$)" packages.txt && continue
     [[ -x "bin/$app" ]] && continue      # a Khadi script, shipped in bin/
     [[ -d "crates/$app" ]] && continue   # a Khadi binary, built from crates/
+    # khadi-shell is a Khadi binary too, it just does not live in crates/ — its
+    # Cargo manifest sits under the frontend it embeds.
+    [[ "$app" == khadi-shell && -f shell/src-tauri/Cargo.toml ]] && continue
     # A binary's name is often not its package's: dbus ships
     # dbus-update-activation-environment, glib2 ships gsettings. Ask pacman
     # which package owns it, which also proves the manifest entry really
@@ -84,7 +87,7 @@ while read -r app; do
         owner=$(pacman -Qoq "$(command -v "$app" 2>/dev/null)" 2>/dev/null | head -1)
         [[ -n "$owner" ]] && grep -qE "^${owner}( |$)" packages.txt && continue
     fi
-    printf '    %s is launched by the config, and nothing in packages.txt, bin/ or crates/ provides it\n' "$app"
+    printf '    %s is launched by the config, and nothing in packages.txt, bin/, crates/ or shell/ provides it\n' "$app"
     miss=$((miss+1))
 done < <({ grep -oE '^bind.*exec, *[a-zA-Z0-9._-]+' config/hypr/hyprland.conf 2>/dev/null \
              | sed -E 's/.*exec, *//'

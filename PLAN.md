@@ -2236,9 +2236,21 @@ re-derives nothing, which is the rule from section 4.
 had a reputation for lag. `Super+Return` still opens a real foot window, and
 that is the answer for builds and log tails.
 
-**What it ends.** `khadi-hud` and `khadi-bar` are now a second implementation
-of one design system, which is exactly the drift section 4 exists to prevent.
-They stay only until the shell covers what they cover.
+**What it ended, 2026-10-08.** `khadi-hud` is deleted — 3,842 lines, the whole
+ratatui panel set. `exec-once` starts `khadi-shell`, the zellij `khadi` layout
+is gone and zellij is a multiplexer again. `khadi-greet` keeps the clock and
+the ticked header in `src/chrome.rs`: it runs on a VT before a session exists,
+where there is no compositor to put a webview on, so it is the one surface that
+cannot follow. There is nothing left for it to drift against.
+
+`khadi-bar` survives for now and should not. It draws a second tab strip above
+a window that already has one, which is a duplication eDEX does not have.
+
+**One trap, paid for with a VM boot.** `cargo build --release` produces a
+`khadi-shell` that compiles, links, runs, opens a window — and shows *"Could
+not connect to localhost: Connection refused"*, because without the Tauri CLI
+the frontend is never embedded and the binary falls back to the dev server. It
+has to be `npm run tauri build`. `bin/khadi-install` now says so by name.
 
 ---
 

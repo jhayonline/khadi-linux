@@ -2313,21 +2313,9 @@ dependencies = [
  "chrono",
  "crossterm",
  "khadi-core",
- "khadi-hud",
  "ratatui",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "khadi-hud"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "crossterm",
- "khadi-core",
- "ratatui",
 ]
 
 [[package]]

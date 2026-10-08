@@ -5,13 +5,14 @@
 //! bracket-tick header or the block clock, so the login screen was the one
 //! surface still wearing someone else's design.
 //!
-//! The widgets come from khadi-hud, so the clock here and the clock on the
+//! The widgets are in `chrome`, carried over when khadi-hud was retired.
 //! system panel are the same code.
 //!
 //! **greetd owns authentication.** This process collects a string, hands it
 //! over and is told yes or no; PAM is never touched here. It also never logs
 //! the string, and clears the buffer as soon as it is sent.
 
+mod chrome;
 mod greetd;
 
 use anyhow::Result;
@@ -23,7 +24,7 @@ use crossterm::{
 };
 use greetd::{Greetd, Request, Response};
 use khadi_core::Theme;
-use khadi_hud::widgets::{col, BigClock, Header};
+use chrome::{col, BigClock, Header};
 use ratatui::{
     backend::CrosstermBackend,
     buffer::Buffer,

@@ -64,7 +64,7 @@ echo "  Binaries on PATH"
 if (( ${#BINS[@]} == 0 )); then
     no "could not read BINS from khadi-install — this gate is checking nothing"
 else
-    # RUSTBINS included deliberately. khadi-hud and khadi-bar are the two
+    # RUSTBINS included deliberately. khadi-shell and khadi-bar are the two
     # components Khadi writes, the installer did not ship either, and this
     # gate passed anyway because khadi-vm push installs them by another route.
     for b in "${BINS[@]}" "${RUSTBINS[@]}"; do
@@ -86,19 +86,36 @@ echo
 # ON PATH IS NOT THE SAME AS WORKING. A stale khadi-hud passed every check
 # here while three of the four panels were dead -- the layout showed
 # `unknown command "net"` and the gate said 71/71, because nothing asked the
-# binary to do anything. Only looking at the screen caught it. So ask.
-echo "  Panels render"
-if command -v khadi-hud >/dev/null; then
-    for sub in dash net fs header; do
-        if out=$(KHADI_COLS=34 KHADI_ROWS=20 khadi-hud "$sub" --once 2>&1) \
-           && [[ -n "${out//[[:space:]]/}" ]]; then
-            ok "khadi-hud $sub"
-        else
-            no "khadi-hud $sub drew nothing: ${out%%$'\n'*}"
-        fi
-    done
+# binary to do anything. Only looking at the screen caught it.
+#
+# khadi-shell cannot be asked to draw into a pipe, so the equivalent is to run
+# it and look at what it produced: a window, and a shell on the far end of its
+# pty. The pty is the one worth checking by name -- it silently never spawned
+# for a whole afternoon because Tauri 2 denies `listen` without a capability
+# manifest and the rejected promise went nowhere.
+echo "  The shell runs"
+if ! command -v khadi-shell >/dev/null; then
+    no "khadi-shell not on PATH — cannot ask it to run"
+elif [[ -z "${WAYLAND_DISPLAY:-}" ]]; then
+    sk "khadi-shell (no Wayland display in this shell)"
 else
-    no "khadi-hud not on PATH — cannot ask it to draw"
+    WEBKIT_DISABLE_DMABUF_RENDERER=1 setsid khadi-shell >/tmp/khadi-gate-shell.log 2>&1 &
+    shell_pid=$!
+    for _ in $(seq 1 20); do
+        sleep 1
+        pgrep -P "$shell_pid" -x bash >/dev/null 2>&1 && break
+    done
+    if pgrep -P "$shell_pid" -x bash >/dev/null 2>&1; then
+        ok "khadi-shell spawned a shell on its pty"
+    else
+        no "khadi-shell started no pty: $(tail -1 /tmp/khadi-gate-shell.log)"
+    fi
+    if hyprctl clients -j 2>/dev/null | grep -q '"class": *"khadi-shell"'; then
+        ok "khadi-shell mapped a window"
+    else
+        no "khadi-shell mapped no window"
+    fi
+    kill "$shell_pid" 2>/dev/null || true
 fi
 echo
 
@@ -194,7 +211,7 @@ echo "  Display"
 read -r W H < <(tr ',' ' ' < /sys/class/graphics/fb0/virtual_size 2>/dev/null)
 cols=$(( W * 72 / (10 * 96) * 2 ))
 # 217, not 247. The threshold moved when khadi-hud replaced btop in the side
-# columns: btop needed 60 for its CPU box, khadi-hud draws the same content in
+# columns: btop needed 60 for its CPU box, khadi-hud drew the same content in
 # 34, and the columns went 84 -> 74. See PLAN.md section 10d.
 if   [[ "${cols:-0}" -ge 217 ]]; then ok "${W}x${H} -> ~$cols cols (faithful proportions)"
 elif [[ "${cols:-0}" -ge 180 ]]; then ok "${W}x${H} -> ~$cols cols (usable, below 217)"
@@ -217,7 +234,7 @@ if pgrep -x Hyprland >/dev/null 2>&1; then
     sp=$(tr '\0' '\n' < "/proc/${kid:-$$}/environ" 2>/dev/null | grep '^PATH=' | cut -d= -f2-)
     case ":$sp:" in
         *":$HOME/.local/bin:"*) ok "~/.local/bin on the SESSION PATH" ;;
-        *) no "~/.local/bin missing from the session PATH — khadi-panel unfindable" ;;
+        *) no "~/.local/bin missing from the session PATH — khadi-shell unfindable" ;;
     esac
     e=$(hyprctl configerrors 2>/dev/null | grep -cv '^[[:space:]]*$')
     [[ "$e" -eq 0 ]] && ok "no config errors" || no "$e config errors"

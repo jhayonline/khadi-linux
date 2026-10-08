@@ -1,12 +1,12 @@
 # khadi-greet — the login screen.
 #
 # A greeter rather than configuring tuigreet further, for the same reason
-# khadi-hud exists: nothing off the shelf carries the design language. tuigreet
+# khadi-greet exists: nothing off the shelf carries the design language. tuigreet
 # themes its colours and draws a box; it cannot draw the bracket-tick header or
 # the block clock, and the login screen is the first thing seen after the
 # splash and the thing seen most often after that.
 #
-# It depends on khadi-hud for those widgets. A second implementation of either
+# Those widgets live in src/chrome.rs. They came from khadi-hud, which the
 # would be a second thing to keep in step with the design.
 [package]
 name = "khadi-greet"
@@ -20,7 +20,6 @@ path = "src/main.rs"
 
 [dependencies]
 khadi-core = { path = "../khadi-core" }
-khadi-hud  = { path = "../khadi-hud" }
 anyhow.workspace = true
 serde.workspace = true
 serde_json = "1"

@@ -1,10 +1,10 @@
 # Khadi — Rust workspace.
 #
-# khadi-core  theme + metrics. No UI dependencies, because two very different
-#             surfaces consume it: a ratatui TUI (Phase 3a) and a GTK
-#             layer-shell panel (Phase 3b). Anything that knows about a cell
-#             grid or a widget tree does not belong here.
-# khadi-hud   the panels. Also a lib: khadi-greet draws the same chrome.
+# khadi-core  theme + metrics. No UI dependencies, because three very different
+#             surfaces consume it: a webview (khadi-shell), a GTK layer-shell
+#             panel (khadi-bar) and a ratatui VT app (khadi-greet). Anything
+#             that knows about a cell grid or a widget tree does not belong
+#             here — which is why the Tauri rewrite cost this crate nothing.
 # khadi-greet the login screen, speaking greetd's IPC.
 # khadi-shell the UI shell: eDEX's layout as a Tauri app. A THIRD consumer of
 #             khadi-core, and the reason that crate was kept UI-free — nothing
@@ -12,7 +12,6 @@
 [workspace]
 members = [
     "crates/khadi-core",
-    "crates/khadi-hud",
     "crates/khadi-bar",
     "crates/khadi-greet",
     "shell/src-tauri",
