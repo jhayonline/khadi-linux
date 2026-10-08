@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+/* khadi-shell — eDEX's stylesheet, ported.
+ *
+ * EVERY NUMBER HERE IS eDEX'S. The `vh` units, the 0.092vh hairlines, the
+ * 0.833vh tick stubs, the 17% columns, the 65%/60.3% main shell — all read
+ * out of edex-ui/src/assets/css, which is GPL-3.0, the same licence as Khadi.
+ * This is a port, not an interpretation, and where a number looks arbitrary it
+ * is because it is eDEX's arbitrary number.
+ *
+ * Sizing in vh is what makes the whole UI scale with the window instead of
+ * with a font size, and it is the reason the terminal version could never
+ * match it: a cell grid has one indivisible unit and this has none.
+ *
+ * Colours arrive as CSS variables set at runtime from khadi-core's theme, so
+ * the four themes in themes/*.toml all work without rebuilding. */
+
+@theme {
+  --font-ui: "Rajdhani", sans-serif;
+  --font-ui-light: "Rajdhani Light", "Rajdhani", sans-serif;
+  --font-mono: "Iosevka Term", monospace;
+}
+
+:root {
+  /* Overwritten on boot by the theme command. These are tron's, so a frame
+     rendered before the theme resolves is still the right colour. */
+  --c: 170, 207, 209;
+  --ground: #05080d;
+  --grid: #262828;
+  --rule: rgba(var(--c), 0.3);
+}
+
+@font-face {
+  font-family: "Rajdhani";
+  src: local("Rajdhani Medium"), local("Rajdhani");
+  font-weight: 500;
+}
+@font-face {
+  font-family: "Rajdhani Light";
+  src: local("Rajdhani Light");
+  font-weight: 300;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  user-select: none;
+  color: rgb(var(--c));
+  font-family: var(--font-ui);
+  /* eDEX's lattice: a cell of light_black over grey, tiled. The colour has
+     been in themes/*.toml marked PORTED since Phase 2 and the terminal build
+     could never draw it — a cell grid has no sub-cell to put a hairline in. */
+  background:
+    linear-gradient(90deg, var(--ground) 1.85vh, transparent 1%) center,
+    linear-gradient(var(--ground) 1.85vh, transparent 1%) center,
+    var(--grid);
+  background-size: 2.04vh 2.04vh;
+}
+
+/* ------------------------------------------------------------ the motif ---
+ * A hairline with a tick at each end. In the TUI this was the characters
+ * `┬───┬`; here it is eDEX's own construction — a top border plus two
+ * 0.833vh stubs hung off ::before and ::after. */
+.rule-top {
+  border-top: 0.092vh solid var(--rule);
+  position: relative;
+}
+.rule-top::before,
+.rule-top::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  height: 0.833vh;
+  width: 0;
+  border-left: 0.092vh solid var(--rule);
+}
+.rule-top::before {
+  left: 0;
+}
+.rule-top::after {
+  right: 0;
+}
+
+/* The section header: a label pair over the ticked rule. */
+.title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 1.02vh;
+  letter-spacing: 0.092vh;
+  padding: 0 0.925vh;
+  margin: 0;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+.title > span:last-child {
+  opacity: 0.7;
+  text-align: right;
+}
+
+/* Label over value, the unit eDEX's info grids are built from. */
+.pair > .k {
+  opacity: 0.5;
+  font-family: var(--font-ui-light);
+  margin: 0;
+}
+.pair > .v {
+  margin: 0;
+}
+
+/* Dashed separators inside a module — eDEX uses these between CPU graphs. */
+.dashed-top {
+  border-top: 0.092vh dashed var(--rule);
+}
+.dashed-bottom {
+  border-bottom: 0.092vh dashed var(--rule);
+}
+
+/* xterm fills its pane; the addon handles the cell maths. */
+.xterm .xterm-viewport {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-button {
+  display: none;
+}
+::-webkit-scrollbar-track {
+  background: rgba(var(--c), 0.4);
+  border: 3px solid var(--ground);
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--c));
+}

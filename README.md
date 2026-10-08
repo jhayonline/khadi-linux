@@ -75,6 +75,10 @@ crates/khadi-hud      the ratatui panels: the motifs no off-the-shelf TUI draws
 crates/khadi-bar      the Wayland layer-shell panel, for the motifs a cell
                       grid cannot draw at all
 crates/khadi-greet    the login screen, speaking greetd's IPC
+shell/                khadi-shell — eDEX's interface as a Tauri app: React,
+                      TypeScript and Tailwind in a webview, Rust underneath.
+                      shell/README.md, and PLAN.md 10r for why the terminal
+                      panels were the ceiling.
 themes/tron.toml      the design system — one file, everything derives from it
 templates/            the source of every config; config/ is build output
 config/               mirrors ~/.config — GENERATED, do not edit

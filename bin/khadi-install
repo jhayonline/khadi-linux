@@ -50,13 +50,18 @@ act()  { if (( APPLY )); then "$@"; fi; }
 
 CONFIGS=(foot zellij btop hypr yazi fuzzel helix mako khadi gtk-3.0 gtk-4.0 xdg-desktop-portal)
 BINS=(khadi-panel khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontcheck khadi-boot)
+# khadi-shell is the odd one: Tauri embeds its whole frontend into the binary,
+# so there is still exactly one file to install and nothing to put beside it.
+# Building it needs node and npm, which is why `cargo build --release` alone no
+# longer produces a complete set — see shell/README.md.
+#
 # The compiled half. These are the two components Khadi actually writes, and
 # the installer shipped neither: a clean --apply produced a desktop with no
 # panels and no bar. The VM gate never caught it because `khadi-vm push`
 # installs them separately — so the gate was passing on a state the installer
 # could not produce, which is the hole in "someone else runs the script and
 # gets your desktop".
-RUSTBINS=(khadi-hud khadi-bar khadi-greet)
+RUSTBINS=(khadi-hud khadi-bar khadi-greet khadi-shell)
 
 # ---------------------------------------------------------------- uninstall
 if (( UNINSTALL )); then

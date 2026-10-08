@@ -14,3 +14,8 @@ vm/.qmp.sock
 
 # rust build output
 /target/
+
+# khadi-shell build output
+shell/node_modules/
+shell/dist/
+shell/src-tauri/gen/

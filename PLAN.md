@@ -2200,6 +2200,48 @@ regenerates from templates before validating.
 
 ---
 
+## 10r. The terminal was the ceiling, so the UI left the terminal
+
+`khadi-hud` scored well against the reference and still did not look like it,
+and the reason was not taste. A terminal cell is about 8x20 px and indivisible.
+Everything that follows is a consequence:
+
+| eDEX | what a cell grid can do | measured |
+| --- | --- | --- |
+| `0.092vh` hairline | `─`, a 2 px line adrift in a 20 px row | 10j |
+| United Sans, proportional | one monospace, one weight | 3 |
+| SVG file icons | block characters in the shape of a folder | 10s |
+| WebGL globe | braille dots | 10i |
+| `2.04vh` lattice over the whole UI | nothing — there is no sub-cell | — |
+
+The last row is the giveaway. `grid = "#262828"` has been in `themes/*.toml`
+marked `PORTED` since Phase 2 and was never drawn once, because a cell grid has
+nowhere to put it.
+
+Section 12 already named the way out — *"no Electron, anywhere, which is why
+the Tauri rewrite is the only acceptable eDEX descendant"* — written as a fence
+and read here as a plan. `shell/` is that rewrite: React, TypeScript and
+Tailwind in a webview, Rust underneath, and every number in `src/index.css`
+read out of `edex-ui/src/assets/css` rather than estimated. Both are GPL-3.0,
+so it is a port.
+
+**What it cost nothing to build.** `khadi-core` did not change. It was kept
+free of UI dependencies in Phase 2 on the grounds that two very different
+surfaces consumed it; it now feeds three, and the third is a browser. The same
+goes for `themes/*.toml` — the shell reads the resolved theme at runtime and
+re-derives nothing, which is the rule from section 4.
+
+**What it costs to run.** A webview is ~100-150 MB RSS against `khadi-hud`'s
+~5 MB. xterm.js is not foot: it is slower on heavy output, which is why eDEX
+had a reputation for lag. `Super+Return` still opens a real foot window, and
+that is the answer for builds and log tails.
+
+**What it ends.** `khadi-hud` and `khadi-bar` are now a second implementation
+of one design system, which is exactly the drift section 4 exists to prevent.
+They stay only until the shell covers what they cover.
+
+---
+
 ## 11. Risks and open decisions
 
 | Risk | Why it bites | Mitigation |
@@ -2249,9 +2291,13 @@ will ask for, and the answer is no.
   globe with no browser engine, no new dependency and no geolocation; it is
   labelled `NO GEOIP` because a pin would be a claim the data does not
   support. See section 10i.
-- **No on-screen keyboard.** ~15% of the eDEX screen, useless without a
-  touchscreen, on a system whose entire premise is the physical keyboard.
-  Already dropped upstream.
+- **No on-screen keyboard** — amended 2026-10-08. The reasoning above was
+  written for a cell grid, where the keyboard would have been useless
+  decoration drawn in characters. `khadi-shell` renders eDEX's keyboard
+  because it is a quarter of the screen and the composition does not stand
+  without it, and because in a webview it is not inert: it lights on real key
+  events. `showKeyboard` in `shell/src/App.tsx` turns it off in one line. The
+  fence that survives is the narrow one: nothing in Khadi may *require* it.
 - **No X11.** Wayland only. Supporting both doubles the compositor, screenshot,
   clipboard and screen-share surface for a shrinking audience.
 - **No desktop environment features.** No settings GUI, no file manager beyond

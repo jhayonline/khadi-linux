@@ -6,8 +6,17 @@
 #             grid or a widget tree does not belong here.
 # khadi-hud   the panels. Also a lib: khadi-greet draws the same chrome.
 # khadi-greet the login screen, speaking greetd's IPC.
+# khadi-shell the UI shell: eDEX's layout as a Tauri app. A THIRD consumer of
+#             khadi-core, and the reason that crate was kept UI-free — nothing
+#             in it had to change to feed a webview.
 [workspace]
-members = ["crates/khadi-core", "crates/khadi-hud", "crates/khadi-bar", "crates/khadi-greet"]
+members = [
+    "crates/khadi-core",
+    "crates/khadi-hud",
+    "crates/khadi-bar",
+    "crates/khadi-greet",
+    "shell/src-tauri",
+]
 resolver = "2"
 
 [workspace.package]

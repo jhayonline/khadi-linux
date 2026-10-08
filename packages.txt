@@ -23,6 +23,19 @@ grim               # screenshot
 slurp              # region select
 wl-clipboard       # clipboard
 
+# --- the UI shell ------------------------------------------------------
+# khadi-shell is eDEX's layout as a Tauri app. Tauri uses the SYSTEM webview
+# rather than bundling one, which is the whole reason it was picked over
+# Electron: one 40 MB library that Arch already ships and most desktops
+# already have, instead of a 300 MB Chromium per app.
+webkit2gtk-4.1     # the webview khadi-shell renders into
+# Tauri's docs name libappindicator-gtk3; that package is NOT in the Arch
+# repos — checked, `pacman -Si` says not found — and the manifest forbids the
+# AUR. Arch ships the Ayatana fork instead, which is what webkit2gtk links.
+libayatana-appindicator
+# nodejs/npm are BUILD dependencies, not runtime ones — the shell ships as a
+# compiled binary with its frontend embedded, so they are not listed here.
+
 # --- GUI apps ----------------------------------------------------------
 # Khadi is terminal-FIRST, not terminal-only. A portal is how a GUI app asks
 # the desktop to open a file or share a screen, and BOTH backends are needed:
