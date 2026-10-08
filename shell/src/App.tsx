@@ -1,12 +1,13 @@
-// The eDEX composition.
+// The eDEX composition, with the panels able to get out of the way.
 //
-// Geometry out of edex-ui/src/assets/css: columns at 17%, main shell at 65%
-// wide and 60.3% tall, filesystem 43vw x 30vh, keyboard 55.5vw. The side
-// columns are absolutely positioned and the three flow children wrap, which
-// is how eDEX gets the terminal on one row and the browser plus keyboard on
-// the next.
+// Geometry is still eDEX's — 17% columns, a 30vh bottom row — but the
+// positioning is not. eDEX hangs its columns off `position: absolute` and
+// leans on flex-wrap for the bottom row, which works for furniture that never
+// moves and falls apart the moment a panel can fold. This is three flex boxes:
+// a row of [left | shell | right] over a filesystem strip. At the default
+// settings it lands where eDEX's does; with a panel folded it just works.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   getFilesystem,
   getNetwork,
@@ -22,10 +23,10 @@ import { Clock, CpuInfo, Hardware, RamWatcher, SysInfo, TopList } from "./compon
 import { ConnInfo, Globe, NetStat } from "./components/RightColumn";
 import { MainShell } from "./components/MainShell";
 import { FilesystemPanel } from "./components/Filesystem";
-import { Keyboard } from "./components/Keyboard";
+import { CollapseButton, CollapsedRail } from "./components/Collapse";
 
-/** Turn the on-screen keyboard off here if you want the terminal taller. */
-const showKeyboard = true;
+type Folded = { left: boolean; right: boolean; bottom: boolean };
+const FOLD_KEY = "khadi.folded";
 
 /** Poll on a timer, as eDEX does. The Rust side refreshes on demand, so the
  *  interval is the only clock in the system. */
@@ -33,16 +34,23 @@ function usePoll<T>(fn: () => Promise<T>, ms: number): T | null {
   const [v, setV] = useState<T | null>(null);
   useEffect(() => {
     let alive = true;
-    const run = () => {
-      fn()
-        .then((x) => alive && setV(x))
-        .catch(() => {});
+    let timer: number | undefined;
+    const run = async () => {
+      try {
+        const x = await fn();
+        if (alive) setV(x);
+      } catch {
+        /* a panel that cannot read is better blank than crashed */
+      }
+      // CHAINED, NOT setInterval. An interval queues another call whether or
+      // not the last one came back; on a loaded machine the refreshes stack up
+      // behind each other and the UI gets slower exactly when it matters most.
+      if (alive) timer = window.setTimeout(run, ms);
     };
-    run();
-    const t = setInterval(run, ms);
+    void run();
     return () => {
       alive = false;
-      clearInterval(t);
+      if (timer !== undefined) clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ms]);
@@ -51,9 +59,33 @@ function usePoll<T>(fn: () => Promise<T>, ms: number): T | null {
 
 export default function App() {
   const [theme, setTheme] = useState<Theme | null>(null);
-  const sys = usePoll<System>(getSystem, 1000);
-  const net = usePoll<Network>(getNetwork, 1000);
-  const fs = usePoll<Filesystem>(getFilesystem, 2000);
+  const [fold, setFold] = useState<Folded>(() => {
+    try {
+      const raw = localStorage.getItem(FOLD_KEY);
+      if (raw) return { left: false, right: false, bottom: false, ...JSON.parse(raw) };
+    } catch {
+      /* a browser with storage switched off still gets a desktop */
+    }
+    return { left: false, right: false, bottom: false };
+  });
+
+  const toggle = useCallback((k: keyof Folded) => {
+    setFold((f) => {
+      const next = { ...f, [k]: !f[k] };
+      try {
+        localStorage.setItem(FOLD_KEY, JSON.stringify(next));
+      } catch {
+        /* not worth failing a click over */
+      }
+      return next;
+    });
+  }, []);
+
+  // A folded panel is not polled. Nothing reads the result, and on a laptop
+  // the cheapest work is the work that does not happen.
+  const sys = usePoll<System>(getSystem, fold.left ? 60000 : 1000);
+  const net = usePoll<Network>(getNetwork, fold.right ? 60000 : 1000);
+  const fs = usePoll<Filesystem>(getFilesystem, fold.bottom ? 60000 : 3000);
 
   useEffect(() => {
     getTheme()
@@ -71,58 +103,81 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // Ctrl+Alt+<arrow> folds the panel in that direction. Ctrl+Alt is free:
+  // Hyprland owns Super, the shell inside owns Ctrl, and foot's Ctrl+Shift is
+  // not in this window at all.
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || !e.altKey) return;
+      const k =
+        e.code === "ArrowLeft" ? "left" : e.code === "ArrowRight" ? "right" : e.code === "ArrowDown" ? "bottom" : null;
+      if (!k) return;
+      e.preventDefault();
+      toggle(k);
+    };
+    // CAPTURE PHASE. xterm.js owns the keyboard once the terminal has focus
+    // and calls preventDefault on almost everything, so a bubble-phase
+    // listener on window never sees Ctrl+Alt+Left — it was added, it was
+    // correct, and it did nothing at all until this flag.
+    window.addEventListener("keydown", on, { capture: true });
+    return () => window.removeEventListener("keydown", on, { capture: true });
+  }, [toggle]);
+
   return (
-    <div className="relative flex h-full w-full flex-row flex-wrap items-center justify-center pt-[1.85vh]">
-      {/* ------------------------------------------------ mod_column_left */}
-      <section className="absolute left-[-0.555vh] top-[2.5vh] z-10 flex max-h-[96%] w-[17%] flex-col items-end overflow-hidden box-border p-[1.39vh] pb-0">
-        <div className="w-full">
-          <Title left="PANEL" right="SYSTEM" />
-          <Clock />
-          <SysInfo s={sys} />
-          <Hardware s={sys} />
-          <CpuInfo s={sys} />
-          <RamWatcher s={sys} />
-        </div>
-        <TopList s={sys} />
-      </section>
+    <div className="flex h-full w-full flex-col pt-[1.85vh]">
+      <div className="flex min-h-0 flex-1 flex-row">
+        {/* ------------------------------------------------ mod_column_left */}
+        {fold.left ? (
+          <CollapsedRail label="SYSTEM" side="left" onClick={() => toggle("left")} />
+        ) : (
+          <section className="flex w-[17%] shrink-0 flex-col overflow-hidden box-border p-[1.39vh] pt-0">
+            <Title
+              left="PANEL"
+              right="SYSTEM"
+              action={<CollapseButton side="left" collapsed={false} onClick={() => toggle("left")} />}
+            />
+            <Clock />
+            <SysInfo s={sys} />
+            <Hardware s={sys} />
+            <CpuInfo s={sys} />
+            <RamWatcher s={sys} />
+            <TopList s={sys} />
+          </section>
+        )}
 
-      {/* ----------------------------------------------- mod_column_right */}
-      <section className="absolute right-[-0.555vh] top-[2.5vh] z-10 flex max-h-[96%] w-[17%] flex-col items-start overflow-hidden box-border p-[1.39vh] pb-0">
-        <div className="w-full">
-          <Title left="PANEL" right="NETWORK" />
-          <NetStat n={net} />
-          <Globe />
-          <ConnInfo n={net} />
-        </div>
-      </section>
-
-      {/* ------------------------------------------------------ main_shell */}
-      <section
-        className="box-border p-[0.74vh]"
-        style={{ width: "65%", height: showKeyboard ? "60.3%" : "88%" }}
-      >
-        <MainShell theme={theme} />
-      </section>
-
-      {/* ------------------------------------- filesystem + keyboard row */}
-      {/* ONE container, not two flow siblings. As siblings the filesystem's
-          17% inset counted against the row's width, the total passed 100vw and
-          the keyboard wrapped onto a third row that fell off the bottom of the
-          screen. The row clears the left column with padding and splits what
-          is left. */}
-      <div className="flex h-[30vh] w-full flex-row items-stretch pl-[17%]">
-        <section
-          className="relative top-[-0.925vh] box-border flex min-h-0 flex-col px-[1vh]"
-          style={{ width: showKeyboard ? "40%" : "100%" }}
-        >
-          <FilesystemPanel fs={fs} />
+        {/* ------------------------------------------------------ main_shell */}
+        <section className="min-w-0 flex-1 box-border p-[0.74vh] pt-0">
+          <MainShell theme={theme} />
         </section>
-        {showKeyboard && (
-          <section className="box-border min-w-0 flex-1 pr-[1vh]">
-            <Keyboard />
+
+        {/* ----------------------------------------------- mod_column_right */}
+        {fold.right ? (
+          <CollapsedRail label="NETWORK" side="right" onClick={() => toggle("right")} />
+        ) : (
+          <section className="flex w-[17%] shrink-0 flex-col overflow-hidden box-border p-[1.39vh] pt-0">
+            <Title
+              left="PANEL"
+              right="NETWORK"
+              action={<CollapseButton side="right" collapsed={false} onClick={() => toggle("right")} />}
+            />
+            <NetStat n={net} />
+            <Globe />
+            <ConnInfo n={net} />
           </section>
         )}
       </div>
+
+      {/* -------------------------------------------------- section#filesystem */}
+      {fold.bottom ? (
+        <CollapsedRail label="FILESYSTEM" side="bottom" onClick={() => toggle("bottom")} />
+      ) : (
+        <section className="box-border flex h-[22vh] shrink-0 flex-col px-[1.39vh] pb-[1vh]">
+          <FilesystemPanel
+            fs={fs}
+            action={<CollapseButton side="bottom" collapsed={false} onClick={() => toggle("bottom")} />}
+          />
+        </section>
+      )}
     </div>
   );
 }

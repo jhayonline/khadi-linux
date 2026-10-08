@@ -2303,13 +2303,13 @@ will ask for, and the answer is no.
   globe with no browser engine, no new dependency and no geolocation; it is
   labelled `NO GEOIP` because a pin would be a claim the data does not
   support. See section 10i.
-- **No on-screen keyboard** — amended 2026-10-08. The reasoning above was
-  written for a cell grid, where the keyboard would have been useless
-  decoration drawn in characters. `khadi-shell` renders eDEX's keyboard
-  because it is a quarter of the screen and the composition does not stand
-  without it, and because in a webview it is not inert: it lights on real key
-  events. `showKeyboard` in `shell/src/App.tsx` turns it off in one line. The
-  fence that survives is the narrow one: nothing in Khadi may *require* it.
+- **No on-screen keyboard.** ~15% of the eDEX screen, useless without a
+  touchscreen, on a system whose entire premise is the physical keyboard.
+  Already dropped upstream. This fence came down for one commit, on the
+  reasoning that an exact replica needs it and that in a webview it is at least
+  live rather than inert — and went straight back up on seeing it: a quarter of
+  the screen spent on a picture of the thing under your hands. The panels fold
+  away now instead, which is the need it was standing in for.
 - **No X11.** Wayland only. Supporting both doubles the compositor, screenshot,
   clipboard and screen-share surface for a shrinking audience.
 - **No desktop environment features.** No settings GUI, no file manager beyond

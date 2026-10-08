@@ -56,57 +56,97 @@ export function Globe() {
   useEffect(() => {
     const cv = ref.current;
     if (!cv) return;
-    const ctx = cv.getContext("2d");
+    const ctx = cv.getContext("2d", { alpha: true });
     if (!ctx) return;
+
+    // Trig once, not 3937 times a frame. Only the spin changes between
+    // frames, so everything that depends solely on the tile is precomputed.
+    const rad = Math.PI / 180;
     const pts = land as [number, number][];
+    const n = pts.length;
+    const sinLat = new Float32Array(n);
+    const cosLat = new Float32Array(n);
+    const lon = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      sinLat[i] = Math.sin(pts[i][0] * rad);
+      cosLat[i] = Math.cos(pts[i][0] * rad);
+      lon[i] = pts[i][1] * rad;
+    }
+
+    // Four depth buckets instead of a per-point fillStyle. Each bucket is one
+    // path and one fill, so a frame costs 4 fills rather than 3937 arc+fill
+    // pairs — which is what made the whole UI feel heavy, because canvas work
+    // on the main thread blocks everything else the webview wants to do.
+    const BUCKETS = 4;
+    const ALPHA = [0.3, 0.5, 0.75, 1];
+
     let raf = 0;
     let spin = 0;
     let last = performance.now();
+    let acc = 0;
+    const FRAME = 1000 / 24; // eDEX's globe turns slowly; 24fps reads the same
 
     const frame = (now: number) => {
+      raf = requestAnimationFrame(frame);
+      const dt = now - last;
+      last = now;
+      acc += dt;
+      if (acc < FRAME) return;
+      acc = 0;
+
       // Six degrees a second: one turn a minute, fast enough to read as alive
       // and slow enough not to pull the eye.
-      spin = (spin + ((now - last) / 1000) * 6) % 360;
-      last = now;
-      const w = (cv.width = cv.clientWidth * devicePixelRatio);
-      const h = (cv.height = cv.clientHeight * devicePixelRatio);
+      spin = (spin + (dt / 1000) * 6) % 360;
+
+      const w = cv.clientWidth * devicePixelRatio;
+      const h = cv.clientHeight * devicePixelRatio;
+      if (cv.width !== w || cv.height !== h) {
+        cv.width = w;
+        cv.height = h;
+      }
       ctx.clearRect(0, 0, w, h);
-      const css = getComputedStyle(document.documentElement);
-      const c = css.getPropertyValue("--c").trim();
+
+      const c = getComputedStyle(document.documentElement).getPropertyValue("--c").trim();
       const r = Math.min(w, h) * 0.46;
       const cx = w / 2;
       const cy = h / 2;
-      const rad = Math.PI / 180;
-      // The meridian/parallel cage first, under the land.
+
+      // The cage, under the land.
       ctx.strokeStyle = `rgba(${c}, 0.12)`;
       ctx.lineWidth = devicePixelRatio;
+      ctx.beginPath();
       for (let latd = -60; latd <= 60; latd += 30) {
         const y = Math.sin(latd * rad);
         const rr = Math.cos(latd * rad);
-        ctx.beginPath();
         ctx.ellipse(cx, cy - y * r, rr * r, rr * r * 0.18, 0, 0, Math.PI * 2);
-        ctx.stroke();
       }
-      ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.stroke();
 
-      const dot = r * 0.016;
-      for (const [lat, lon] of pts) {
-        const la = lat * rad;
-        const lo = (lon + spin) * rad;
-        const x = Math.cos(la) * Math.sin(lo);
-        const z = Math.cos(la) * Math.cos(lo);
-        const y = Math.sin(la);
-        if (z < 0) continue; // the far side
-        // Fade toward the limb, which is what gives the dot matrix its
-        // curvature instead of reading as a flat disc.
-        ctx.fillStyle = `rgba(${c}, ${(0.25 + 0.75 * z).toFixed(3)})`;
+      const spinRad = spin * rad;
+      const sinSpin = Math.sin(spinRad);
+      const cosSpin = Math.cos(spinRad);
+      const d = Math.max(1, r * 0.028);
+
+      for (let b = 0; b < BUCKETS; b++) {
         ctx.beginPath();
-        ctx.arc(cx + x * r, cy - y * r, dot * (0.5 + 0.5 * z), 0, Math.PI * 2);
+        const lo = b / BUCKETS;
+        const hi = (b + 1) / BUCKETS;
+        for (let i = 0; i < n; i++) {
+          // sin(lon + spin) and cos(lon + spin), expanded so the per-tile trig
+          // stays in the precomputed arrays.
+          const sl = Math.sin(lon[i]) * cosSpin + Math.cos(lon[i]) * sinSpin;
+          const cl = Math.cos(lon[i]) * cosSpin - Math.sin(lon[i]) * sinSpin;
+          const z = cosLat[i] * cl;
+          if (z <= lo || z > hi) continue; // far side, or another bucket
+          const x = cosLat[i] * sl;
+          const y = sinLat[i];
+          const sz = d * (0.55 + 0.45 * z);
+          ctx.rect(cx + x * r - sz / 2, cy - y * r - sz / 2, sz, sz);
+        }
+        ctx.fillStyle = `rgba(${c}, ${ALPHA[b]})`;
         ctx.fill();
       }
-      raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);

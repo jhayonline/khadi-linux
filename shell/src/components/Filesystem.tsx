@@ -13,11 +13,11 @@ import { bytes } from "../lib/format";
 import { ICONS } from "./icons";
 import { Title } from "./Title";
 
-export function FilesystemPanel({ fs }: { fs: Fs | null }) {
+export function FilesystemPanel({ fs, action }: { fs: Fs | null; action?: React.ReactNode }) {
   const pct = fs && fs.total ? Math.round((fs.used / fs.total) * 100) : 0;
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <Title left="FILESYSTEM" right={fs?.cwd ?? ""} />
+      <Title left="FILESYSTEM" right={fs?.cwd ?? ""} action={action} />
       <div
         className="mt-[1vh] min-h-0 flex-1 overflow-auto"
         style={{

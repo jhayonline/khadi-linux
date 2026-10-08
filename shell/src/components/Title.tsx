@@ -1,11 +1,22 @@
 // The signature motif: a label pair over a hairline that terminates in a tick
 // at each end. Every eDEX module opens with one.
 
-export function Title({ left, right }: { left: string; right?: string }) {
+export function Title({
+  left,
+  right,
+  action,
+}: {
+  left: string;
+  right?: string;
+  action?: React.ReactNode;
+}) {
   return (
     <h3 className="title rule-top">
       <span>{left}</span>
-      {right !== undefined && <span>{right}</span>}
+      <span className="flex items-baseline gap-[0.3vh]">
+        {right !== undefined && <span>{right}</span>}
+        {action}
+      </span>
     </h3>
   );
 }

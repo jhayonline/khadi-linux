@@ -4,7 +4,7 @@
 // digits in 2.3vh cells, sysinfo is 5.556vh at 1.111vh, the rest is 1.3vh on a
 // 1.5vh line. Where a number looks arbitrary it is because it is eDEX's.
 
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import type { System } from "../lib/ipc";
 import { bytes, clockDur, gib } from "../lib/format";
 
@@ -159,6 +159,30 @@ export function CpuInfo({ s }: { s: System | null }) {
 
 /* -------------------------------------------------------- mod_ramwatcher */
 
+/** Memoised on the LIT COUNT, not on the System object. The object is new on
+ *  every poll and 368 spans were being rebuilt once a second for a number that
+ *  moves a few times a minute. */
+const MemCells = memo(function MemCells({ used, cells, cols, step }: {
+  used: number; cells: number; cols: number; step: number;
+}) {
+  const nodes = useMemo(
+    () =>
+      Array.from({ length: cells }, (_, n) => (
+        <span
+          key={n}
+          className="aspect-square"
+          style={{ background: (n * step) % cells < used ? "rgb(var(--c))" : "rgba(var(--c), 0.14)" }}
+        />
+      )),
+    [used, cells, step],
+  );
+  return (
+    <div className="my-[0.5vh] grid gap-[0.14vh] px-[0.46vh]" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+      {nodes}
+    </div>
+  );
+});
+
 export function RamWatcher({ s }: { s: System | null }) {
   // eDEX's block is a page map, so it looks scattered. There is no page map
   // without root, so the same count of cells is spread instead of packed —
@@ -179,20 +203,7 @@ export function RamWatcher({ s }: { s: System | null }) {
           {s ? `USING ${gib(s.mem_used).toFixed(1)} OUT OF ${gib(s.mem_total).toFixed(1)} GIB` : ""}
         </span>
       </h3>
-      <div
-        className="my-[0.5vh] grid gap-[0.14vh] px-[0.46vh]"
-        style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }}
-      >
-        {Array.from({ length: cells }, (_, n) => (
-          <span
-            key={n}
-            className="aspect-square"
-            style={{
-              background: (n * step) % cells < used ? "rgb(var(--c))" : "rgba(var(--c), 0.14)",
-            }}
-          />
-        ))}
-      </div>
+      <MemCells used={used} cells={cells} cols={COLS} step={step} />
       <div className="flex items-center gap-[0.6vh] px-[0.46vh] text-[1.3vh]">
         <span>SWAP</span>
         <div className="h-[0.56vh] flex-1 bg-[rgba(var(--c),0.2)]">

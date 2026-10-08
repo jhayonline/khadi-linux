@@ -352,6 +352,11 @@ for arg in args:
 TPY
 }
 
+# The guest renders on llvmpipe, where webkit's DMABUF path gives a blank
+# window. Real hardware does not need this and is much slower with it, so it
+# lives here rather than in the session config.
+export KHADI_GUEST_ENV="WEBKIT_DISABLE_DMABUF_RENDERER=1"
+
 cmd_autologin() {
     local rc
     rc=$(cat <<'GUEST'

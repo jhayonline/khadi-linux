@@ -11,7 +11,10 @@
 
 mod pty;
 
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Mutex,
+};
 
 use khadi_core::{browse::Browser, disks::Filesystem, metrics::Metrics, net::Network, Theme};
 use serde::Serialize;
@@ -19,6 +22,9 @@ use tauri::{AppHandle, Manager, State};
 
 pub struct Sources {
     metrics: Mutex<Metrics>,
+    /// Flips each `system` call. The process walk is most of a refresh's cost
+    /// and the list changes far more slowly than the CPU graph beside it.
+    tick: AtomicU64,
     net: Mutex<Network>,
     disks: Mutex<Filesystem>,
     browser: Mutex<Browser>,
@@ -28,6 +34,7 @@ impl Default for Sources {
     fn default() -> Self {
         Self {
             metrics: Mutex::new(Metrics::new()),
+            tick: AtomicU64::new(0),
             net: Mutex::new(Network::new()),
             disks: Mutex::new(Filesystem::new()),
             browser: Mutex::new(Browser::new()),
@@ -106,7 +113,8 @@ pub struct SystemOut {
 #[tauri::command]
 fn system(src: State<'_, Sources>) -> Result<SystemOut, String> {
     let mut m = src.metrics.lock().map_err(|e| e.to_string())?;
-    m.refresh();
+    let n = src.tick.fetch_add(1, Ordering::Relaxed);
+    m.refresh_with(n % 2 == 0);
     Ok(SystemOut {
         cores: m.per_core.iter().map(|h| h.iter().copied().collect()).collect(),
         mem_used: m.memory.used,

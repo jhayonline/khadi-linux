@@ -141,9 +141,29 @@ impl Metrics {
     }
 
     pub fn refresh(&mut self) {
+        self.refresh_with(true)
+    }
+
+    /// `procs = false` skips the process walk.
+    ///
+    /// Walking /proc is most of what a refresh costs — every pid, every tick —
+    /// and the process list changes far more slowly than the CPU graph it
+    /// shares a panel with. The shell asks for CPU and memory every second and
+    /// for processes every other second; `khadi-bar`, which shows no process
+    /// list at all, could stop asking entirely.
+    pub fn refresh_with(&mut self, procs: bool) {
         self.sys.refresh_cpu_all();
         self.sys.refresh_memory();
-        self.sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        if procs {
+            // ONLY CPU AND MEMORY. The default refresh also reads each
+            // process's command line, environment, user, root and disk
+            // counters — six more files per pid, none of which this draws.
+            self.sys.refresh_processes_specifics(
+                sysinfo::ProcessesToUpdate::All,
+                true,
+                sysinfo::ProcessRefreshKind::nothing().with_cpu().with_memory(),
+            );
+        }
 
         for (i, cpu) in self.sys.cpus().iter().enumerate() {
             if let Some(h) = self.per_core.get_mut(i) {
@@ -161,6 +181,15 @@ impl Metrics {
             swap_used: self.sys.used_swap(),
         };
 
+        // Before the guard: these are cheap, and they are read every second
+        // whether or not the process list is. Uptime especially — it is a
+        // ticking number and freezing it on alternate frames looks broken.
+        self.temp_c = Self::hottest_zone();
+        self.uptime = Duration::from_secs(System::uptime());
+
+        if !procs {
+            return;
+        }
         let mut ps: Vec<Process> = self
             .sys
             .processes()
@@ -181,9 +210,6 @@ impl Metrics {
         // which is most of what makes eDEX's panels look finished.
         ps.truncate(40);
         self.procs = ps;
-
-        self.temp_c = Self::hottest_zone();
-        self.uptime = Duration::from_secs(System::uptime());
     }
 
     /// Highest thermal zone. sysinfo's component API is inconsistent across
