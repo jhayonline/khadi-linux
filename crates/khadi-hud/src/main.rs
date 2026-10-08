@@ -70,7 +70,7 @@ fn run(panel: Panel) -> Result<()> {
     let theme = Theme::load()?;
     let mut m = Metrics::new();
     let mut n = khadi_core::net::Network::new();
-    let mut fsys = khadi_core::disks::Filesystem::new();
+    let mut fsys = khadi_core::browse::Browser::new();
     m.refresh();
     n.refresh();
     fsys.refresh();
@@ -153,7 +153,8 @@ fn main() -> Result<()> {
     // shell column, so it has no business defaulting to a panel's width.
     let (dw, dh) = match panel {
         Panel::Header { .. } => (80, widgets::Header::HEIGHT),
-        _ => (34, 44),
+        Panel::Fs => (160, 22),
+        _ => (40, 46),
     };
     let w: u16 = std::env::var("KHADI_COLS").ok().and_then(|s| s.parse().ok()).unwrap_or(dw);
     let h: u16 = std::env::var("KHADI_ROWS").ok().and_then(|s| s.parse().ok()).unwrap_or(dh);
@@ -182,7 +183,7 @@ fn main() -> Result<()> {
             })?
         }
         Panel::Fs => {
-            let mut fsys = khadi_core::disks::Filesystem::new();
+            let mut fsys = khadi_core::browse::Browser::new();
             fsys.refresh();
             render_once(w, h, |f| {
                 f.render_widget(fs_panel::FsPanel { fs: &fsys, theme: &theme }, f.area())

@@ -10,11 +10,11 @@ use khadi_core::{metrics::Metrics, Theme};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::Style,
+    style::{Modifier, Style},
     widgets::Widget,
 };
 
-use crate::widgets::{bar, col, ellipsize, grid, BigClock, Graph, Header, MemGrid};
+use crate::widgets::{bar, col, ellipsize, grid, rule, BigClock, Graph, Header, MemGrid};
 
 pub struct Dash<'a> {
     pub m: &'a Metrics,
@@ -75,7 +75,9 @@ impl Widget for Dash<'_> {
         room!(BigClock::HEIGHT);
         BigClock { text: &self.clock, theme: t }
             .render(Rect::new(area.x, y, w, BigClock::HEIGHT), buf);
-        y += BigClock::HEIGHT + 1;
+        y += BigClock::HEIGHT;
+        rule(buf, area.x, y, w, t);
+        y += 1;
 
         // eDEX's second row is four cells wide, not three. The panel has the
         // width for it once the values are kept short, and a fourth cell is
@@ -89,7 +91,9 @@ impl Widget for Dash<'_> {
             ("TASKS", &self.m.tasks.to_string()),
             ("TEMP", &temp),
         ], t);
-        y += 3;
+        y += 2;
+        rule(buf, area.x, y, w, t);
+        y += 1;
 
         // Three cells: vendor, model, chassis. The old version put vendor and
         // model on ONE line and a VM's "Standard PC (Q35 + ICH9, 2009)" ate it
@@ -111,7 +115,9 @@ impl Widget for Dash<'_> {
             ("MODEL", &hw.model),
             ("CHASSIS", &hw.chassis),
         ], t);
-        y += 3;
+        y += 2;
+        rule(buf, area.x, y, w, t);
+        y += 1;
 
         // CPU. This is the panel btop structurally cannot put in a side column.
         room!(Header::HEIGHT);
@@ -144,9 +150,23 @@ impl Widget for Dash<'_> {
             let gx = area.x + 6;
             let gw = w.saturating_sub(6);
             let series: Vec<&[f32]> = if b.is_empty() { vec![&a] } else { vec![&a, &b] };
-            Graph { series: &series, max: 100.0, theme: t }
+            // SCALED TO THE WINDOW, NOT TO 100. A fixed 0-100 axis means an
+            // idle machine draws a flat line along the floor — which is what
+            // Khadi's CPU band was, every time it was photographed, while
+            // eDEX's traces have shape at the same load. eDEX autoscales; so
+            // does the traffic graph two panels over. The floor of 12 stops an
+            // idle core's sampling noise from being magnified into a mountain.
+            let peak = series.iter().flat_map(|s| s.iter()).cloned().fold(12.0f32, f32::max);
+            Graph { series: &series, max: peak, theme: t }
                 .render(Rect::new(gx, y, gw, 3), buf);
-            y += 4;
+            let scale = format!("{peak:.0}");
+            buf.set_string(area.x + w - scale.len() as u16, y, &scale,
+                           Style::default().fg(col(t.text_muted)));
+            y += 3;
+            if y < bottom {
+                rule(buf, area.x, y, w, t);
+            }
+            y += 1;
         }
 
         // Memory, with the grid.
@@ -154,12 +174,19 @@ impl Widget for Dash<'_> {
         let mem = format!("{:.1}/{:.1} GiB", gib(self.m.memory.used), gib(self.m.memory.total));
         Header::new("MEMORY", &mem, t).render(Rect::new(area.x, y, w, 2), buf);
         y += Header::HEIGHT;
-        let grid_h = 4u16.min(bottom.saturating_sub(y));
+        // SIX ROWS. eDEX's memory block is the densest, most recognisable
+        // thing in its column precisely because it has mass; four rows of a
+        // forty-column panel is a band, not a block.
+        let grid_h = 6u16.min(bottom.saturating_sub(y));
         if grid_h > 0 {
             let frac = if self.m.memory.total == 0 { 0.0 }
                        else { self.m.memory.used as f64 / self.m.memory.total as f64 };
             MemGrid { frac, theme: t }.render(Rect::new(area.x, y, w, grid_h), buf);
-            y += grid_h + 1;
+            y += grid_h;
+            if y < bottom {
+                rule(buf, area.x, y, w, t);
+            }
+            y += 1;
         }
 
         // Swap as a single bar — eDEX gives it one row, not a grid.
@@ -171,7 +198,11 @@ impl Widget for Dash<'_> {
             bar(buf, area.x + 5, y, barw, frac, t);
             buf.set_string(area.x + w - lbl.len() as u16, y, &lbl,
                            Style::default().fg(col(t.text_muted)));
-            y += 2;
+            y += 1;
+            if y < bottom {
+                rule(buf, area.x, y, w, t);
+            }
+            y += 1;
         }
 
         // Four columns, as eDEX has: PID, NAME, CPU, MEM. `mem` was already
@@ -192,7 +223,8 @@ impl Widget for Dash<'_> {
             let mem = format!("{:>5}", mib(p.mem));
             // Name takes whatever the two right-hand columns leave.
             let name_w = w.saturating_sub(7 + cpu.len() as u16 + mem.len() as u16 + 2);
-            buf.set_string(area.x + 7, y, ellipsize(&p.name, name_w as usize), Style::default().fg(col(t.text)));
+            buf.set_string(area.x + 7, y, ellipsize(&p.name, name_w as usize),
+                           Style::default().fg(col(t.text)).add_modifier(Modifier::BOLD));
             buf.set_string(area.x + w - mem.len() as u16 - cpu.len() as u16 - 1, y, &cpu,
                            Style::default().fg(col(t.text_dim)));
             buf.set_string(area.x + w - mem.len() as u16, y, &mem,

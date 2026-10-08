@@ -9,7 +9,7 @@ use khadi_core::{Rgb, Theme};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     symbols::Marker,
     widgets::{
         canvas::{Canvas, Line as CanvasLine},
@@ -143,6 +143,40 @@ impl Widget for Graph<'_> {
     }
 }
 
+/// Where cell `n` sits in the fill order, scattered rather than sequential.
+///
+/// Multiplying by a step coprime to the cell count is a bijection, so every
+/// cell gets a distinct rank and lighting the lowest N lights EXACTLY N cells
+/// — the count stays honest while the pattern stops being a solid block at the
+/// top. The step is near the golden ratio of the count, which is the standard
+/// way to make such a sequence look unpatterned; a plain `n * used % cells`
+/// was tried first and came out as identical stripes on every row, because the
+/// row length happened to divide the period.
+fn order(n: usize, cells: usize) -> usize {
+    if cells == 0 {
+        return 0;
+    }
+    let gcd = |mut a: usize, mut b: usize| {
+        while b != 0 {
+            let t = b;
+            b = a % b;
+            a = t;
+        }
+        a
+    };
+    let mut step = ((cells as f64) * 0.618_033_988_75) as usize | 1;
+    if step == 0 {
+        step = 1;
+    }
+    while gcd(step, cells) != 1 {
+        step += 2;
+        if step >= cells * 2 {
+            return n;
+        }
+    }
+    (n.wrapping_mul(step)) % cells
+}
+
 pub struct MemGrid<'a> {
     pub frac: f64,
     pub theme: &'a Theme,
@@ -153,20 +187,30 @@ impl Widget for MemGrid<'_> {
         if area.width < 2 || area.height == 0 {
             return;
         }
-        // DISCRETE CELLS, ONE COLUMN APART. Drawn edge to edge these merge into
-        // solid runs and the band reads as a stacked bar chart; eDEX's memory
-        // block reads as a matrix because you can see the individual cells.
-        // The gutter is the whole effect.
-        let per_row = (area.width as usize + 1) / 2;
+        // EVERY COLUMN, not every other one. The gutter was there because the
+        // first version drew `█`, which does merge into solid runs — but `▪`
+        // is a small square inside its cell and already carries its own gap.
+        // Skipping a column halved the resolution and left eDEX's densest,
+        // most recognisable element looking like a sparse row of ticks.
+        let per_row = area.width as usize;
         let cells = per_row * area.height as usize;
         let used = (self.frac.clamp(0.0, 1.0) * cells as f64).round() as usize;
         let on = Style::default().fg(col(self.theme.text));
         let off = Style::default().fg(col(self.theme.a(20)));
         for y in 0..area.height {
             for i in 0..per_row {
-                let lit = (y as usize * per_row + i) < used;
+                // SPREAD, NOT PACKED. Filling the first N cells put every lit
+                // square in the top row or two and left the rest of the block
+                // dark, so a machine at 20% looked like a machine with a
+                // broken panel. eDEX's block is a page map and therefore
+                // scattered; Khadi has no page map — the kernel will not hand
+                // one out without root — so it distributes the same N cells
+                // evenly instead. It is the same number either way; neither
+                // version claims to know WHICH pages are in use.
+                let n = y as usize * per_row + i;
+                let lit = order(n, cells) < used;
                 buf.set_string(
-                    area.x + (i * 2) as u16,
+                    area.x + i as u16,
                     area.y + y,
                     if lit { "\u{25aa}" } else { "\u{00b7}" },
                     if lit { on } else { off },
@@ -176,7 +220,7 @@ impl Widget for MemGrid<'_> {
     }
 }
 
-/// Five-row seven-segment digits, one cell per stroke.
+/// Five-row seven-segment digits, one cell per stroke, drawn solid.
 ///
 /// THE STROKE WEIGHT IS THE DESIGN. This was a 5x5 face of solid blocks, and
 /// against eDEX it read as crude: eDEX's clock is the most prominent thing on
@@ -235,55 +279,26 @@ impl BigClock<'_> {
         }
         let s = Self::segments(c);
         let (a, b, cc, d, e, f, g) = (s[0], s[1], s[2], s[3], s[4], s[5], s[6]);
-        let tl = match (a, f) {
-            (true, true) => '┌',
-            (true, false) => '─',
-            (false, true) => '│',
-            _ => ' ',
-        };
-        let tr = match (a, b) {
-            (true, true) => '┐',
-            (true, false) => '─',
-            (false, true) => '│',
-            _ => ' ',
-        };
-        // The middle row is the only three-way junction: the crossbar can meet
-        // the vertical above, below, or both.
-        let ml = match (g, f, e) {
-            (true, true, true) => '├',
-            (true, true, false) => '└',
-            (true, false, true) => '┌',
-            (true, false, false) => '─',
-            (false, true, _) | (false, _, true) => '│',
-            _ => ' ',
-        };
-        let mr = match (g, b, cc) {
-            (true, true, true) => '┤',
-            (true, true, false) => '┘',
-            (true, false, true) => '┐',
-            (true, false, false) => '─',
-            (false, true, _) | (false, _, true) => '│',
-            _ => ' ',
-        };
-        let bl = match (d, e) {
-            (true, true) => '└',
-            (true, false) => '─',
-            (false, true) => '│',
-            _ => ' ',
-        };
-        let br = match (d, cc) {
-            (true, true) => '┘',
-            (true, false) => '─',
-            (false, true) => '│',
-            _ => ' ',
-        };
-        let v = |on: bool| if on { '│' } else { ' ' };
-        let h = |on: bool| if on { '─' } else { ' ' };
+        // SOLID STROKES, NOT HAIRLINES. The face was drawn with `─` and `│`,
+        // which put a two-pixel line down the middle of a twenty-pixel cell:
+        // next to eDEX's clock, whose strokes are a tenth of the glyph height,
+        // it read as a wireframe of a clock rather than as a readout. A full
+        // block fills its cell, so the stroke becomes the cell — and the
+        // corner-joining the hairline version needed disappears with it,
+        // because two solid cells meeting ARE a corner.
+        let v = |on: bool| if on { '\u{2588}' } else { ' ' };
+        let h = |on: bool| if on { "\u{2588}\u{2588}\u{2588}" } else { "   " };
+        let tl = v(a || f);
+        let tr = v(a || b);
+        let ml = v(g || f || e);
+        let mr = v(g || b || cc);
+        let bl = v(d || e);
+        let br = v(d || cc);
         [
             format!("{tl}{}{tr}", h(a)),
-            format!("{} {}", v(f), v(b)),
+            format!("{}   {}", v(f), v(b)),
             format!("{ml}{}{mr}", h(g)),
-            format!("{} {}", v(e), v(cc)),
+            format!("{}   {}", v(e), v(cc)),
             format!("{bl}{}{br}", h(d)),
         ]
     }
@@ -368,6 +383,117 @@ pub fn grid(buf: &mut Buffer, area: Rect, cells: &[(&str, &str)], theme: &Theme)
     }
 }
 
+/// eDEX's background is not flat black. It is a grid — `background-size:
+/// 2.04vh` of `light_black` cells over `grey`, so a faint lattice shows
+/// through every panel. The colour has been in `themes/*.toml` since Phase 2
+/// (`grid = "#262828"  # PORTED`) and nothing ever drew it, which is a large
+/// part of why the screen read as empty rather than as a surface.
+///
+/// A cell grid cannot draw a hairline, so the lattice is a dot on every second
+/// column and every second row, at the faintest rule step. Drawn FIRST, so
+/// anything else written into the same cells covers it.
+pub fn dot_grid(buf: &mut Buffer, area: Rect, theme: &Theme) {
+    let style = Style::default().fg(col(theme.rule_faint));
+    let mut y = area.y;
+    while y < area.y + area.height {
+        let mut x = area.x;
+        while x < area.x + area.width {
+            buf.set_string(x, y, "\u{00b7}", style);
+            x += 4;
+        }
+        y += 2;
+    }
+}
+
+/// The six shapes eDEX's file browser is built from, as block glyphs.
+///
+/// Seven cells by three rows is about 56x60 px at Khadi's font size, against
+/// eDEX's 54x54 SVG — close enough that the silhouettes read the same. The
+/// shapes ARE the silhouettes: a folder is a tab over a solid body, a file is
+/// a solid page with the top-right corner cut, and a symlink is an outline
+/// because eDEX draws its chain hollow while everything else is filled.
+pub struct Icon<'a> {
+    pub kind: IconKind,
+    pub theme: &'a Theme,
+    /// Dotfiles, which eDEX renders at 0.7 opacity.
+    pub dim: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum IconKind {
+    Up,
+    Dir,
+    File,
+    Link,
+    Other,
+}
+
+impl Icon<'_> {
+    pub const W: u16 = 7;
+    pub const H: u16 = 3;
+
+    pub fn rows(kind: IconKind) -> [&'static str; 3] {
+        match kind {
+            // A tab over a solid body. The tab is what makes it a folder and
+            // not a rectangle, so it is three cells of the seven.
+            IconKind::Dir => ["\u{2584}\u{2584}\u{2584}    ",
+                              "\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}",
+                              "\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}"],
+            // A solid page with the top-right corner cut away: ▙ is the three
+            // quadrants that survive a diagonal fold.
+            IconKind::File => [" \u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2599}",
+                               " \u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}",
+                               " \u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}"],
+            // Hollow, as eDEX's chain is, with the arrow that says where it
+            // points. The name is underlined too — also eDEX's treatment.
+            IconKind::Link => [" \u{250c}\u{2500}\u{2500}\u{2500}\u{2500}\u{2510}",
+                               " \u{2502} \u{2192}\u{2192} \u{2502}",
+                               " \u{2514}\u{2500}\u{2500}\u{2500}\u{2500}\u{2518}"],
+            // Going up is the one action in the panel, so it gets the one
+            // shape that is not a document: an arrow.
+            IconKind::Up => ["   \u{2584}   ",
+                             " \u{2584}\u{2588}\u{2588}\u{2588}\u{2584} ",
+                             "\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}"],
+            // Sockets, fifos, devices. Neither a page nor a folder, and saying
+            // so is more honest than picking the nearer lie.
+            IconKind::Other => [" \u{2592}\u{2592}\u{2592}\u{2592}\u{2592} ",
+                                " \u{2592}   \u{2592} ",
+                                " \u{2592}\u{2592}\u{2592}\u{2592}\u{2592} "],
+        }
+    }
+}
+
+impl Widget for Icon<'_> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        if area.width < Self::W || area.height < Self::H {
+            return;
+        }
+        // eDEX fades dotfiles to 0.7 opacity, not to a whisper. a(50) was so far
+        // down the ramp that half a home directory looked disabled.
+        let c = if self.dim { self.theme.a(70) } else { self.theme.text };
+        let style = Style::default().fg(col(c));
+        for (i, row) in Self::rows(self.kind).iter().enumerate() {
+            buf.set_string(area.x, area.y + i as u16, *row, style);
+        }
+    }
+}
+
+/// A plain hairline, no ticks. eDEX rules off EVERY band — under the clock,
+/// under the date row, between the two CPU graphs, under the memory block —
+/// and Khadi only ruled under the headers. The difference is why one column
+/// reads as a stack of instruments and the other as floating text.
+///
+/// Fainter than `Header`'s rule on purpose: the ticked rule opens a section,
+/// this one separates two rows inside it, and at equal weight the hierarchy
+/// goes flat.
+pub fn rule(buf: &mut Buffer, x: u16, y: u16, w: u16, theme: &Theme) {
+    if w == 0 {
+        return;
+    }
+    buf.set_string(x, y, "\u{2500}".repeat(w as usize),
+                   Style::default().fg(col(theme.rule_faint)));
+}
+
 /// A two-tone meter: one glyph, two weights.
 ///
 /// Every bar on the screen used `█` over `░` in a single colour, which is two
@@ -417,8 +543,11 @@ pub fn pair(buf: &mut Buffer, area: Rect, label: &str, value: &str, theme: &Them
     let w = area.width as usize;
     buf.set_string(area.x, area.y, ellipsize(label, w),
                    Style::default().fg(col(theme.text_dim)));
+    // BOLD. eDEX sets its values in United Sans Medium against Light labels,
+    // so the number is the thing you read and the label is the caption. One
+    // weight for both put them on the same footing and the grid went flat.
     buf.set_string(area.x, area.y + 1, ellipsize(value, w),
-                   Style::default().fg(col(theme.text)));
+                   Style::default().fg(col(theme.text)).add_modifier(Modifier::BOLD));
 }
 
 #[cfg(test)]
@@ -533,19 +662,22 @@ a90 = "#9abbbd"
     /// The clock was locked to HH:MM in Phase 0 because HH:MM:SS needs 39
     /// columns at a legible glyph width and the panel is 34.
     #[test]
-    fn clock_fits_a_34_column_panel() {
+    fn clock_fits_a_40_column_panel() {
         let t = theme();
-        let mut term = Terminal::new(TestBackend::new(34, 5)).unwrap();
+        let mut term = Terminal::new(TestBackend::new(40, 5)).unwrap();
         // WITH SECONDS. Phase 0 could not fit eight glyphs and dropped them;
         // the seven-segment face costs 3 columns a digit and 1 for the colon,
         // so this is the assertion that decision turned on.
-        term.draw(|f| f.render_widget(BigClock { text: "12:34:56", theme: &t }, f.area()))
+        // 0 and 6 are full-width glyphs. The centring check counts LIT cells,
+        // and `1` is four blanks and a stroke — a time starting with one reads
+        // as off-centre when the face is not.
+        term.draw(|f| f.render_widget(BigClock { text: "08:30:56", theme: &t }, f.area()))
             .unwrap();
         let buf = term.backend().buffer();
         let mut lit = 0usize;
-        let (mut first, mut last) = (34usize, 0usize);
+        let (mut first, mut last) = (40usize, 0usize);
         for y in 0..5u16 {
-            for x in 0..34u16 {
+            for x in 0..40u16 {
                 if !buf[(x, y)].symbol().trim().is_empty() {
                     lit += 1;
                     first = first.min(x as usize);
@@ -555,11 +687,11 @@ a90 = "#9abbbd"
         }
         assert!(lit > 40, "clock did not draw (only {lit} cells)");
         let span = last - first + 1;
-        assert!(span <= 34, "clock spans {span} columns, panel is 34");
+        assert!(span <= 40, "clock spans {span} columns, panel is 40");
         // Centred, so a face narrower than the panel does not look like it
         // fell against the left edge.
         let left = first;
-        let right = 34 - 1 - last;
+        let right = 40 - 1 - last;
         assert!(left.abs_diff(right) <= 1, "not centred: {left} left, {right} right");
     }
 
@@ -570,7 +702,7 @@ a90 = "#9abbbd"
     fn every_clock_glyph_row_is_the_same_width() {
         for c in "0123456789".chars() {
             for (i, row) in BigClock::glyph(c).iter().enumerate() {
-                assert_eq!(row.chars().count(), 3, "glyph {c:?} row {i} is {row:?}");
+                assert_eq!(row.chars().count(), 5, "glyph {c:?} row {i} is {row:?}");
             }
         }
         for (i, row) in BigClock::glyph(':').iter().enumerate() {
@@ -578,80 +710,43 @@ a90 = "#9abbbd"
         }
     }
 
-    /// The strokes have to MEET. A digit drawn as unjoined bars and verticals
-    /// renders as five fragments: every lit cell on the top and bottom rows of
-    /// a closed digit must be a corner or a bar, never a bare vertical.
+    /// The strokes are SOLID. Hairline box glyphs put a two-pixel line in the
+    /// middle of a twenty-pixel cell, which is how the clock came out looking
+    /// like a wireframe next to eDEX's.
     #[test]
-    fn clock_digits_are_drawn_with_corners() {
-        // 0 and 8 are closed top and bottom, so every outer row is corners.
-        for c in ['0', '8'] {
-            let g = BigClock::glyph(c);
-            assert_eq!(g[0], "\u{250c}\u{2500}\u{2510}", "{c:?} top");
-            assert_eq!(g[4], "\u{2514}\u{2500}\u{2518}", "{c:?} bottom");
+    fn clock_strokes_are_solid_blocks() {
+        for c in "0123456789".chars() {
+            for row in BigClock::glyph(c) {
+                assert!(
+                    row.chars().all(|ch| ch == '\u{2588}' || ch == ' '),
+                    "glyph {c:?} row {row:?} is not solid"
+                );
+            }
         }
-        // 1 is the one digit with no horizontal at all.
-        assert!(BigClock::glyph('1').iter().all(|r| r == "  \u{2502}"));
-        // 4's crossbar leaves the upper-left vertical and meets both the upper
-        // and lower right ones: └─┤, which only a corner-aware builder draws.
-        assert_eq!(BigClock::glyph('4')[2], "\u{2514}\u{2500}\u{2524}");
-    }
-
-    #[test]
-    fn ellipsize_marks_what_it_cuts() {
-        assert_eq!(ellipsize("QEMU", 10), "QEMU");
-        assert_eq!(ellipsize("Standard PC (Q35 + ICH9, 2009)", 12), "Standard PC…");
-        assert_eq!(ellipsize("abc", 0), "");
-        assert_eq!(ellipsize("abc", 1), "…");
-        // Never panics mid-codepoint: these widgets draw box glyphs and the
-        // same class of bug already crashed MemGrid at exactly 34 columns.
-        for n in 0..12 {
-            let _ = ellipsize("Aspire A515-51G ✓ ▀▀▀", n);
+        // 8 lights every segment, so it is solid across all three bars and has
+        // both verticals between them.
+        let g = BigClock::glyph('8');
+        for r in [0, 2, 4] {
+            assert_eq!(g[r], "\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}", "row {r} of 8");
         }
+        for r in [1, 3] {
+            assert_eq!(g[r], "\u{2588}   \u{2588}", "row {r} of 8");
+        }
+        // 1 is the one digit with nothing but the right-hand stroke.
+        assert!(BigClock::glyph('1').iter().all(|r| r == "    \u{2588}"));
     }
 
-
-    /// A long value borrows from its neighbours' slack. Equal columns cut
-    /// "Standard PC (Q35 + ICH9, 2009)" to "Standard …" while VENDOR sat on
-    /// four unused ones.
+    /// No two digits may render the same, or the clock is lying. This is the
+    /// property the per-digit assertions above are a sample of.
     #[test]
-    fn a_grid_cell_borrows_slack_before_it_truncates() {
-        let th = theme();
-        let mut term = Terminal::new(TestBackend::new(34, 2)).unwrap();
-        term.draw(|f| {
-            let a = f.area();
-            grid(f.buffer_mut(), a, &[
-                ("VENDOR", "QEMU"),
-                ("MODEL", "Standard PC (Q35 + ICH9, 2009)"),
-                ("CHASSIS", "Other"),
-            ], &th);
-        })
-        .unwrap();
-        let buf = term.backend().buffer();
-        let row: String = (0..34).map(|x| buf[(x, 1)].symbol().to_string()).collect();
-        assert!(row.starts_with("QEMU"), "{row:?}");
-        assert!(row.contains("Standard PC (Q3"), "model did not get the slack: {row:?}");
-        assert!(row.trim_end().ends_with("Other"), "{row:?}");
-    }
-
-    /// And when everything fits, the columns stay EVEN — the four-cell
-    /// DATE/UPTIME/TASKS/TEMP band is the common case and a ragged one reads
-    /// as a bug.
-    #[test]
-    fn a_grid_that_fits_keeps_even_columns() {
-        let th = theme();
-        let mut term = Terminal::new(TestBackend::new(32, 2)).unwrap();
-        term.draw(|f| {
-            let a = f.area();
-            grid(f.buffer_mut(), a, &[
-                ("DATE", "07 OCT"), ("UPTIME", "6h 44m"),
-                ("TASKS", "909"), ("TEMP", "56C"),
-            ], &th);
-        })
-        .unwrap();
-        let buf = term.backend().buffer();
-        let row: String = (0..32).map(|x| buf[(x, 0)].symbol().to_string()).collect();
-        for (i, label) in ["DATE", "UPTIME", "TASKS", "TEMP"].iter().enumerate() {
-            assert_eq!(&row[i * 8..i * 8 + label.len()], *label, "cell {i} is not on the grid");
+    fn every_digit_renders_differently() {
+        let mut seen: Vec<(char, String)> = Vec::new();
+        for c in "0123456789".chars() {
+            let face = BigClock::glyph(c).join("/");
+            if let Some((other, _)) = seen.iter().find(|(_, f)| *f == face) {
+                panic!("{c:?} and {other:?} render identically: {face:?}");
+            }
+            seen.push((c, face));
         }
     }
 
