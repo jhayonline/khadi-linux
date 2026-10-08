@@ -64,7 +64,7 @@ echo "  Binaries on PATH"
 if (( ${#BINS[@]} == 0 )); then
     no "could not read BINS from khadi-install — this gate is checking nothing"
 else
-    # RUSTBINS included deliberately. khadi-shell and khadi-bar are the two
+    # RUSTBINS included deliberately. khadi-shell is the
     # components Khadi writes, the installer did not ship either, and this
     # gate passed anyway because khadi-vm push installs them by another route.
     for b in "${BINS[@]}" "${RUSTBINS[@]}"; do
@@ -230,7 +230,7 @@ if pgrep -x Hyprland >/dev/null 2>&1; then
                            || no "$n binds loaded, $want in the file — config not in effect"
     g=$(hyprctl getoption general:gaps_out 2>/dev/null | head -1 | grep -oE '[0-9]+' | head -1)
     [[ "$g" == "4" ]] && ok "gaps_out=4 in effect" || no "gaps_out=$g, expected 4 — defaults are live"
-    kid=$(pgrep -x khadi-bar || pgrep -x mako || true)
+    kid=$(pgrep -x khadi-shell || pgrep -x mako || true)
     sp=$(tr '\0' '\n' < "/proc/${kid:-$$}/environ" 2>/dev/null | grep '^PATH=' | cut -d= -f2-)
     case ":$sp:" in
         *":$HOME/.local/bin:"*) ok "~/.local/bin on the SESSION PATH" ;;

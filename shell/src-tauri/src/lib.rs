@@ -259,6 +259,44 @@ fn mounts(src: State<'_, Sources>) -> Result<Vec<Mount>, String> {
         .collect())
 }
 
+// ------------------------------------------------------------ the workspaces
+//
+// The one thing `khadi-bar` carried that nothing else did. Its clock, CPU,
+// memory and network readouts duplicated the side panels — its own module doc
+// said so — and its angled tab strip was there because a cell grid cannot
+// skew. A webview can, so the whole bar folds into this.
+
+#[derive(Serialize)]
+pub struct Workspace {
+    id: i32,
+    name: String,
+    windows: u32,
+    active: bool,
+}
+
+#[tauri::command]
+fn workspaces() -> Result<Vec<Workspace>, String> {
+    if !khadi_core::hypr::available() {
+        return Ok(Vec::new());
+    }
+    let snap = khadi_core::hypr::snapshot().map_err(|e| e.to_string())?;
+    Ok(snap
+        .workspaces
+        .iter()
+        .map(|w| Workspace {
+            id: w.id,
+            name: w.name.clone(),
+            windows: w.windows,
+            active: w.id == snap.active,
+        })
+        .collect())
+}
+
+#[tauri::command]
+fn workspace_goto(id: i32) -> Result<(), String> {
+    khadi_core::hypr::goto_workspace(id).map_err(|e| e.to_string())
+}
+
 // ------------------------------------------------------------- the terminal
 
 #[tauri::command]
@@ -302,7 +340,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            theme, system, network, filesystem, mounts,
+            theme, system, network, filesystem, mounts, workspaces, workspace_goto,
             pty_spawn, pty_write, pty_resize, pty_kill
         ])
         .run(tauri::generate_context!())

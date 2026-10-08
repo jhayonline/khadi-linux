@@ -47,7 +47,7 @@ deleted. `--uninstall` removes the links and restores the newest backups.
 
 Khadi will not install packages for you, and will not build for you. The dry
 run lists what is missing and prints the command — `pacman` for packages,
-`cargo build --release` for `khadi-bar` and `khadi-greet`, and
+`cargo build --release` for `khadi-greet`, and
 `npm run tauri build` for `khadi-shell`, which is the desktop.
 
 ## Keys
@@ -75,8 +75,6 @@ bin/khadi-fontcheck   do the theme's fonts — and glyphs — actually resolve?
 bin/khadi-cheatsheet  Super+/ overlay
 bin/khadi-boot        install the boot splash (needs root; run from --system)
 crates/khadi-core     theme, metrics and Hyprland IPC — no UI dependencies
-crates/khadi-bar      the Wayland layer-shell panel, for the motifs a cell
-                      grid cannot draw at all
 crates/khadi-greet    the login screen, speaking greetd's IPC
 shell/                khadi-shell — THE DESKTOP. eDEX's interface as a Tauri
                       app: React, TypeScript and Tailwind in a webview, Rust
@@ -103,7 +101,7 @@ by photographing a real boot in a VM rather than by reading the config back.
 | --- | --- |
 | **Boot** | a Plymouth splash: wordmark, progress bar, and the real systemd unit it is waiting on |
 | **Login** | `khadi-greet` — written, not configured, because nothing off the shelf draws the bracket-tick header or the block clock |
-| **Desktop** | Hyprland running `khadi-shell` — eDEX's interface as a Tauri app, with `khadi-bar` above it |
+| **Desktop** | Hyprland running `khadi-shell` — eDEX's interface as a Tauri app, in one window |
 | **Idle** | `hypridle` locks at 10 minutes and blanks at 11. It does **not** suspend — see `hypridle.conf` for why |
 | **Lock** | `hyprlock`, themed rather than replaced: it is what stands between a locked machine and its data |
 

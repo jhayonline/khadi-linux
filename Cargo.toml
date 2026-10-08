@@ -2,7 +2,8 @@
 #
 # khadi-core  theme + metrics. No UI dependencies, because three very different
 #             surfaces consume it: a webview (khadi-shell), a GTK layer-shell
-#             panel (khadi-bar) and a ratatui VT app (khadi-greet). Anything
+#             panel... no: a webview (khadi-shell) and a ratatui VT app
+#             (khadi-greet), since khadi-bar folded into the shell. Anything
 #             that knows about a cell grid or a widget tree does not belong
 #             here — which is why the Tauri rewrite cost this crate nothing.
 # khadi-greet the login screen, speaking greetd's IPC.
@@ -12,7 +13,6 @@
 [workspace]
 members = [
     "crates/khadi-core",
-    "crates/khadi-bar",
     "crates/khadi-greet",
     "shell/src-tauri",
 ]

@@ -8,9 +8,67 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { listen } from "@tauri-apps/api/event";
 import "@xterm/xterm/css/xterm.css";
-import { ptyResize, ptySpawn, ptyWrite, type Theme } from "../lib/ipc";
+import {
+  getWorkspaces,
+  gotoWorkspace,
+  ptyResize,
+  ptySpawn,
+  ptyWrite,
+  type Theme,
+  type Workspace,
+} from "../lib/ipc";
 
 const TAB_COUNT = 5;
+
+/** Hyprland's workspaces, right of the shell tabs.
+ *
+ * This is all that is left of `khadi-bar`. Its clock, CPU, memory and network
+ * readouts repeated the side panels — its own module doc admitted as much —
+ * and its angled strip existed because a cell grid cannot skew. One strip now,
+ * one process, and the workspace switching survives. */
+function Workspaces() {
+  const [ws, setWs] = useState<Workspace[]>([]);
+  useEffect(() => {
+    let alive = true;
+    let t: number | undefined;
+    const run = async () => {
+      try {
+        const v = await getWorkspaces();
+        if (alive) setWs(v);
+      } catch {
+        /* no compositor: the strip is simply absent */
+      }
+      if (alive) t = window.setTimeout(run, 1500);
+    };
+    void run();
+    return () => {
+      alive = false;
+      if (t !== undefined) clearTimeout(t);
+    };
+  }, []);
+
+  if (ws.length === 0) return null;
+  return (
+    <div className="flex shrink-0 flex-row items-stretch">
+      {ws.map((w) => (
+        <button
+          key={w.id}
+          onClick={() => void gotoWorkspace(w.id)}
+          title={`Workspace ${w.name}`}
+          className={`cursor-pointer border-0 border-l border-[rgba(var(--c),0.25)] px-[1.1vh] text-[1.2vh] tracking-[0.15vh] ${
+            w.active
+              ? "bg-[rgba(var(--c),0.18)] text-[rgb(var(--c))]"
+              : w.windows > 0
+                ? "bg-transparent text-[rgba(var(--c),0.7)]"
+                : "bg-transparent text-[rgba(var(--c),0.3)]"
+          }`}
+        >
+          {w.name}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function MainShell({ theme }: { theme: Theme | null }) {
   const host = useRef<HTMLDivElement>(null);
@@ -79,21 +137,24 @@ export function MainShell({ theme }: { theme: Theme | null }) {
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden border-[0.18vh] border-[rgba(var(--c),0.5)]">
-      <ul className="m-0 flex list-none flex-row flex-nowrap items-center justify-evenly overflow-hidden border-b-[0.18vh] border-[rgba(var(--c),0.5)] p-0">
-        {Array.from({ length: TAB_COUNT }, (_, i) => (
-          <li
-            key={i}
-            onClick={() => setActive(i)}
-            className={`flex-1 cursor-pointer py-[0.5vh] text-center text-[1.4vh] tracking-[0.15vh] ${
-              i === active
-                ? "bg-[rgba(var(--c),0.15)] text-[rgb(var(--c))]"
-                : "text-[rgba(var(--c),0.35)]"
-            }`}
-          >
-            {i === 0 ? "MAIN SHELL" : live.has(i) ? `SHELL ${i + 1}` : "EMPTY"}
-          </li>
-        ))}
-      </ul>
+      <div className="flex shrink-0 flex-row items-stretch overflow-hidden border-b-[0.18vh] border-[rgba(var(--c),0.5)]">
+        <ul className="m-0 flex min-w-0 flex-1 list-none flex-row flex-nowrap items-stretch p-0">
+          {Array.from({ length: TAB_COUNT }, (_, i) => (
+            <li
+              key={i}
+              onClick={() => setActive(i)}
+              className={`tab flex flex-1 cursor-pointer items-center justify-center py-[0.5vh] text-[1.4vh] tracking-[0.15vh] ${
+                i === active
+                  ? "bg-[rgba(var(--c),0.15)] text-[rgb(var(--c))]"
+                  : "text-[rgba(var(--c),0.35)]"
+              }`}
+            >
+              <span>{i === 0 ? "MAIN SHELL" : live.has(i) ? `SHELL ${i + 1}` : "EMPTY"}</span>
+            </li>
+          ))}
+        </ul>
+        <Workspaces />
+      </div>
       <div ref={host} className="min-h-0 w-full flex-1 p-[0.74vh]" />
     </section>
   );

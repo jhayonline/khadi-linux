@@ -48,7 +48,7 @@ done
 say()  { printf '  %s\n' "$*"; }
 act()  { if (( APPLY )); then "$@"; fi; }
 
-CONFIGS=(foot zellij btop hypr yazi fuzzel helix mako khadi gtk-3.0 gtk-4.0 xdg-desktop-portal)
+CONFIGS=(foot zellij hypr yazi fuzzel helix mako khadi gtk-3.0 gtk-4.0 xdg-desktop-portal)
 BINS=(khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontcheck khadi-boot)
 # khadi-shell is the odd one. Tauri embeds its whole frontend into the binary,
 # so there is still exactly one file to install and nothing to put beside it —
@@ -58,16 +58,16 @@ BINS=(khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontcheck khadi-b
 # the frontend is never embedded and the binary falls back to the dev server.
 # It is a silent, plausible-looking failure and it cost a VM boot to find.
 #
-# The compiled half. khadi-shell is the desktop; khadi-bar is the strip above
-# it; khadi-greet is the login screen, which runs on a VT before any of this
-# exists and is therefore the one surface still drawn in a terminal.
+# The compiled half. khadi-shell is the desktop; khadi-greet is the login
+# screen, which runs on a VT before any of this exists and is therefore the one
+# surface still drawn in a terminal.
 #
 # The installer once shipped NONE of these: a clean --apply produced a desktop
 # with no panels and no bar, and the VM gate never caught it because
 # `khadi-vm push` installs them separately — so the gate was passing on a state
 # the installer could not produce, which is the hole in "someone else runs the
 # script and gets your desktop".
-RUSTBINS=(khadi-shell khadi-bar khadi-greet)
+RUSTBINS=(khadi-shell khadi-greet)
 
 # ---------------------------------------------------------------- uninstall
 if (( UNINSTALL )); then
@@ -187,7 +187,7 @@ for b in "${BINS[@]}"; do
 done
 # Khadi does not build for you, the same way it does not install packages for
 # you — it says what is missing and prints the command. Silence here is the
-# expensive case: `exec-once = khadi-bar` fails without a word and the session
+# expensive case: `exec-once = khadi-shell` fails without a word and the session
 # just comes up without a bar.
 missing_rust=0
 for b in "${RUSTBINS[@]}"; do
@@ -203,7 +203,7 @@ if (( missing_rust )); then
     say ""
     say "  $missing_rust of ${#RUSTBINS[@]} compiled components are not built."
     say "  Without them the layout has no panels and the session has no bar:"
-    say "      cargo build --release                      (khadi-bar, khadi-greet)"
+    say "      cargo build --release                      (khadi-greet)"
     say "      cd shell && npm install && npm run tauri build   (khadi-shell)"
 fi
 

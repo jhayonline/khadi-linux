@@ -67,7 +67,11 @@ export type Filesystem = {
   mount: string;
 };
 
+export type Workspace = { id: number; name: string; windows: number; active: boolean };
+
 export const getTheme = () => invoke<Theme>("theme");
+export const getWorkspaces = () => invoke<Workspace[]>("workspaces");
+export const gotoWorkspace = (id: number) => invoke<void>("workspace_goto", { id });
 export const getSystem = () => invoke<System>("system");
 export const getNetwork = () => invoke<Network>("network");
 export const getFilesystem = () => invoke<Filesystem>("filesystem");

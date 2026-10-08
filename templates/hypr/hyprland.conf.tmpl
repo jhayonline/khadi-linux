@@ -33,9 +33,6 @@ monitor = , preferred, auto, 1
 #     WEBKIT_DISABLE_DMABUF_RENDERER=1 khadi-shell
 exec-once = khadi-shell 2>$HOME/.cache/khadi-session.log
 exec-once = mako
-# khadi-bar replaces waybar (Phase 3b). It carries the two motifs a cell grid
-# cannot: the faithful sub-pixel bracket tick and the skewX(35deg) tab bar.
-exec-once = khadi-bar 2>$HOME/.cache/khadi-bar.log
 # Idle. Without this the lock screen only protects a machine you remembered to
 # lock. Config in hypridle.conf, including why it does not suspend.
 exec-once = hypridle 2>$HOME/.cache/khadi-idle.log

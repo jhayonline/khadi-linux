@@ -64,7 +64,7 @@ echo
 # same way and the second one fails more quietly.
 #
 # Two real bugs sat behind this. `Super+B` pointed at chromium for two phases
-# while the manifest never mentioned it. And `exec-once = khadi-bar` named a
+# while the manifest never mentioned it. And `exec-once = khadi-shell` names a
 # binary the installer did not install at all, so a clean install came up with
 # no bar and nothing said why. Each half was internally consistent on its own,
 # which is exactly why neither was caught.

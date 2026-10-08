@@ -89,6 +89,17 @@ fn request(cmd: &str) -> Result<String> {
     Ok(out)
 }
 
+/// Switch to a workspace.
+///
+/// The classic `.conf` dispatch form, deliberately. Hyprland 0.56 added a Lua
+/// config manager and `hyprctl dispatch` follows whichever manager is loaded;
+/// Khadi ships classic `.conf`, so this is the form that works here. PLAN.md
+/// section 10m has the measurement, and the 0.57 migration item is where this
+/// line has to change.
+pub fn goto_workspace(id: i32) -> Result<()> {
+    request(&format!("dispatch workspace {id}")).map(|_| ())
+}
+
 pub fn snapshot() -> Result<Snapshot> {
     #[derive(Deserialize)]
     struct Active {

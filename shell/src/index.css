@@ -124,6 +124,19 @@ body {
   border-bottom: 0.092vh dashed var(--rule);
 }
 
+/* THE ANGLED TAB. eDEX skews its shell tabs `skewX(35deg)` and skews the label
+ * back so the text stays upright — the slanted edge in every screenshot of it.
+ * `khadi-bar` was written partly to provide this, on the correct grounds that a
+ * cell grid cannot skew at all. A webview can, so it lives here now. */
+.tab {
+  transform: skewX(35deg);
+  transform-origin: bottom left;
+}
+.tab > span {
+  display: block;
+  transform: skewX(-35deg);
+}
+
 /* xterm fills its pane; the addon handles the cell maths. */
 .xterm .xterm-viewport {
   overflow-y: auto;

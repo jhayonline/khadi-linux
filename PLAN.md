@@ -2243,8 +2243,20 @@ the ticked header in `src/chrome.rs`: it runs on a VT before a session exists,
 where there is no compositor to put a webview on, so it is the one surface that
 cannot follow. There is nothing left for it to drift against.
 
-`khadi-bar` survives for now and should not. It draws a second tab strip above
-a window that already has one, which is a duplication eDEX does not have.
+**`khadi-bar` is gone too, 2026-10-08.** It drew a second tab strip above a
+window that already had one. Its own module doc had the verdict written down
+from the day it was built: *"Everything else it shows (clock, CPU, memory,
+network) duplicates what khadi-hud already draws, and is here because eDEX's
+chrome runs along the top of the screen, not because the data had nowhere else
+to go."* The two things it alone could do were Hyprland's workspace tabs, which
+moved into the shell's existing tab strip, and the angled `skewX(35deg)` tab —
+which it existed to provide *because a cell grid cannot skew*. A webview can.
+That argument expired with the TUI, and `gtk4` and `gtk4-layer-shell` leave the
+package manifest with it.
+
+**btop goes with them.** It has not been in the layout since khadi-hud replaced
+it in Phase 3a, and it was still a package dependency and still had a themed
+config installed into `~/.config` for a program nothing ran.
 
 **One trap, paid for with a VM boot.** `cargo build --release` produces a
 `khadi-shell` that compiles, links, runs, opens a window — and shows *"Could
