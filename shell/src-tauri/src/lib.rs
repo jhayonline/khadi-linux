@@ -111,7 +111,8 @@ pub struct SystemOut {
 }
 
 #[tauri::command]
-fn system(src: State<'_, Sources>) -> Result<SystemOut, String> {
+fn system(src: State<'_, Sources>) -> Result<SystemOut, String> { system_of(&src) }
+fn system_of(src: &Sources) -> Result<SystemOut, String> {
     let mut m = src.metrics.lock().map_err(|e| e.to_string())?;
     let n = src.tick.fetch_add(1, Ordering::Relaxed);
     m.refresh_with(n % 2 == 0);
@@ -166,7 +167,8 @@ pub struct NetworkOut {
 }
 
 #[tauri::command]
-fn network(src: State<'_, Sources>) -> Result<NetworkOut, String> {
+fn network(src: State<'_, Sources>) -> Result<NetworkOut, String> { network_of(&src) }
+fn network_of(src: &Sources) -> Result<NetworkOut, String> {
     let mut n = src.net.lock().map_err(|e| e.to_string())?;
     n.refresh();
     Ok(NetworkOut {
@@ -213,7 +215,8 @@ pub struct FsOut {
 }
 
 #[tauri::command]
-fn filesystem(src: State<'_, Sources>) -> Result<FsOut, String> {
+fn filesystem(src: State<'_, Sources>) -> Result<FsOut, String> { filesystem_of(&src) }
+fn filesystem_of(src: &Sources) -> Result<FsOut, String> {
     use khadi_core::browse::Kind;
     let mut b = src.browser.lock().map_err(|e| e.to_string())?;
     b.refresh();
@@ -250,7 +253,8 @@ pub struct Mount {
 }
 
 #[tauri::command]
-fn mounts(src: State<'_, Sources>) -> Result<Vec<Mount>, String> {
+fn mounts(src: State<'_, Sources>) -> Result<Vec<Mount>, String> { mounts_of(&src) }
+fn mounts_of(src: &Sources) -> Result<Vec<Mount>, String> {
     let mut d = src.disks.lock().map_err(|e| e.to_string())?;
     d.refresh();
     Ok(d.mounts
@@ -328,6 +332,86 @@ fn pty_resize(
 #[tauri::command]
 fn pty_kill(state: State<'_, pty::Ptys>, id: String) -> Result<(), String> {
     pty::kill(&state, &id).map_err(|e| e.to_string())
+}
+
+
+/// `khadi-shell --selftest` — ask the binary whether it can read the machine.
+///
+/// THE GATE USED TO HAVE THIS AND LOST IT. Its sharpest check was "on PATH is
+/// not the same as working": a stale khadi-hud once passed 71/71 while three
+/// of its four panels were dead, because nothing asked the binary to draw. The
+/// shell cannot draw into a pipe, so after the rewrite the gate was down to
+/// two checks — a window exists, a pty spawned — and a panel full of dashes
+/// would have sailed through. The globe shipped upside down under exactly that
+/// gap.
+///
+/// This runs every data command the webview calls, through the same code, and
+/// reports one line each. It needs no compositor and no window.
+pub fn selftest() -> i32 {
+    let src = Sources::default();
+    let mut bad = 0;
+
+    macro_rules! check {
+        ($name:literal, $body:expr) => {
+            match $body {
+                Ok(detail) => println!("ok   {:<12} {}", $name, detail),
+                Err(e) => {
+                    println!("FAIL {:<12} {}", $name, e);
+                    bad += 1;
+                }
+            }
+        };
+    }
+
+    check!("theme", theme().map(|t| format!("{} text={}", t.name, t.text)));
+    check!("system", {
+        // Twice: per-core history needs two samples before it means anything,
+        // and the second call is the one that walks /proc.
+        let _ = system_of(&src);
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        system_of(&src).and_then(|s| {
+            if s.cores.is_empty() {
+                Err("no CPU cores".into())
+            } else if s.mem_total == 0 {
+                Err("no memory total".into())
+            } else if s.procs.is_empty() {
+                Err("no processes".into())
+            } else {
+                Ok(format!("{} cores, {} procs, {} MiB", s.cores.len(), s.procs.len(), s.mem_total / 1048576))
+            }
+        })
+    });
+    check!("network", network_of(&src).and_then(|n| {
+        if n.rx_hist.is_empty() {
+            Err("no traffic history".into())
+        } else {
+            Ok(format!("{} rx_hist={} est={}", if n.up { &n.iface } else { "offline" }, n.rx_hist.len(), n.established))
+        }
+    }));
+    check!("filesystem", filesystem_of(&src).and_then(|f| {
+        if f.entries.is_empty() {
+            Err(format!("no entries in {}", f.cwd))
+        } else if f.total == 0 {
+            Err("statvfs gave no total".into())
+        } else {
+            Ok(format!("{} ({} entries)", f.cwd, f.entries.len()))
+        }
+    }));
+    check!("mounts", mounts_of(&src).and_then(|m| {
+        if m.is_empty() { Err("no mounts".into()) } else { Ok(format!("{} mounted", m.len())) }
+    }));
+    // Workspaces are the one thing that legitimately answers empty: no
+    // compositor means no workspaces, which is not a failure of the shell.
+    check!("workspaces", workspaces().map(|w| {
+        if w.is_empty() { "none (no compositor)".to_string() } else { format!("{} live", w.len()) }
+    }));
+
+    if bad == 0 {
+        println!("\nselftest: all data sources answered");
+    } else {
+        println!("\nselftest: {bad} source(s) failed");
+    }
+    bad
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

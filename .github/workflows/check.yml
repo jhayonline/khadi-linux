@@ -39,7 +39,7 @@ jobs:
         # Before checkout, which needs git. fontconfig is what khadi-fontcheck
         # asks "what would you actually use for this family" — the question
         # that caught a whole phase of rendering in substitute faces.
-        run: pacman -Syu --noconfirm --needed git base-devel rust python fontconfig
+        run: pacman -Syu --noconfirm --needed git base-devel rust python fontconfig nodejs npm
 
       - uses: actions/checkout@v4
 
@@ -53,13 +53,24 @@ jobs:
         # replaces it with a two-face subset.
         run: pacman -S --noconfirm --needed $(awk '{sub(/#.*/,"")} NF {print $1}' packages.txt)
 
-      - name: Build and test
-        # Release too, not just test: khadi-bar links GTK4 and gtk4-layer-shell
-        # from the manifest installed above, so an upstream API break lands
-        # here as a failing build rather than as a panel that will not start.
+      - name: Build and test (Rust)
+        # Release too, not just test: khadi-shell links webkit2gtk from the
+        # manifest installed above, so an upstream API break lands here as a
+        # failing build rather than as a desktop that will not start.
         run: |
           cargo build --workspace --release
           cargo test --workspace
+
+      - name: Test the shell's data sources
+        # The gate's sharpest check, as a CI step. "On PATH is not the same as
+        # working" — ask the binary whether it can still read the machine.
+        run: ./target/release/khadi-shell --selftest
+
+      - name: Build and test (frontend)
+        # The globe shipped upside down because nothing tested the frontend.
+        # `npm run build` type-checks, runs vitest and only then bundles.
+        run: |
+          cd shell && npm ci && npm run build
 
       - name: khadi-check
         # --drift   config/ is build output. A hand-edit there is a silent

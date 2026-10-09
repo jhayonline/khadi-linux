@@ -159,22 +159,46 @@ export function CpuInfo({ s }: { s: System | null }) {
 
 /* -------------------------------------------------------- mod_ramwatcher */
 
+/** Which cells are lit, spread rather than packed.
+ *
+ * eDEX's block is a page map and therefore scattered. There is no page map
+ * without root, so the same COUNT of cells is distributed instead — the number
+ * is honest either way, and neither version claims to know which pages are in
+ * use. Multiplying by a step coprime to the cell count is a bijection, so
+ * lighting the lowest N lights exactly N.
+ */
+export function litCells(frac: number, cells: number): boolean[] {
+  if (cells <= 0) return [];
+  const used = Math.round(Math.min(1, Math.max(0, frac)) * cells);
+  // THE STEP MUST BE COPRIME TO THE CELL COUNT or the mapping is not a
+  // bijection and the block lights the wrong number. The first version took
+  // the golden-ratio step and used it unchecked: at 368 cells that is 115,
+  // gcd(115, 368) = 23, and a block claiming 269 lit cells drew 276. The Rust
+  // version this was ported from searched for a coprime step; the port lost
+  // the search. A test found it, which is the entire argument for having any.
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  let step = 2 * Math.round((cells * 0.309) / 2) + 1;
+  while (gcd(step, cells) !== 1 && step < cells * 2) step += 2;
+  if (gcd(step, cells) !== 1) step = 1; // nothing coprime found: pack, honestly
+  return Array.from({ length: cells }, (_, n) => (n * step) % cells < used);
+}
+
 /** Memoised on the LIT COUNT, not on the System object. The object is new on
  *  every poll and 368 spans were being rebuilt once a second for a number that
  *  moves a few times a minute. */
-const MemCells = memo(function MemCells({ used, cells, cols, step }: {
-  used: number; cells: number; cols: number; step: number;
+const MemCells = memo(function MemCells({ used, cells, cols }: {
+  used: number; cells: number; cols: number;
 }) {
   const nodes = useMemo(
     () =>
-      Array.from({ length: cells }, (_, n) => (
+      litCells(used / cells, cells).map((lit, n) => (
         <span
           key={n}
           className="aspect-square"
-          style={{ background: (n * step) % cells < used ? "rgb(var(--c))" : "rgba(var(--c), 0.14)" }}
+          style={{ background: lit ? "rgb(var(--c))" : "rgba(var(--c), 0.14)" }}
         />
       )),
-    [used, cells, step],
+    [used, cells],
   );
   return (
     <div className="my-[calc(0.5vh*var(--ui-scale))] grid gap-[0.14vh] px-[calc(0.46vh*var(--ui-scale))]" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
@@ -193,7 +217,6 @@ export function RamWatcher({ s }: { s: System | null }) {
   const cells = COLS * ROWS;
   const frac = s && s.mem_total ? s.mem_used / s.mem_total : 0;
   const used = Math.round(frac * cells);
-  const step = 2 * Math.round((cells * 0.309) / 2) + 1;
   const swap = s && s.swap_total ? s.swap_used / s.swap_total : 0;
   return (
     <div className="rule-top py-[calc(0.645vh*var(--ui-scale))] tracking-[0.092vh] font-[var(--font-ui-light)]">
@@ -203,7 +226,7 @@ export function RamWatcher({ s }: { s: System | null }) {
           {s ? `USING ${gib(s.mem_used).toFixed(1)} OUT OF ${gib(s.mem_total).toFixed(1)} GIB` : ""}
         </span>
       </h3>
-      <MemCells used={used} cells={cells} cols={COLS} step={step} />
+      <MemCells used={used} cells={cells} cols={COLS} />
       <div className="flex items-center gap-[calc(0.6vh*var(--ui-scale))] px-[calc(0.46vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))]">
         <span>SWAP</span>
         <div className="h-[calc(0.56vh*var(--ui-scale))] flex-1 bg-[rgba(var(--c),0.2)]">

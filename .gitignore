@@ -19,3 +19,6 @@ vm/.qmp.sock
 shell/node_modules/
 shell/dist/
 shell/src-tauri/gen/
+
+# khadi-shell frontend
+shell/coverage/

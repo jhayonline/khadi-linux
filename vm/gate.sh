@@ -15,9 +15,15 @@
 set -uo pipefail
 
 : "${XDG_CONFIG_HOME:=$HOME/.config}"
-pass=0; fail=0
+pass=0; fail=0; skipped=0
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; pass=$((pass+1)); }
 no()   { printf '  \033[31m✗\033[0m %s\n' "$*"; fail=$((fail+1)); }
+# A skip is NOT a pass. It is counted and printed so that a run which checked
+# nothing cannot read as a run that checked everything — the same reasoning
+# behind khadi-check's --strict. This existed only as a call site until now:
+# the no-Wayland branch below invoked `sk`, which was never defined, so it
+# errored to stderr and the gate carried on as though nothing had happened.
+sk()   { printf '  \033[2m–\033[0m %s\n' "$*"; skipped=$((skipped+1)); }
 note() { printf '    %s\n' "$*"; }
 
 echo
@@ -93,6 +99,30 @@ echo
 # pty. The pty is the one worth checking by name -- it silently never spawned
 # for a whole afternoon because Tauri 2 denies `listen` without a capability
 # manifest and the rejected promise went nowhere.
+# ASK THE BINARY WHETHER IT CAN READ THE MACHINE. This is the check the gate
+# lost in the rewrite. Its sharpest test was always "on PATH is not the same as
+# working" — a stale khadi-hud once passed 71/71 with three of four panels dead
+# — and after khadi-shell replaced it the gate was down to "a window exists".
+# The globe shipped upside down through exactly that gap.
+echo "  The shell can read the machine"
+if command -v khadi-shell >/dev/null; then
+    if out=$(khadi-shell --selftest 2>&1); then
+        while IFS= read -r line; do
+            [[ "$line" == ok* ]] && ok "${line#ok   }"
+        done <<<"$out"
+    else
+        while IFS= read -r line; do
+            case "$line" in
+                ok*)   ok "${line#ok   }" ;;
+                FAIL*) no "${line#FAIL }" ;;
+            esac
+        done <<<"$out"
+    fi
+else
+    no "khadi-shell not on PATH — cannot ask it to read anything"
+fi
+echo
+
 echo "  The shell runs"
 if ! command -v khadi-shell >/dev/null; then
     no "khadi-shell not on PATH — cannot ask it to run"
@@ -273,5 +303,9 @@ else no "Hyprland not installed"; fi
 echo
 
 echo "  ────────────────────────────────────────────────────────"
-printf '  %d passed, %d failed\n\n' "$pass" "$fail"
+if (( skipped )); then
+    printf '  %d passed, %d failed, %d skipped\n\n' "$pass" "$fail" "$skipped"
+else
+    printf '  %d passed, %d failed\n\n' "$pass" "$fail"
+fi
 [[ "$fail" -eq 0 ]]
