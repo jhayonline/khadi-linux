@@ -14,18 +14,23 @@
 # a support ticket. systemd feeds plymouth genuine unit status through
 # SetUpdateStatusFunction, so it costs nothing and it is true.
 #
-# EVERYTHING IS TEXT. Plymouth script has no rectangle primitive, so themes
-# ship PNGs for their logos and bars — Omarchy's ships five. Khadi's wordmark
-# is drawn from characters, so the splash has no image assets at all and
-# restyles from themes/*.toml like every other config.
+# THIS USED TO BE ALL TEXT, and it looked like debug output. Two beliefs put it
+# there and only one of them was true.
 #
-# ASCII, NOT THE BOX-DRAWING MOTIF, and this was measured rather than chosen.
-# An initramfs carries only `label-freetype.so`; `label-pango.so` would drag in
-# pango, harfbuzz and fontconfig. That renderer draws Latin correctly and
-# returns .notdef for everything multi-byte, so an earlier version came up with
-# "KHADI" in the right face above a rule of tofu boxes. The font was never the
-# problem: Iosevka Term is correctly baked in and does carry U+2500, verified
-# by extracting the initramfs and querying it.
+# TRUE: large text is impossible here. `Image.Text` takes its size from a font
+# string and a font string cannot be resolved inside an initramfs — section
+# 10m, measured by extracting one — so the wordmark was built from `##` at the
+# single size available. You could see the hash glyphs.
+#
+# FALSE: "a PNG would not restyle with the theme". That holds for a PNG someone
+# draws by hand. It does not hold for one khadi-theme GENERATES: wordmark.png
+# is geometry filled in role.text, rebuilt for every theme like every other
+# output, with no font and no dependency outside the standard library.
+#
+# AND PLYMOUTH DOES HAVE A RECTANGLE after all. The old comment said it had
+# none, which is why the progress bar was a row of dashes. `Image.Scale(w, h)`
+# on a one-pixel swatch is a rectangle at any size — so the hairlines, the
+# ticks and the bar are real geometry now.
 
 Window.SetBackgroundTopColor({{ role.ground | rgbf }});
 Window.SetBackgroundBottomColor({{ role.ground | rgbf }});
@@ -34,74 +39,68 @@ fun text(s, r, g, b) {
     return Image.Text(s, r, g, b);
 }
 
-# --- the wordmark ----------------------------------------------------------
-# A 5x7 block face, one row per Image.Text. Same idea as khadi-hud's block
-# clock — Khadi draws large text out of small marks rather than shipping a
-# bitmap — and here it is also the only option, since a PNG would not restyle
-# with the theme.
-#
-# EACH PIXEL IS TWO CHARACTERS WIDE, and the row spacing is tighter than the
-# line height, because there is only ONE font size available: Image.Text takes
-# its size from a font string, and a font string cannot be resolved inside an
-# initramfs (see the header). So the wordmark cannot be set larger than the
-# status line under it — it can only be built from more marks. Doubling the
-# width and closing the leading is what turns a sparse dot grid into letters.
-global.logo = [];
-global.logo[0] = "##      ##  ##      ##    ######    ########    ##########";
-global.logo[1] = "##    ##    ##      ##  ##      ##  ##      ##      ##    ";
-global.logo[2] = "##  ##      ##      ##  ##      ##  ##      ##      ##    ";
-global.logo[3] = "####        ##########  ##########  ##      ##      ##    ";
-global.logo[4] = "##  ##      ##      ##  ##      ##  ##      ##      ##    ";
-global.logo[5] = "##    ##    ##      ##  ##      ##  ##      ##      ##    ";
-global.logo[6] = "##      ##  ##      ##  ##      ##  ########    ##########";
+# --- primitives ------------------------------------------------------------
+# One pixel, scaled. See the header.
+global.px_text = Image("px-text.png");
+global.px_rule = Image("px-rule.png");
+global.px_dim  = Image("px-dim.png");
 
-global.logo_lead = 13;
-global.logo_sprite = [];
-global.logo_top = Window.GetHeight() / 2 - 7 * global.logo_lead / 2 - 40;
+global.W = Window.GetWidth();
+global.H = Window.GetHeight();
 
-for (i = 0; i < 7; i++) {
-    img = text(global.logo[i], {{ role.text | rgbf }});
-    global.logo_sprite[i] = Sprite(img);
-    global.logo_sprite[i].SetPosition(
-        Window.GetWidth() / 2 - img.GetWidth() / 2,
-        global.logo_top + i * global.logo_lead, 10);
-}
-
-# --- progress --------------------------------------------------------------
-# Short and centred, like the reference. The track is drawn once so the bar has
-# something to move along instead of appearing out of nothing.
-global.bar_cols = 32;
-global.bar_y = global.logo_top + 7 * global.logo_lead + 34;
-global.max_progress = 0.0;
-
-fun bar_string(n, fill, rest) {
-    s = "";
-    for (i = 0; i < global.bar_cols; i++) {
-        if (i < n) {
-            s = s + fill;
-        } else {
-            s = s + rest;
-        }
-    }
+fun rect(px, x, y, w, h, z) {
+    s = Sprite(px.Scale(w, h));
+    s.SetPosition(x, y, z);
     return s;
 }
 
-track = text(bar_string(0, "-", "-"), {{ ramp.a20 | rgbf }});
-global.track_sprite = Sprite(track);
-global.track_sprite.SetPosition(Window.GetWidth() / 2 - track.GetWidth() / 2, global.bar_y, 10);
-global.bar_left = Window.GetWidth() / 2 - track.GetWidth() / 2;
+# The signature motif: a hairline that terminates in a tick at each end. The
+# same `┬───┬` every Khadi surface opens with, as three rectangles.
+# Sprites must be kept alive in globals or plymouth drops them, and the index
+# is counted by hand rather than asked for: plymouth script is not JavaScript
+# and an array method that does not exist fails as a BLANK SCREEN at boot,
+# which is the most expensive way there is to find a typo.
+global.rules = [];
+global.nrules = 0;
+fun ticked_rule(x, y, w) {
+    global.rules[global.nrules] = rect(global.px_rule, x, y, w, 1, 10);
+    global.rules[global.nrules + 1] = rect(global.px_rule, x, y, 1, 7, 10);
+    global.rules[global.nrules + 2] = rect(global.px_rule, x + w - 1, y, 1, 7, 10);
+    global.nrules = global.nrules + 3;
+}
 
+# --- the wordmark ----------------------------------------------------------
+global.logo = Image("wordmark.png");
+global.logo_sprite = Sprite(global.logo);
+global.logo_x = global.W / 2 - global.logo.GetWidth() / 2;
+global.logo_y = global.H / 2 - global.logo.GetHeight() / 2 - 60;
+global.logo_sprite.SetPosition(global.logo_x, global.logo_y, 10);
+
+# A rule under it, the width of the wordmark, so the mark sits ON something.
+ticked_rule(global.logo_x, global.logo_y + global.logo.GetHeight() + 26,
+            global.logo.GetWidth());
+
+# --- progress --------------------------------------------------------------
+# A real bar: a dim track with the fill drawn over it, both three pixels tall,
+# with the same ticks at each end. It was a string of dashes because the old
+# script believed Plymouth had no rectangle.
+global.bar_w = global.logo.GetWidth();
+global.bar_x = global.logo_x;
+global.bar_y = global.logo_y + global.logo.GetHeight() + 74;
+global.max_progress = 0.0;
+
+global.track_sprite = rect(global.px_dim, global.bar_x, global.bar_y, global.bar_w, 3, 10);
 global.bar_sprite = Sprite();
-global.bar_sprite.SetPosition(global.bar_left, global.bar_y, 11);
+global.bar_sprite.SetPosition(global.bar_x, global.bar_y, 11);
 global.bar_sprite.SetOpacity(0);
+ticked_rule(global.bar_x, global.bar_y - 5, global.bar_w);
 
 fun draw_progress(p) {
     if (p <= global.max_progress) return;
     global.max_progress = p;
-    n = Math.Int(p * global.bar_cols);
-    if (n < 1) n = 1;
-    img = text(bar_string(n, "#", " "), {{ role.text | rgbf }});
-    global.bar_sprite.SetImage(img);
+    w = Math.Int(p * global.bar_w);
+    if (w < 2) w = 2;
+    global.bar_sprite.SetImage(global.px_text.Scale(w, 3));
     global.bar_sprite.SetOpacity(1);
 }
 
@@ -111,15 +110,16 @@ fun progress_callback(duration, progress) {
 Plymouth.SetBootProgressFunction(progress_callback);
 
 # --- one status line -------------------------------------------------------
-global.status_y = global.bar_y + 40;
+# Small text, which is the one size Image.Text can set here, and the one place
+# that size is the right one.
+global.status_y = global.bar_y + 30;
 global.status_sprite = Sprite();
 global.status_sprite.SetOpacity(0);
 
 fun say(line) {
     img = text(line, {{ role.text_muted | rgbf }});
     global.status_sprite.SetImage(img);
-    global.status_sprite.SetPosition(
-        Window.GetWidth() / 2 - img.GetWidth() / 2, global.status_y, 10);
+    global.status_sprite.SetPosition(global.W / 2 - img.GetWidth() / 2, global.status_y, 10);
     global.status_sprite.SetOpacity(1);
 }
 
@@ -149,7 +149,7 @@ fun password_callback(prompt, bullets) {
     global.track_sprite.SetOpacity(0);
     global.bar_sprite.SetOpacity(0);
 
-    centre(global.prompt_sprite, text(prompt, {{ role.text_dim | rgbf }}), global.bar_y);
+    centre(global.prompt_sprite, text(prompt, {{ role.text_dim | rgbf }}), global.bar_y - 6);
 
     s = "";
     for (i = 0; i < bullets; i++) {
