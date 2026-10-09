@@ -28,8 +28,8 @@ wayland
 libxkbcommon
 
 # --- what the session needs at runtime -----------------------------------
-xorg-xwayland      # X11 applications. edex-comp starts and manages it itself.
-cage               # the last fallback in edex-rs-session: if edex-comp cannot
+xorg-xwayland      # X11 applications. khadi-comp starts and manages it itself.
+cage               # the last fallback in khadi-session: if khadi-comp cannot
                    # drive the display twice over, the shell runs inside this
                    # rather than leaving you at a black screen.
 networkmanager     # nmcli, which the settings screen drives for Wi-Fi
@@ -41,7 +41,7 @@ curl               # geolocation lookups for the globe
 fontconfig         # fc-list, how the shell finds an installed Nerd Font
 
 # --- portals -------------------------------------------------------------
-# session/edex-rs-portals.conf asks for the gtk backend by name, and for
+# session/khadi-portals.conf asks for the gtk backend by name, and for
 # gnome-keyring to answer the Secret portal. Without these a file chooser in
 # Firefox hangs waiting for a backend that is not there.
 xdg-desktop-portal
