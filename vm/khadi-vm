@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Khadi — test VM.
 #
-# A throwaway Arch VM to run the Phase 1 gate in: "someone else runs the
-# script and gets your desktop." Deliberately plain QEMU, no libvirt — one
+# A throwaway Arch VM, and the only safe way to test a compositor: khadi-comp
+# takes over the display, so running a build on the machine you are working on
+# logs you out of it. Deliberately plain QEMU, no libvirt — one
 # script, no daemon, nothing installed into the host's system state.
 #
 #   khadi-vm deps     what you must install (needs root; this script will not)
@@ -13,7 +14,7 @@
 #   khadi-vm shot     screenshot the guest framebuffer via QMP
 #   khadi-vm ssh      shell into the guest once Arch is installed
 #   khadi-vm push     copy this repo into the guest
-#   khadi-vm autologin start a session on tty1 so gate.sh can check loaded state
+#   khadi-vm autologin start a session on tty1 without going through greetd
 #   khadi-vm type     type into the guest console over QMP (drives the greeter)
 #   khadi-vm status   what exists so far
 #   khadi-vm clean    delete the disk (keeps the ISO)
@@ -225,89 +226,40 @@ cmd_ssh() {
 
 cmd_push() {
     echo "  Copying the repo into the guest…"
-    # Mirror deletions. tar adds files but never removes them, so a renamed or
-    # deleted file lives on in the guest forever — which is exactly how an
-    # orphaned khadi-tron.theme survived a rename and poisoned every theme.
-    ssh -n -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-        -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
-        'rm -rf ~/khadi/templates ~/khadi/themes ~/khadi/bin ~/khadi/crates'
-    # NOTE: config/ is deliberately NOT removed. Hyprland watches
-    # config/hypr/hyprland.conf and regenerates a default the instant it
-    # vanishes, which races the delete and fails it with "Directory not
-    # empty". It does not need removing anyway: config/ is build output and
-    # `khadi-theme build` already prunes anything with no template behind it.
-
+    # The whole directory goes, rather than a list of paths to refresh. tar
+    # adds files but never removes them, so a renamed or deleted one lives on
+    # in the guest forever — which is how an orphaned khadi-tron.theme once
+    # survived a rename and poisoned every theme. Enumerating what to delete
+    # was the old fix and it rotted the moment the layout changed: it still
+    # named templates/ and crates/, which no longer exist, while missing
+    # common/ and compositor/, which do. Replacing the lot cannot go stale.
+    #
+    # Extracted beside the old tree and swapped, so nothing is deleted until
+    # the transfer has landed. Deleting first and then piping is one dropped
+    # connection away from a guest with no repo on it at all.
     tar -C "$ROOT" \
-        --exclude=edex-ui --exclude=.git --exclude=target \
+        --exclude=edex-ui --exclude=omarchy --exclude=.git --exclude=target \
         --exclude='vm/*.iso' --exclude='vm/*.iso.part' \
         --exclude='vm/*.qcow2' --exclude='vm/OVMF_VARS.fd' --exclude='vm/.qmp.sock' \
         -cf - . \
       | ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
-            'mkdir -p ~/khadi && tar -C ~/khadi -xf -'
+            'set -e
+             rm -rf ~/.khadi-incoming ~/.khadi-outgoing
+             mkdir -p ~/.khadi-incoming
+             tar -C ~/.khadi-incoming -xf -
+             if [ -d ~/khadi ]; then mv ~/khadi ~/.khadi-outgoing; fi
+             mv ~/.khadi-incoming ~/khadi
+             rm -rf ~/.khadi-outgoing'
     echo "  ✓ repo is at ~/khadi in the guest"
 
-    # Release binaries go separately. They CANNOT ride in the tar above:
-    # --exclude=target drops them even when the path is listed explicitly,
-    # which silently shipped a stale binary and cost a debugging round. The
-    # guest has no Rust toolchain (302 MiB) and should not need one — Phase 4
-    # ships these as prebuilt packages for the same reason.
-    #
-    # They land in target/release/, NOT in ~/.local/bin. khadi-install is the
-    # only thing that installs, and it links ~/.local/bin/<b> -> this path.
-    # Writing to ~/.local/bin here instead gave two installers one path: push
-    # copied the current binary, khadi-install then replaced it with a symlink
-    # to the stale target/release/ the tar had never updated, and the session
-    # came up with three dead panels reporting an error string from two phases
-    # ago. Deliver the artefact; let the installer install it.
-    # The list comes from khadi-install, not from a copy kept here. Keeping a
-    # second one is how khadi-greet was added to the installer and silently not
-    # delivered — greetd enabled, greeter binary absent, which is the one
-    # failure mode that locks you out rather than looking wrong.
-    local RUSTBINS=()
-    eval "$(grep -E '^RUSTBINS=\(' "$ROOT/bin/khadi-install")"
-    [[ ${#RUSTBINS[@]} -gt 0 ]] || die "could not read RUSTBINS from bin/khadi-install"
-    local b
-    for b in "${RUSTBINS[@]}"; do
-        [[ -x "$ROOT/target/release/$b" ]] || continue
-        # NOT ssh -n here: -n points stdin at /dev/null, which silently sent an
-        # empty file. The checksum below exists because that looked like success.
-        ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
-            "mkdir -p ~/khadi/target/release; cat > ~/khadi/target/release/.$b.new && chmod 755 ~/khadi/target/release/.$b.new && mv ~/khadi/target/release/.$b.new ~/khadi/target/release/$b" \
-            < "$ROOT/target/release/$b"
-        local want got
-        want="$(md5sum < "$ROOT/target/release/$b" | cut -d' ' -f1)"
-        got="$(ssh -n -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-               -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
-               "md5sum < ~/khadi/target/release/$b | cut -d' ' -f1")"
-        if [[ "$want" == "$got" ]]; then
-            echo "  ✓ $b delivered to the guest"
-        else
-            echo "  ✗ $b checksum mismatch: host $want, guest $got" >&2
-        fi
-    done
-
-    # tar replacing files under a running Hyprland makes its config watcher see
-    # them vanish and fall back to an autogenerated config. Reload after.
-    # `ls -1t`, not `ls`: stale instance dirs linger after a session restart and
-    # an alphabetical pick silently targets a dead compositor.
-    ssh -n -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-        -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
-        'export XDG_RUNTIME_DIR=/run/user/$(id -u);
-         export HYPRLAND_INSTANCE_SIGNATURE=$(ls -1t $XDG_RUNTIME_DIR/hypr 2>/dev/null|head -1);
-         command -v hyprctl >/dev/null && [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] && hyprctl reload >/dev/null' \
-        2>/dev/null && echo "  ✓ hyprctl reload" || true
+    # NO BINARIES. They used to be pushed from the host because the guest had
+    # no Rust toolchain and building in a VM was slow. That made the guest a
+    # place binaries were delivered to rather than a machine Khadi installs
+    # on, and it is exactly the thing provisioning is supposed to prove. The
+    # guest builds its own now; `rust` is in packages.txt.
 }
 
-# The loaded-state half of the gate needs a compositor, and the compositor
-# needs a seat — which ssh does not give you. For a long time that meant those
-# checks simply never ran: `gate.sh` reported "Hyprland not running" and the
-# other 50-odd checks passed, which looked like a pass.
-#
-# This makes the session start on boot so the gate can be run for real. It is
-# TEST SCAFFOLDING, written into the guest and nowhere near the repo: Khadi's
-# own session manager is greetd, which asks for a password on purpose.
 # Type into the guest's console over QMP. The greeter is the one surface that
 # cannot be driven over ssh — it owns a VT and reads a keyboard — so without
 # this, "can anyone actually log in" stays untested, which for a login screen
@@ -352,30 +304,48 @@ for arg in args:
 TPY
 }
 
-# The guest renders on llvmpipe, where webkit's DMABUF path gives a blank
-# window. Real hardware does not need this and is much slower with it, so it
-# lives here rather than in the session config.
-export KHADI_GUEST_ENV="WEBKIT_DISABLE_DMABUF_RENDERER=1"
-
+# Starting the session without going through greetd. The compositor needs a
+# seat, which ssh does not give you, so anything that has to look at a running
+# desktop needs the guest to bring one up by itself on boot.
+#
+# TEST SCAFFOLDING, written into the guest and nowhere near the repo: Khadi's
+# own session manager is greetd, which asks for a password on purpose.
 cmd_autologin() {
     local rc
     rc=$(cat <<'GUEST'
 set -e
+# greetd also wants vt1. Leaving it enabled means two things race for the
+# console and which one wins depends on boot timing.
+sudo systemctl disable --now greetd 2>/dev/null || true
 sudo mkdir -p /etc/systemd/system/getty@tty1.service.d
 printf '[Service]\nExecStart=\nExecStart=-/usr/bin/agetty --autologin %s --noclear %%I $TERM\n' "$USER" \
     | sudo tee /etc/systemd/system/getty@tty1.service.d/autologin.conf >/dev/null
-if ! grep -q KHADI-VM-TEST ~/.bash_profile 2>/dev/null; then
-cat >> ~/.bash_profile <<'EOF'
+# Both login profiles, because which one agetty's shell reads depends on the
+# account's shell and this guest has had both. Writing only ~/.bash_profile
+# left a zsh account logging straight in to a prompt, with the session never
+# started and nothing to say why.
+#
+# Rewritten every time, not appended once. Skipping the write when the markers
+# were already there meant a guest provisioned before the des-ui replacement
+# kept execing `start-hyprland` — so a VM with the new compositor installed
+# still booted the old desktop over the top of it, and nothing said so.
+for profile in ~/.bash_profile ~/.zprofile; do
+python3 - "$profile" <<'STRIP'
+import re, sys, pathlib
+p = pathlib.Path(sys.argv[1])
+s = p.read_text() if p.exists() else ""
+p.write_text(re.sub(r'\n*# >>> KHADI-VM-TEST >>>.*?# <<< KHADI-VM-TEST <<<\n', '', s, flags=re.S))
+STRIP
+cat >> "$profile" <<'EOF'
 
-# >>> KHADI-VM-TEST >>> scaffolding, not part of Khadi. Starts a session on
-# tty1 so gate.sh can run its loaded-state checks against a real compositor.
-if [[ -z $WAYLAND_DISPLAY && $(tty) == /dev/tty1 ]]; then
-    export WLR_RENDERER=pixman WLR_NO_HARDWARE_CURSORS=1
-    exec start-hyprland > ~/.cache/hypr-start.log 2>&1
+# >>> KHADI-VM-TEST >>> scaffolding, not part of Khadi. Starts the session on
+# tty1 without a login, for checking loaded state against a real compositor.
+if [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = /dev/tty1 ]; then
+    exec /usr/local/bin/khadi-session > ~/.cache/khadi-start.log 2>&1
 fi
 # <<< KHADI-VM-TEST <<<
 EOF
-fi
+done
 sudo systemctl daemon-reload
 sudo systemctl restart getty@tty1
 GUEST
@@ -384,7 +354,7 @@ GUEST
     ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" "bash -s" <<<"$rc"
     echo "  ✓ session starting. Give it ~20s, then:"
-    echo "      KHADI_VM_USER=${KHADI_VM_USER:-root} ./vm/khadi-vm ssh 'bash -lc \"bash ~/khadi/vm/gate.sh\"'"
+    echo "      ./vm/khadi-vm shot session.png"
 }
 
 cmd_status() {
