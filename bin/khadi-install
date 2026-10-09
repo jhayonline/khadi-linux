@@ -81,7 +81,7 @@ if (( UNINSTALL )); then
                 "$HOME/.zprofile" "$HOME/.bashrc" "$HOME/.zshrc" \
                 "$HOME/.config/fish/conf.d/khadi-path.fish" \
                 "$HOME/.config/fish/conf.d/khadi-prompt.fish"; do
-        [[ -f "$prof" ]] && grep -qsE '# >>> khadi (path|prompt) >>>' "$prof" || continue
+        [[ -f "$prof" ]] && grep -qsE '# >>> khadi (path|prompt|shell) >>>' "$prof" || continue
         say "strip   khadi block from $prof"
         act python3 - "$prof" <<'STRIP'
 import re, sys
@@ -90,7 +90,7 @@ p = sys.argv[1]; s = open(p).read()
 # login profile and the prompt block to the interactive rc, and on zsh and
 # bash those are different files.
 open(p, 'w').write(
-    re.sub(r'\n?# >>> khadi (path|prompt) >>>.*?# <<< khadi \1 <<<\n', '', s, flags=re.S))
+    re.sub(r'\n?# >>> khadi (path|prompt|shell) >>>.*?# <<< khadi \1 <<<\n', '', s, flags=re.S))
 STRIP
     done
     for c in "${CONFIGS[@]}"; do
@@ -304,6 +304,38 @@ command -v starship >/dev/null 2>&1 && eval "\$(starship init $SH)"
 # <<< khadi prompt <<<
 RCB
         fi
+    fi
+fi
+
+
+# ------------------------------------------------------------ shell features
+# Completion, history, suggestions, fzf and zoxide — the things that make a
+# shell feel like the one you already use. SOURCED, not inlined: the content
+# lives in config/khadi/shell.zsh, which khadi-theme generates from the theme
+# like everything else, so the suggestion grey and the fzf popup are the same
+# ramp as the panels.
+#
+# Only zsh for now. bash has no equivalent to zsh-autosuggestions worth
+# shipping, and fish has all of it built in — writing a half-version for
+# either would be worse than leaving them alone.
+SMARK="# >>> khadi shell >>>"
+if [[ "$SH" == zsh ]] && ! grep -qsF "$SMARK" "$RC" 2>/dev/null; then
+    echo
+    echo "Shell:"
+    say "append  $RC  (completion, history, suggestions, fzf, zoxide)"
+    for pkg in zsh-autosuggestions zsh-syntax-highlighting fzf zoxide; do
+        command -v "$pkg" >/dev/null 2>&1 ||
+            [[ -d "/usr/share/zsh/plugins/$pkg" || -d "/usr/share/$pkg" ]] ||
+            say "NOTE    $pkg is not installed; that feature stays off"
+    done
+    if (( APPLY )); then
+        mkdir -p "$(dirname "$RC")"
+        [[ -e "$RC" ]] && cp "$RC" "$RC.khadi-backup-$STAMP"
+        cat >> "$RC" <<SHRC
+$SMARK
+[[ -r "$XDG_CONFIG_HOME/khadi/shell.zsh" ]] && source "$XDG_CONFIG_HOME/khadi/shell.zsh"
+# <<< khadi shell <<<
+SHRC
     fi
 fi
 

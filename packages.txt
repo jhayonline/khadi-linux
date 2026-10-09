@@ -62,7 +62,16 @@ chromium                    # what Super+B launches. The keybind already
 yazi               # file browser
 helix              # editor — pending the Phase 1 open decision vs neovim
 git
-fish               # not the login shell; interactive default only
+zsh                # the interactive shell Khadi is set up for. NOT forced as
+                   # anyone's login shell — khadi-install appends a marked
+                   # block to whichever rc your $SHELL reads, and removes it
+                   # again on --uninstall.
+zsh-autosuggestions     # the grey ghost text from history
+zsh-syntax-highlighting # command colouring as you type
+zsh-completions         # the completion set zsh does not ship
+fzf                # Ctrl+R history and Ctrl+T files, themed off the ramp
+zoxide             # `z` — the directory jumper the shell layer initialises
+fish               # not the login shell; still supported if it is yours
 starship           # the prompt (A/B item 13). Cross-shell, because Khadi does
                    # not own the login shell and a fish-only prompt would be
                    # absent for most users on the day they install.
