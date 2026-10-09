@@ -98,8 +98,17 @@ one; your own go in `~/.config/edex-rs/themes/`.
 
 ## Install as a login session
 
-    sudo apt install libudev-dev libinput-dev libgbm-dev libseat-dev cage
+    sudo pacman -S --needed $(sed 's/#.*//' packages.txt | tr -s '[:space:]' ' ')
     ./install.sh
+
+`packages.txt` lists every package with a line saying what needs it. Arch does
+not split headers into their own packages, so the build dependencies and the
+runtime ones are mostly the same names; `install.sh` checks for the libraries
+smithay links against before it starts, because a missing one otherwise shows
+up as a linker error naming a symbol rather than a package.
+
+Arch ships no display manager, so nothing will offer the session until one is
+installed. See the note at the end of `packages.txt`.
 
 Then log out and choose **DEs-UI** from the session menu on the login screen.
 Exiting the last shell, or Ctrl+Shift+Q, ends the session. `./uninstall.sh`

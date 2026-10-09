@@ -1,0 +1,64 @@
+# Khadi — the Arch packages the desktop needs.
+#
+# One name per line, `#` to end of line is a comment. Install with:
+#
+#     sudo pacman -S --needed $(sed 's/#.*//' packages.txt | tr -s '[:space:]' ' ')
+#
+# Arch does not split headers into -dev packages, so most of these are needed
+# both to build and to run. The upstream project documents Debian names; these
+# are the Arch equivalents, checked against what smithay actually links.
+
+# --- build ---------------------------------------------------------------
+rust               # cargo. rustup works too; the workspace is edition 2024,
+                   # so a 2024-capable toolchain is the real requirement.
+pkgconf            # how install.sh finds the libraries below
+
+# --- what the compositor links against -----------------------------------
+# smithay is built with backend_drm, backend_gbm, backend_egl, backend_udev,
+# backend_libinput, backend_session_libseat and renderer_gl, and each of those
+# is one of these.
+libinput           # input devices
+seatd              # libseat: taking the seat without being root. The seatd
+                   # service is only needed without systemd-logind; on a
+                   # systemd install libseat uses logind and seatd stays off.
+mesa               # libgbm and EGL
+systemd-libs       # libudev. Already present on any systemd install; named so
+                   # the dependency is written down rather than assumed.
+wayland
+libxkbcommon
+
+# --- what the session needs at runtime -----------------------------------
+xorg-xwayland      # X11 applications. edex-comp starts and manages it itself.
+cage               # the last fallback in edex-rs-session: if edex-comp cannot
+                   # drive the display twice over, the shell runs inside this
+                   # rather than leaving you at a black screen.
+networkmanager     # nmcli, which the settings screen drives for Wi-Fi
+bluez              # the Bluetooth stack
+bluez-utils        # bluetoothctl, which the settings screen drives
+pipewire           # audio
+wireplumber        # wpctl, which the volume control calls
+curl               # geolocation lookups for the globe
+fontconfig         # fc-list, how the shell finds an installed Nerd Font
+
+# --- portals -------------------------------------------------------------
+# session/edex-rs-portals.conf asks for the gtk backend by name, and for
+# gnome-keyring to answer the Secret portal. Without these a file chooser in
+# Firefox hangs waiting for a backend that is not there.
+xdg-desktop-portal
+xdg-desktop-portal-gtk
+gnome-keyring
+
+# --- fonts ---------------------------------------------------------------
+# Chakra Petch and JetBrains Mono are bundled in shell/assets/fonts, so the
+# interface has its typefaces with nothing installed. This is for the prompt:
+# the shell looks for an installed Nerd Font for powerline and icon glyphs,
+# and renders tofu without one.
+ttf-jetbrains-mono-nerd
+
+# --- login ---------------------------------------------------------------
+# NOT YET SETTLED. install.sh registers a session in /usr/share/wayland-sessions,
+# which needs a display manager to offer it, and Arch ships none by default.
+# Khadi had its own greeter on greetd; it was dropped with the old codebase and
+# is in the history at the tag pre-des-ui. Upstream lists a login screen under
+# "not done yet", so this is a real gap for both projects.
+greetd             # the display manager the old greeter ran under

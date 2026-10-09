@@ -3,9 +3,28 @@
 set -eu
 cd "$(dirname "$0")"
 
+# Arch does not split development headers into their own packages, so what the
+# build needs and what the session needs are the same names. Checked by the
+# library smithay links against rather than by package name, because a missing
+# one otherwise surfaces as a linker error about a symbol nobody recognises.
+missing=
+for pc in libinput libseat gbm libudev wayland-server xkbcommon; do
+    pkg-config --exists "$pc" 2>/dev/null || missing="$missing $pc"
+done
+if [ -n "$missing" ]; then
+    echo "Missing build dependencies:$missing" >&2
+    echo "  sudo pacman -S --needed libinput seatd mesa systemd-libs wayland libxkbcommon" >&2
+    exit 1
+fi
+
 if ! command -v cage >/dev/null; then
     echo "Note: cage is not installed, so the session has no fallback if edex-comp" >&2
-    echo "cannot drive the display. To add one: sudo apt install cage" >&2
+    echo "cannot drive the display. To add one: sudo pacman -S cage" >&2
+fi
+
+if ! command -v Xwayland >/dev/null; then
+    echo "Note: Xwayland is not installed, so X11 applications will not run." >&2
+    echo "To add it: sudo pacman -S xorg-xwayland" >&2
 fi
 
 cargo build --release
