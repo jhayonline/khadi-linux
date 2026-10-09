@@ -47,6 +47,9 @@ GL="${KHADI_VM_GL:-on}"
 # the 180 the layout needs). Headless makes resolution reproducible and
 # `khadi-vm shot` meaningful, which is what automated gate runs require.
 HEADLESS="${KHADI_VM_HEADLESS:-0}"
+# Open the window already filling the screen, so the guest picks a mode the
+# shell's layout fits in rather than one the window decorations left over.
+FULLSCREEN="${KHADI_VM_FULLSCREEN:-0}"
 VNC_PORT="${KHADI_VM_VNC:-1}"
 
 die()  { printf '\n  %s\n\n' "$*" >&2; exit 1; }
@@ -197,11 +200,23 @@ cmd_run() {
         gpu=(-device "virtio-gpu-gl,xres=$XRES,yres=$YRES")
         disp="gtk,gl=on,show-cursor=on,zoom-to-fit=on"
         echo "  GL on, EGL pinned to: $__EGL_VENDOR_LIBRARY_FILENAMES"
+        echo "  If the window fills with 'eglMakeCurrent failed', this host cannot"
+        echo "  do it: KHADI_VM_GL=off ./vm/khadi-vm run"
     else
         gpu=(-device "virtio-gpu,xres=$XRES,yres=$YRES")
         disp="gtk,gl=off,show-cursor=on,zoom-to-fit=on"
-        echo "  GL off — guest needs WLR_RENDERER=pixman for Hyprland."
+        echo "  GL off — the host blits each frame. Slower, and 'shot' works."
     fi
+
+    # With virtio-gpu the guest follows the window: resize it and the guest
+    # changes mode to match, which is how a 1920x1080 start ends up at 732x810
+    # once GTK has shrunk the window to fit the screen with its decorations on.
+    # The shell wants 180 columns. Ctrl+Alt+F in the window, or start here.
+    # `if`, not `[[ … ]] && …`: under `set -e` a bare AND-list that fails is
+    # the whole command, so the common case — fullscreen off — would have
+    # exited the script here instead of falling through to boot.
+    local full=()
+    if [[ "$FULLSCREEN" == "1" ]]; then full=(-full-screen); fi
 
     exec qemu-system-x86_64 \
         -name "khadi-test" \
@@ -214,6 +229,7 @@ cmd_run() {
         "${boot[@]}" \
         "${gpu[@]}" \
         -display "$disp" \
+        "${full[@]}" \
         ${HEADLESS:+$( [[ "$HEADLESS" == 1 ]] && echo "-vnc 127.0.0.1:$VNC_PORT" )} \
         -device virtio-net,netdev=n0 \
         -netdev "user,id=n0,hostfwd=tcp::$SSH_PORT-:22" \
