@@ -36,6 +36,18 @@ fn main() {
         // acceleration. Being locked out is worse than a clock composited on
         // the CPU.
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        // The greeter's compositor is cage, which gets none of the session
+        // config above — it starts before there is a session. Its pointer came
+        // out UPSIDE DOWN, which is the wlroots hardware-cursor plane on a
+        // driver that disagrees about buffer orientation; software cursors
+        // cost nothing on a screen that does not move.
+        std::env::set_var("WLR_NO_HARDWARE_CURSORS", "1");
+        if std::env::var_os("XCURSOR_THEME").is_none() {
+            std::env::set_var("XCURSOR_THEME", "Adwaita");
+        }
+        if std::env::var_os("XCURSOR_SIZE").is_none() {
+            std::env::set_var("XCURSOR_SIZE", "24");
+        }
         return khadi_shell_lib::run_greeter();
     }
     khadi_shell_lib::run()
