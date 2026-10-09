@@ -22,3 +22,6 @@ shell/src-tauri/gen/
 
 # khadi-shell frontend
 shell/coverage/
+
+# Reference clones, not part of the build
+omarchy/

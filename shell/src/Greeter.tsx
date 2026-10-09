@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getTheme } from "./lib/ipc";
+import { Wordmark } from "./components/Wordmark";
 
 type Step =
   | { kind: "prompt"; message: string; secret: boolean }
@@ -26,14 +27,8 @@ export default function Greeter() {
   const [value, setValue] = useState(DEFAULT_USER);
   const [user, setUser] = useState("");
   const [error, setError] = useState("");
-  const [now, setNow] = useState(() => new Date());
   const [host, setHost] = useState("");
   const input = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   // The theme comes from /etc/khadi/theme.toml here: the greeter runs as the
   // `greeter` user, which cannot read anyone's home directory. khadi-core
@@ -107,11 +102,6 @@ export default function Greeter() {
     [stage, value, apply, fail],
   );
 
-  const hhmmss = now.toLocaleTimeString("en-GB", { hour12: false });
-  const date = now
-    .toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })
-    .toUpperCase();
-
   return (
     <div className="relative flex h-full w-full flex-col justify-between">
       {/* The frame, as the lock screen has it: full-bleed, ticked at both ends. */}
@@ -124,14 +114,12 @@ export default function Greeter() {
       </header>
 
       <main className="flex flex-1 flex-col items-center justify-center">
-        <h1 className="m-0 font-[var(--font-ui-light)] text-[calc(9vh*var(--ui-scale))] leading-none tracking-[0.4vh]">
-          {hhmmss}
-        </h1>
-        <p className="mt-[calc(1.4vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))] tracking-[0.3vh] opacity-55">
-          {date}
-        </p>
+        {/* The logo is the hero. It replaced a clock — a login screen does
+            not need to tell the time, and the clock was filling the space the
+            mark should have had. */}
+        <Wordmark className="h-[calc(11vh*var(--ui-scale))] w-auto text-[rgb(var(--c))]" />
 
-        <form onSubmit={submit} className="mt-[calc(4vh*var(--ui-scale))] w-[42vh] max-w-[80vw]">
+        <form onSubmit={submit} className="mt-[calc(6vh*var(--ui-scale))] w-[42vh] max-w-[80vw]">
           <div className="flex items-baseline justify-between text-[calc(1.1vh*var(--ui-scale))] tracking-[0.2vh]">
             <span className="opacity-60">{prompt}</span>
             {user && stage !== "user" && <span className="opacity-40">{user}</span>}

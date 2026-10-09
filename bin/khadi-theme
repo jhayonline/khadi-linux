@@ -206,7 +206,11 @@ def banner(path, theme):
 # filled in role.text, regenerated for every theme like every other output.
 
 def _png(width, height, pixels):
-    """Minimal RGBA PNG. `pixels` is a bytearray of width*height*4."""
+    """Minimal RGBA PNG. `pixels` is a bytearray of width*height*4.
+
+    No anti-aliasing and none wanted: a pixel face is supposed to have hard
+    edges, and the supersampled coverage buffer the polygon version needed
+    went with it."""
     import struct, zlib
     raw = bytearray()
     for y in range(height):
@@ -223,119 +227,44 @@ def _png(width, height, pixels):
             + chunk(b"IEND", b""))
 
 
-class Canvas:
-    """A supersampled coverage buffer. One channel: how much of each sample
-    the shapes cover. Colour is applied once at the end, so a wordmark is the
-    same geometry whatever the theme paints it."""
-
-    SS = 4  # samples per axis; 16 per pixel is enough to hide a diagonal's stair
-
-    def __init__(self, w, h):
-        self.w, self.h = w, h
-        self.cov = bytearray(w * self.SS * h * self.SS)
-
-    def _set(self, x, y):
-        W = self.w * self.SS
-        if 0 <= x < W and 0 <= y < self.h * self.SS:
-            self.cov[y * W + x] = 1
-
-    def quad(self, pts):
-        """Fill a convex polygon given in PIXEL coordinates."""
-        S = self.SS
-        p = [(x * S, y * S) for x, y in pts]
-        ys = [y for _, y in p]
-        for y in range(int(min(ys)), int(max(ys)) + 1):
-            xs = []
-            for i in range(len(p)):
-                (x0, y0), (x1, y1) = p[i], p[(i + 1) % len(p)]
-                if (y0 <= y < y1) or (y1 <= y < y0):
-                    xs.append(x0 + (y - y0) * (x1 - x0) / (y1 - y0))
-            xs.sort()
-            for i in range(0, len(xs) - 1, 2):
-                for x in range(int(xs[i]), int(xs[i + 1]) + 1):
-                    self._set(x, y)
-
-    def rect(self, x, y, w, h):
-        self.quad([(x, y), (x + w, y), (x + w, y + h), (x, y + h)])
-
-    def to_png(self, rgb):
-        """Resolve coverage to RGBA at `rgb`, averaging each pixel's samples."""
-        S = self.SS
-        W = self.w * S
-        r, g, b = rgb
-        out = bytearray(self.w * self.h * 4)
-        for py in range(self.h):
-            for px in range(self.w):
-                n = 0
-                for sy in range(S):
-                    row = (py * S + sy) * W + px * S
-                    n += sum(self.cov[row:row + S])
-                a = (n * 255) // (S * S)
-                i = (py * self.w + px) * 4
-                out[i] = r
-                out[i + 1] = g
-                out[i + 2] = b
-                out[i + 3] = a
-        return _png(self.w, self.h, out)
-
-
-# Letterforms, as geometry rather than as a face.
+# THE WORDMARK IS A PIXEL GRID, and it is defined exactly once.
 #
-# Squared and angled, the way a techno display face is cut — Orbitron is the
-# vendored reference and these are drawn to sit beside it rather than to
-# imitate it. Coordinates are in a 0..10 wide by 0..14 tall em; `S` is the
-# stroke. Each letter is a list of convex polygons.
-def _glyphs(S=2.0):
-    H, W = 14.0, 10.0
-    o = W - S  # x of the right-hand stem
-
-    def V(x):          return [(x, 0), (x + S, 0), (x + S, H), (x, H)]
-    def Htop():        return [(0, 0), (W, 0), (W, S), (0, S)]
-    def Hbot():        return [(0, H - S), (W, H - S), (W, H), (0, H)]
-    def Hmid():        return [(0, H / 2 - S / 2), (W, H / 2 - S / 2), (W, H / 2 + S / 2), (0, H / 2 + S / 2)]
-
-    waist = H / 2 - S / 2
-    return {
-        # Stem, then two arms springing from ONE segment of it at the waist, so
-        # the junction is a shared edge rather than two shapes that nearly
-        # touch. The first cut had them overlapping at slightly different
-        # angles and left a notch you could see at 140px.
-        "K": [V(0),
-              [(S, waist), (W, 0), (W, S), (S, waist + S)],
-              [(S, waist), (W, H - S), (W, H), (S, waist + S)]],
-        "H": [V(0), V(o), Hmid()],
-        # A squared A: the apex is cut flat, which is what the display faces do.
-        "A": [[(0, H), (0, S * 1.4), (S * 1.4, 0), (W - S * 1.4, 0), (W, S * 1.4), (W, H), (o, H), (o, S * 1.9),
-               (W - S * 1.9, S), (S * 1.9, S), (S, S * 1.9), (S, H)],
-              Hmid()],
-        # D. The chamfer on the lower right is one polygon with the stem, not a
-        # separate piece laid over the bottom bar — composed the other way it
-        # left a sliver where the two edges disagreed.
-        "D": [V(0), Htop(),
-              [(0, H - S), (W - S * 1.5, H - S), (W - S * 1.5, H), (0, H)],
-              [(o, S), (W, S), (W, H - S * 1.5), (W - S * 1.5, H), (W - S * 1.5, H - S), (o, H - S)]],
-        # I with the top and bottom bars a display face gives it.
-        "I": [[(W / 2 - S / 2, 0), (W / 2 + S / 2, 0), (W / 2 + S / 2, H), (W / 2 - S / 2, H)],
-              [(W * 0.18, 0), (W * 0.82, 0), (W * 0.82, S), (W * 0.18, S)],
-              [(W * 0.18, H - S), (W * 0.82, H - S), (W * 0.82, H), (W * 0.18, H)]],
-    }
+# The first version set it as polygons — squared, angled, drawn to sit beside
+# Orbitron. It was clean and it was not Khadi's: the brief was Omarchy's text
+# logo, which is a coarse bitmap display face, condensed and blackletter-ish,
+# every diagonal a stair. Measured off its logo.png: 800px for seven letters
+# at a ~16px pixel is 7 cells across, 188px tall is 12 down, and that ratio is
+# the whole character — a 2-cell stem against a 3-cell counter.
+#
+# `shell/src/assets/wordmark.json` is the one definition. khadi-theme reads it
+# to rasterise the splash, which cannot use a font at all, and the greeter
+# imports the same file to emit inline SVG. A logo that differs between the
+# boot screen and the login screen is worse than no logo.
+WORDMARK = Path(__file__).resolve().parent.parent / "shell/src/assets/wordmark.json"
 
 
-def wordmark_png(word, rgb, height=120, tracking=0.34):
-    """`word` set in the geometry above, at `height` pixels, in `rgb`."""
-    g = _glyphs()
-    EM_W, EM_H = 10.0, 14.0
-    unit = height / EM_H
-    gap = EM_W * tracking
-    total = len(word) * EM_W + (len(word) - 1) * gap
-    pad = EM_W * 0.25
-    cv = Canvas(int(round((total + pad * 2) * unit)), int(round(EM_H * unit)))
-    x = pad
+def wordmark_png(word, rgb, height=120, gap=1):
+    import json
+    spec = json.loads(WORDMARK.read_text())
+    g, gw, gh = spec["glyphs"], spec["cell_w"], spec["cell_h"]
+    cell = max(1, round(height / gh))
+    cols = len(word) * gw + (len(word) - 1) * gap
+    w, h = cols * cell, gh * cell
+    r, gg, b = rgb
+    out = bytearray(w * h * 4)
+    x0 = 0
     for ch in word:
-        for poly in g[ch]:
-            cv.quad([((px + x) * unit, py * unit) for px, py in poly])
-        x += EM_W + gap
-    return cv.to_png(rgb)
+        for y, row in enumerate(g[ch]):
+            for x, v in enumerate(row):
+                if v != "#":
+                    continue
+                for py in range(y * cell, (y + 1) * cell):
+                    base = (py * w + (x0 + x) * cell) * 4
+                    for k in range(cell):
+                        i = base + k * 4
+                        out[i], out[i + 1], out[i + 2], out[i + 3] = r, gg, b, 255
+        x0 += gw + gap
+    return _png(w, h, out)
 
 
 def swatch_png(rgb):
