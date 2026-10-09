@@ -1,0 +1,6 @@
+[package]
+name = "edex-common"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Frame geometry and desktop protocol shared by the DEs-UI shell and compositor"

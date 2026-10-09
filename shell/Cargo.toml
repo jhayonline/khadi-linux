@@ -1,0 +1,17 @@
+[package]
+name = "edex-rs"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "The DEs-UI shell: a sci-fi terminal desktop"
+
+[dependencies]
+anyhow = "1.0.104"
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+eframe = { version = "0.31", default-features = false, features = ["glow", "wayland", "x11", "default_fonts"] }
+portable-pty = "0.9.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sysinfo = "0.38.4"
+vt100 = "0.16.2"
+edex-common = { path = "../common" }

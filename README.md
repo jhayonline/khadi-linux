@@ -1,161 +1,168 @@
-# Khadi
+# DEs-UI
 
-A keyboard-driven, terminal-first Arch desktop with an
-[eDEX-UI](https://github.com/GitSquared/edex-ui) aesthetic.
+A sci-fi terminal desktop for Linux, written in Rust: a Wayland compositor and a
+shell that run as their own login session. It began as a rewrite of
+[eDEX-UI](https://github.com/GitSquared/edex-ui).
 
-Not a fork of Arch. A pacman repo and a config layer on top of it.
+The programs, and the files they keep, still carry the working name `edex-rs`.
 
-**Status: Phase 3 complete.** The chassis installs and runs on a clean Arch
-machine, and it now looks like eDEX: measured against the reference screenshot
-it scores 13 faithful elements of 18, up from 1 when the chassis was pure
-config. [PLAN.md](PLAN.md) has the element-by-element scoring and the evidence
-behind every number here.
+It has two programs:
 
----
+- **edex-rs** (`shell/`) — the interface: terminal, system panels, file browser.
+- **edex-comp** (`compositor/`) — a Wayland compositor that shows the shell
+  fullscreen and places other applications in the middle of its frame.
 
-## Try it without installing anything
+## Try it in a window
 
-```sh
-git clone git@github.com:jhayonline/khadi-linux.git khadi-linux && cd khadi-linux
-./bin/khadi-dev
-```
+    cargo build
+    ./target/debug/edex-comp                      # the whole desktop
+    ./target/debug/edex-comp -- --theme blade     # arguments after -- go to the shell
+    ./target/debug/edex-rs --windowed             # the shell on its own
 
-Runs the reference layout straight from the repo. Touches nothing in `~`.
+Open applications with the launcher, or by starting them from the terminal. Hold
+Super (or Ctrl+Alt, which works when running in a window):
 
-Needs `khadi-shell` built — and it has to go through the Tauri CLI, because
-`cargo build` alone links a binary with no frontend embedded in it:
+- **Space** — open the launcher: type to search, Enter to open, Esc to cancel
+- **,** — open the settings
+- **Tab** — switch between the terminal and the applications on this display
+- **S** — split the workspace between two windows, or make it whole again
+- **Left / Right** — give the keyboard to that half of a split
+- **F** — full screen: the applications on this display cover all of it
+- **[  ]  \\** — collapse or open the left, right and bottom panels
+- **Q** — close the current application
+- **O** — move the current application to the next display
 
-```sh
-cd shell && npm install && npm run tauri build
-```
+The bar above the workspace lists the terminal tabs and every open application;
+click one to switch to it. The application in use shows an arrow, to send it to
+the next display, and a cross, to close it. `SPLIT`, `FULL` and `APPS` do what the
+keys do, and the three small switches in the status strip collapse the panels.
 
-Needs `nodejs`, `npm` and `webkit2gtk-4.1` to build; only the last to run.
+A split keeps the window in view on the left and puts the application used before
+it on the right. With one application open, that one goes right and the terminal
+stays on the left.
 
-## Install
+With several displays, modes and arrangement follow what you chose in the settings,
+or else the layout saved in GNOME's display settings (`~/.config/monitors.xml`)
+when it covers the connected monitors.
+Otherwise the frame is on a laptop's own panel and the others extend to its right.
+Each further display shows its applications at full size, split or not.
+Applications open on the display the pointer is on.
 
-```sh
-./bin/khadi-install            # dry run — prints every change, makes none
-./bin/khadi-install --apply
-```
+`edex-rs --list-apps` prints what the launcher offers.
 
-The dry run is the default and the real one needs `--apply`. Anything already
-at a target path is moved to `<target>.khadi-backup-<timestamp>`, never
-deleted. `--uninstall` removes the links and restores the newest backups.
+The globe marks this machine and the places it has connections open to. Positions
+come from looking addresses up at get.geojs.io, which tells that service the public
+addresses this machine talks to; each is asked about once and kept in
+`~/.cache/edex-rs/places.tsv`. Your own position is guessed from your address
+unless you set it.
 
-> **If you already run Hyprland** — Omarchy, end-4, your own dotfiles —
-> Khadi links over `~/.config/hypr`. Read the dry run before you `--apply`.
+## Settings
 
-Khadi will not install packages for you, and will not build for you. The dry
-run lists what is missing and prints the command — `pacman` for packages,
-`cargo build --release` for `khadi-greet`, and
-`npm run tauri build` for `khadi-shell`, which is the desktop.
+**Super+,** or `SETTINGS` in the status strip opens them in place of the terminal;
+Esc closes. Changes apply at once and are saved.
 
-## Keys
+- **Appearance** — theme
+- **Terminal** — font, text size, line height, cursor shape and blink, bold in
+  bright colours, copy on select, scrollback
+- **Frame** — which panels are open, now and at every start
+- **Displays** — each monitor's resolution and refresh rate, their order left to
+  right, and which one is the main display
+- **Network** — Wi-Fi on or off, and joining, leaving and forgetting networks
+- **Bluetooth** — on or off, and pairing, connecting and forgetting devices
+- **Keyboard** — layout, and how held keys repeat
+- **Mouse & touchpad** — natural scrolling, tap to click, pointer speed, left-handed
+- **Globe** — rotation, online lookups, and your location
+- **Sound & screen** — volume and brightness
+- **Session** — where the logs are, and logging out
 
-One rule: **each layer owns exactly one modifier.**
+A display change is tried for 15 seconds and kept only if you confirm it; otherwise
+it goes back by itself, so a mode your monitor cannot show does not strand you.
+Confirmed layouts are saved in `~/.config/edex-rs/displays`, one per set of
+monitors, and come before GNOME's saved layout.
 
-| Layer | Modifier | Owns |
-| --- | --- | --- |
-| Hyprland | `Super` | workspaces, windows, launcher, lock, screenshot |
-| zellij | `Alt` | panes, tabs |
-| foot | `Ctrl+Shift` | font size, copy, paste |
-| your app | `Ctrl` and its own | everything else, untouched |
+The rest are kept in `~/.config/edex-rs/config` as `key = value` lines, which can also
+be edited by hand. The compositor reads the keyboard, mouse and touchpad
+settings from the same file. Network and Bluetooth go through `nmcli` and
+`bluetoothctl`; a Wi-Fi password is handed to `nmcli` on its command line. Two can be set from a terminal:
 
-`Super + /` shows the cheatsheet. It is generated by parsing the live config
-files, so it cannot drift from what the system actually does.
+    edex-rs --set-location 48.8566,2.3522,Paris   # or: --set-location auto
+    edex-rs --geo off                             # no lookups at all; on to resume
 
-## What's here
+X11 applications run through Xwayland, which `edex-comp` starts and manages; the
+clipboard is shared between them and Wayland applications.
 
-```
-bin/khadi-dev         run from the repo, no install
-bin/khadi-install     link into ~/.config and ~/.local/bin
-bin/khadi-theme       render every app config from one theme file
-bin/khadi-check       render every theme, validate with each app's own checker
-bin/khadi-fontcheck   do the theme's fonts — and glyphs — actually resolve?
-bin/khadi-cheatsheet  Super+/ overlay
-bin/khadi-boot        install the boot splash (needs root; run from --system)
-crates/khadi-core     theme, metrics and Hyprland IPC — no UI dependencies
-crates/khadi-greet    the login screen, speaking greetd's IPC
-shell/                khadi-shell — THE DESKTOP. eDEX's interface as a Tauri
-                      app: React, TypeScript and Tailwind in a webview, Rust
-                      underneath. shell/README.md, and PLAN.md 10r for why the
-                      ratatui panels it replaced were the ceiling.
-themes/tron.toml      the design system — one file, everything derives from it
-templates/            the source of every config; config/ is build output
-config/               mirrors ~/.config — GENERATED, do not edit
-                      (includes GTK and xdg-desktop-portal: Khadi is
-                      terminal-FIRST, not terminal-only)
-fonts/                Rajdhani and Orbitron, vendored with their OFL licences
-packages.txt          dependency manifest, official repos only
-vm/gate.sh            the install gate, run inside a clean Arch VM
-.github/workflows/    the rolling-release watch — khadi-check, daily, on Arch
-PLAN.md               the actual plan, and the evidence behind it
-```
+The look is called Signal (`shell/src/ui.rs`): fixed greys, two typefaces, and one
+accent colour. A theme sets that accent and the terminal's colours, in the JSON
+format eDEX-UI uses, so its theme files work here. `themes/` holds the built-in
+one; your own go in `~/.config/edex-rs/themes/`.
 
-## From power-on to desktop
+## Install as a login session
 
-Every stage is themed from the same `themes/*.toml`, and every one was checked
-by photographing a real boot in a VM rather than by reading the config back.
+    sudo apt install libudev-dev libinput-dev libgbm-dev libseat-dev cage
+    ./install.sh
 
-| | |
-| --- | --- |
-| **Boot** | a Plymouth splash: wordmark, progress bar, and the real systemd unit it is waiting on |
-| **Login** | `khadi-greet` — written, not configured, because nothing off the shelf draws the bracket-tick header or the block clock |
-| **Desktop** | Hyprland running `khadi-shell` — eDEX's interface as a Tauri app, in one window |
-| **Idle** | `hypridle` locks at 10 minutes and blanks at 11. It does **not** suspend — see `hypridle.conf` for why |
-| **Lock** | `hyprlock`, themed rather than replaced: it is what stands between a locked machine and its data |
+Then log out and choose **DEs-UI** from the session menu on the login screen.
+Exiting the last shell, or Ctrl+Shift+Q, ends the session. `./uninstall.sh`
+removes it again.
 
-GUI apps work too — Khadi is terminal-**first**, not terminal-only. Portals are
-installed and configured (both backends: the Hyprland one does not implement
-the file chooser), and GTK gets the dark preference, the UI font and the
-palette.
+In the session, `edex-comp` drives the displays and input devices itself (one GPU,
+every monitor connected to it, including ones plugged in later). If that fails in the first seconds it falls back to running inside
+`cage`, and the reason is in `~/.local/state/edex-rs/session.log`. What applications started
+from the launcher print goes to `apps.log` next to it.
 
-## Why 17% columns
+Ways out if something goes wrong: **Ctrl+Alt+Backspace** ends the session, and
+**Ctrl+Alt+F1…F12** switch virtual terminals.
 
-eDEX's side columns are ~17% of screen width and its main shell is 65% wide by
-60.3% tall, with the file browser and keyboard across the bottom. `khadi-shell`
-uses those numbers literally — they are read out of `edex-ui/src/assets/css`,
-not estimated, and both projects are GPL-3.0.
+## Working inside it while changing it
 
-Khadi spent Phase 3 drawing the same layout in a terminal, and the terminal was
-the ceiling. A cell is about 8x20 px and indivisible, so eDEX's `0.092vh`
-hairlines became two-pixel lines adrift in twenty-pixel rows, its proportional
-display face became a monospace, its SVG icons became block characters and its
-WebGL globe became braille dots. Its `2.04vh` background lattice could not be
-drawn at all: the colour has been in `themes/*.toml` marked `PORTED` since
-Phase 2 and was never once rendered, because a cell grid has nowhere to put it.
+- `./dev.sh` builds the working copy and runs it in a window inside the running
+  session. Nothing installed is touched.
+- `./install.sh` can be run from inside the session. **Super+Shift+R** then restarts
+  the shell on the new build: its terminal tabs close, applications stay open. A new
+  compositor takes effect at the next login.
+- If the shell crashes it is started again and applications stay open. Only quitting
+  it (Ctrl+Shift+Q, or closing the last tab) ends the session.
+- `install.sh` keeps the build it replaces. If a new build cannot start at login, the
+  session tries that one, then `cage`.
+- Anything that must survive a shell restart should not run in the shell's own
+  terminal tabs: use a terminal application such as `ptyxis`, or `tmux`.
 
-That measurement, and what followed from it, is [PLAN.md](PLAN.md) section 10r.
+## Layout
 
-## Honest status
+- `shell/src/term.rs` — shell on a PTY, VT parsing, grid rendering, key encoding
+- `shell/src/sysmon.rs` — CPU, memory, process and network sampling
+- `shell/src/ui.rs` — the interface language: colours, typefaces, shared parts
+- `shell/src/panels.rs` — side columns, file browser, status strip
+- `shell/src/globe.rs`, `geo.rs` — the rotating globe and the places on it
+- `shell/src/settings.rs`, `config.rs` — the settings screen and the file behind it
+- `shell/src/radio.rs` — Wi-Fi and Bluetooth
+- `common/src/input.rs` — keyboard, mouse and touchpad settings
+- `shell/src/apps.rs`, `launcher.rs` — installed applications and the launcher
+- `shell/src/theme.rs` — eDEX-UI theme loader
+- `compositor/src/policy.rs` — which window is shown on which display
+- `compositor/src/udev.rs`, `winit.rs` — the hardware and windowed backends
+- `compositor/src/displays.rs`, `monitors.rs` — display settings and saved layouts
+- `compositor/src/xwayland.rs`, `focus.rs` — X11 applications
+- `compositor/src/ipc.rs`, `shell/src/desktop.rs` — the socket the two talk over
+- `common/` — frame geometry and that socket's protocol, shared by both
+- `session/` — login session entry and launcher
 
-The desktop is `khadi-shell`: eDEX's interface rebuilt as a Tauri app, with
-eDEX's own layout numbers and its own continent data. The scoring that used to
-live here — *13 faithful elements of 18* — was an A/B of the ratatui panels
-against a screenshot, and it is retired along with them. Scoring a port of the
-stylesheet against the stylesheet is not a measurement.
+## Not done yet
 
-What is honest to say instead: the clock, the info grids, the CPU graphs, the
-memory matrix, the process list, the network block, the globe, the file browser
-and the keyboard are all present, laid out at eDEX's proportions, fed by
-`khadi-core`. The substitutions that remain are the fonts (Rajdhani for United
-Sans, which is commercial) and the file icons, which are five structural shapes
-against eDEX's ~1000 extension matches.
-
-Three caveats worth stating plainly:
-
-- **The webview costs what a webview costs.** ~150 MB resident against the
-  ratatui panels' ~5 MB, and xterm.js is not foot — `Super+Return` opens a real
-  foot window, which stays the answer for anything that scrolls fast.
-- `bash vm/gate.sh` passes 75 checks, 0 failures, inside a clean VM that boots
-  into the real session. What the gate has never proved is its own wording:
-  "someone else runs the script and gets your desktop". It has been passed by
-  the author's VM, which is not the same thing.
-- Phases 4 to 6 — packaging, installer, ISO, and actually operating a repo —
-  are not started. Khadi is a config layer you clone, not something you
-  `pacman -S` yet.
+- Mirroring displays
+- Keyboard layout setting; display scaling for high-density screens
+- Dialogs at their natural size; sharing the middle-click selection with X11 applications
+- Turning a display off; placing displays above one another; scaling
+- Wired and VPN connections in the settings; Bluetooth devices that need a code
+- A login screen of its own (designed, not built: it still uses the system's)
+- From the original: on-screen keyboard, sound effects, mouse reporting to
+  terminal apps
 
 ## Licence
 
-GPL-3.0 (provisional — see the open decisions in PLAN.md). `themes/tron.toml`
-derives from eDEX-UI, which is GPL-3.0.
+MIT; see `LICENSE`. `compositor/` is derived from Smithay's `smallvil` example, also
+MIT. The bundled typefaces, Chakra Petch and JetBrains Mono (`shell/assets/fonts/`),
+are under the SIL Open Font License.
+
+eDEX-UI's own theme files are GPL-3.0 and are not part of this repository. They
+work as themes here: copy them into `~/.config/edex-rs/themes/`.

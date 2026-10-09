@@ -1,27 +1,21 @@
-# VM artefacts — large, local, reproducible from vm/khadi-vm
+/target
+
+# eDEX-UI's theme files are GPL-3.0; only this project's own theme is kept here.
+/themes/*
+!/themes/signal.json
+
+# VM artefacts — large, local, reproducible from vm/khadi-vm. The VM is the
+# only safe way to test a compositor: it takes over the display, so trying a
+# build on the machine you are working on logs you out of it.
 vm/*.iso
 vm/*.iso.part
 vm/*.qcow2
 vm/OVMF_VARS.fd
-
-# upstream reference clone, not ours to version
-edex-ui/
-
-# python
-__pycache__/
-*.pyc
 vm/.qmp.sock
 
-# rust build output
-/target/
-
-# khadi-shell build output
-shell/node_modules/
-shell/dist/
-shell/src-tauri/gen/
-
-# khadi-shell frontend
-shell/coverage/
-
-# Reference clones, not part of the build
+# Reference clones, not ours to version
+edex-ui/
 omarchy/
+
+__pycache__/
+*.pyc

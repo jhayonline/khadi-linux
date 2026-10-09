@@ -1,30 +1,11 @@
-# Khadi — Rust workspace.
-#
-# khadi-core  theme + metrics. No UI dependencies, because three very different
-#             surfaces consume it: a webview (khadi-shell), a GTK layer-shell
-#             panel... no: a webview (khadi-shell) and a ratatui VT app
-#             (khadi-greet), since khadi-bar folded into the shell. Anything
-#             that knows about a cell grid or a widget tree does not belong
-#             here — which is why the Tauri rewrite cost this crate nothing.
-# khadi-greet the login screen, speaking greetd's IPC.
-# khadi-shell the UI shell: eDEX's layout as a Tauri app. A THIRD consumer of
-#             khadi-core, and the reason that crate was kept UI-free — nothing
-#             in it had to change to feed a webview.
 [workspace]
-members = [
-    "crates/khadi-core",
-    "crates/khadi-greet",
-    "shell/src-tauri",
-]
-resolver = "2"
+resolver = "3"
+members = ["shell", "common", "compositor"]
 
-[workspace.package]
-version = "0.1.0"
-edition = "2021"
-license = "GPL-3.0-only"
-repository = "https://github.com/khadi/khadi"
+# Debug info and incremental caches cost gigabytes of disk for this dependency tree.
+[profile.dev]
+debug = false
+incremental = false
 
-[workspace.dependencies]
-serde  = { version = "1", features = ["derive"] }
-toml   = "0.9"
-anyhow = "1"
+[profile.release]
+strip = true
