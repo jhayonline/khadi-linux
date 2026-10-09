@@ -9,32 +9,32 @@ import land from "../assets/land.json";
 
 export function NetStat({ n }: { n: Network | null }) {
   return (
-    <div className="rule-top py-[0.645vh] tracking-[0.092vh] font-[var(--font-ui-light)]">
-      <h3 className="m-0 flex justify-between px-[0.46vh] text-[1.3vh]">
+    <div className="rule-top py-[calc(0.645vh*var(--ui-scale))] tracking-[0.092vh] font-[var(--font-ui-light)]">
+      <h3 className="m-0 flex justify-between px-[calc(0.46vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))]">
         <span>NETWORK STATUS</span>
         <span className="opacity-50">Interface: {n?.iface || "—"}</span>
       </h3>
-      <div className="mt-[0.4vh] flex flex-row items-start justify-between px-[0.46vh]">
+      <div className="mt-[calc(0.4vh*var(--ui-scale))] flex flex-row items-start justify-between px-[calc(0.46vh*var(--ui-scale))]">
         {([
           ["STATE", n ? (n.up ? "ONLINE" : "OFFLINE") : "—"],
           ["IPv4", n?.ipv4 || "—"],
           ["GATEWAY", n?.gateway || "—"],
         ] as [string, string][]).map(([k, v]) => (
           <div key={k}>
-            <h2 className="m-0 text-[1.3vh] leading-[1.6vh] opacity-50">{k}</h2>
-            <h1 className="m-0 text-[1.6vh] leading-[1.9vh]">{v}</h1>
+            <h2 className="m-0 text-[calc(1.3vh*var(--ui-scale))] leading-[calc(1.6vh*var(--ui-scale))] opacity-50">{k}</h2>
+            <h1 className="m-0 text-[calc(1.6vh*var(--ui-scale))] leading-[calc(1.9vh*var(--ui-scale))]">{v}</h1>
           </div>
         ))}
       </div>
-      <div className="mt-[0.3vh] flex flex-row items-start justify-between px-[0.46vh]">
+      <div className="mt-[calc(0.3vh*var(--ui-scale))] flex flex-row items-start justify-between px-[calc(0.46vh*var(--ui-scale))]">
         {([
           ["DNS", n?.dns || "—"],
           ["MAC", n?.mac || "—"],
           ["MTU", n?.mtu || "—"],
         ] as [string, string][]).map(([k, v]) => (
           <div key={k}>
-            <h2 className="m-0 text-[1.1vh] leading-[1.4vh] opacity-50">{k}</h2>
-            <h1 className="m-0 text-[1.3vh] leading-[1.6vh]">{v}</h1>
+            <h2 className="m-0 text-[calc(1.1vh*var(--ui-scale))] leading-[calc(1.4vh*var(--ui-scale))] opacity-50">{k}</h2>
+            <h1 className="m-0 text-[calc(1.3vh*var(--ui-scale))] leading-[calc(1.6vh*var(--ui-scale))]">{v}</h1>
           </div>
         ))}
       </div>
@@ -153,8 +153,8 @@ export function Globe() {
   }, []);
 
   return (
-    <div className="rule-top flex w-full flex-col py-[0.645vh] tracking-[0.092vh] font-[var(--font-ui-light)]">
-      <h3 className="m-0 flex justify-between px-[0.46vh] text-[1.3vh]">
+    <div className="rule-top flex w-full flex-col py-[calc(0.645vh*var(--ui-scale))] tracking-[0.092vh] font-[var(--font-ui-light)]">
+      <h3 className="m-0 flex justify-between px-[calc(0.46vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))]">
         <span>WORLD VIEW</span>
         <span className="opacity-50">NO GEOIP</span>
       </h3>
@@ -205,22 +205,22 @@ export function ConnInfo({ n }: { n: Network | null }) {
   }, [n]);
 
   return (
-    <div className="rule-top py-[0.645vh] tracking-[0.092vh] font-[var(--font-ui-light)]">
-      <h3 className="m-0 flex justify-between px-[0.46vh] text-[1.3vh]">
+    <div className="rule-top py-[calc(0.645vh*var(--ui-scale))] tracking-[0.092vh] font-[var(--font-ui-light)]">
+      <h3 className="m-0 flex justify-between px-[calc(0.46vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))]">
         <span>NETWORK TRAFFIC</span>
         <span className="opacity-50">UP / DOWN</span>
       </h3>
-      <div className="flex justify-between px-[0.46vh] text-[1.3vh]">
+      <div className="flex justify-between px-[calc(0.46vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))]">
         <span className="opacity-50">
           TOTAL {n ? bytes(n.tx_total) : "—"} OUT, {n ? bytes(n.rx_total) : "—"} IN
         </span>
       </div>
-      <canvas ref={ref} className="my-[0.4vh] h-[9vh] w-full" />
-      <div className="flex justify-between px-[0.46vh] text-[1.3vh]">
+      <canvas ref={ref} className="my-[calc(0.4vh*var(--ui-scale))] h-[calc(9vh*var(--ui-scale))] w-full" />
+      <div className="flex justify-between px-[calc(0.46vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))]">
         <span>DOWN {n ? rate(n.rx_rate) : "—"}</span>
         <span className="opacity-70">UP {n ? rate(n.tx_rate) : "—"}</span>
       </div>
-      <div className="mt-[0.5vh] px-[0.46vh] text-[1.3vh]">
+      <div className="mt-[calc(0.5vh*var(--ui-scale))] px-[calc(0.46vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))]">
         <div className="flex justify-between">
           <span>SOCKETS</span>
           <span className="opacity-50">{n?.established ?? 0} ESTABLISHED</span>

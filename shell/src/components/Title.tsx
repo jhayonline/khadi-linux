@@ -13,7 +13,7 @@ export function Title({
   return (
     <h3 className="title rule-top">
       <span>{left}</span>
-      <span className="flex items-baseline gap-[0.3vh]">
+      <span className="flex items-baseline gap-[calc(0.3vh*var(--ui-scale))]">
         {right !== undefined && <span>{right}</span>}
         {action}
       </span>

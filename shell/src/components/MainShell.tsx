@@ -55,7 +55,7 @@ function Workspaces() {
           key={w.id}
           onClick={() => void gotoWorkspace(w.id)}
           title={`Workspace ${w.name}`}
-          className={`cursor-pointer border-0 border-l border-[rgba(var(--c),0.25)] px-[1.1vh] text-[1.2vh] tracking-[0.15vh] ${
+          className={`cursor-pointer border-0 border-l border-[rgba(var(--c),0.25)] px-[calc(1.1vh*var(--ui-scale))] text-[calc(1.2vh*var(--ui-scale))] tracking-[0.15vh] ${
             w.active
               ? "bg-[rgba(var(--c),0.18)] text-[rgb(var(--c))]"
               : w.windows > 0
@@ -143,7 +143,7 @@ export function MainShell({ theme }: { theme: Theme | null }) {
             <li
               key={i}
               onClick={() => setActive(i)}
-              className={`tab flex flex-1 cursor-pointer items-center justify-center py-[0.5vh] text-[1.4vh] tracking-[0.15vh] ${
+              className={`tab flex flex-1 cursor-pointer items-center justify-center py-[calc(0.5vh*var(--ui-scale))] text-[calc(1.4vh*var(--ui-scale))] tracking-[0.15vh] ${
                 i === active
                   ? "bg-[rgba(var(--c),0.15)] text-[rgb(var(--c))]"
                   : "text-[rgba(var(--c),0.35)]"
@@ -155,7 +155,7 @@ export function MainShell({ theme }: { theme: Theme | null }) {
         </ul>
         <Workspaces />
       </div>
-      <div ref={host} className="min-h-0 w-full flex-1 p-[0.74vh]" />
+      <div ref={host} className="min-h-0 w-full flex-1 p-[calc(0.74vh*var(--ui-scale))]" />
     </section>
   );
 }

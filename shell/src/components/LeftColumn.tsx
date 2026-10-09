@@ -4,7 +4,7 @@
 // digits in 2.3vh cells, sysinfo is 5.556vh at 1.111vh, the rest is 1.3vh on a
 // 1.5vh line. Where a number looks arbitrary it is because it is eDEX's.
 
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { System } from "../lib/ipc";
 import { bytes, clockDur, gib } from "../lib/format";
 
@@ -29,8 +29,8 @@ export function Clock() {
     return () => clearInterval(t);
   }, []);
   return (
-    <div className="rule-top flex h-[7.41vh] pt-[0.645vh] font-[var(--font-ui-light)]">
-      <h1 ref={ref} className="m-auto text-[4vh] leading-none [&_span]:inline-block [&_span]:w-[2.3vh] [&_span]:text-center [&_em]:inline-block [&_em]:w-[2.5vh] [&_em]:not-italic [&_em]:text-center" />
+    <div className="rule-top flex h-[calc(7.41vh*var(--ui-scale))] pt-[calc(0.645vh*var(--ui-scale))] font-[var(--font-ui-light)]">
+      <h1 ref={ref} className="m-auto text-[calc(4vh*var(--ui-scale))] leading-none [&_span]:inline-block [&_span]:w-[calc(2.3vh*var(--ui-scale))] [&_span]:text-center [&_em]:inline-block [&_em]:w-[calc(2.5vh*var(--ui-scale))] [&_em]:not-italic [&_em]:text-center" />
     </div>
   );
 }
@@ -46,9 +46,9 @@ export function SysInfo({ s }: { s: System | null }) {
     ["TASKS", s ? String(s.tasks) : "—"],
   ];
   return (
-    <div className="rule-top flex h-[5.556vh] flex-row items-center justify-between text-[1.111vh] tracking-[0.092vh] font-[var(--font-ui-light)]">
+    <div className="rule-top flex h-[calc(5.556vh*var(--ui-scale))] flex-row items-center justify-between text-[calc(1.111vh*var(--ui-scale))] tracking-[0.092vh] font-[var(--font-ui-light)]">
       {cells.map(([k, v]) => (
-        <div key={k} className="flex h-full flex-col items-start justify-around box-border px-[0.46vh] py-[0.925vh]">
+        <div key={k} className="flex h-full flex-col items-start justify-around box-border px-[calc(0.46vh*var(--ui-scale))] py-[calc(0.925vh*var(--ui-scale))]">
           <h1 className="m-0 opacity-50">{k}</h1>
           <h2 className="m-0">{v}</h2>
         </div>
@@ -66,12 +66,12 @@ export function Hardware({ s }: { s: System | null }) {
     ["CHASSIS", s?.chassis || "—"],
   ];
   return (
-    <div className="rule-top flex py-[0.645vh] tracking-[0.092vh] font-[var(--font-ui-light)]">
+    <div className="rule-top flex py-[calc(0.645vh*var(--ui-scale))] tracking-[0.092vh] font-[var(--font-ui-light)]">
       <div className="flex w-full flex-row flex-wrap items-center justify-evenly">
         {cells.map(([k, v]) => (
           <div key={k} className="text-left">
-            <h2 className="m-0 text-[1.3vh] leading-[1.5vh] opacity-50">{k}</h2>
-            <h1 className="m-0 max-w-[6vw] truncate text-[1.3vh] leading-[1.5vh]">{v}</h1>
+            <h2 className="m-0 text-[calc(1.3vh*var(--ui-scale))] leading-[calc(1.5vh*var(--ui-scale))] opacity-50">{k}</h2>
+            <h1 className="m-0 max-w-[6vw] truncate text-[calc(1.3vh*var(--ui-scale))] leading-[calc(1.5vh*var(--ui-scale))]">{v}</h1>
           </div>
         ))}
       </div>
@@ -110,7 +110,7 @@ function CoreGraph({ a, b }: { a: number[]; b: number[] }) {
     draw(a, 1);
     draw(b, 0.6);
   }, [a, b]);
-  return <canvas ref={ref} className="dashed-top dashed-bottom my-[0.46vh] h-[4.167vh] w-[76%]" />;
+  return <canvas ref={ref} className="dashed-top dashed-bottom my-[calc(0.46vh*var(--ui-scale))] h-[calc(4.167vh*var(--ui-scale))] w-[76%]" />;
 }
 
 export function CpuInfo({ s }: { s: System | null }) {
@@ -118,28 +118,28 @@ export function CpuInfo({ s }: { s: System | null }) {
   const pairs = Math.ceil(cores.length / 2);
   const avg = (v: number[] | undefined) => (v && v.length ? v[v.length - 1] : 0);
   return (
-    <div className="rule-top flex py-[0.645vh] tracking-[0.092vh] font-[var(--font-ui-light)]">
+    <div className="rule-top flex py-[calc(0.645vh*var(--ui-scale))] tracking-[0.092vh] font-[var(--font-ui-light)]">
       <div className="flex w-full flex-col items-center justify-between">
-        <h1 className="m-0 mb-[-1.5vh] w-[98%] pl-[2%] text-[1.48vh]">
+        <h1 className="m-0 mb-[-1.5vh] w-[98%] pl-[2%] text-[calc(1.48vh*var(--ui-scale))]">
           CPU USAGE
-          <i className="relative bottom-[1.9vh] inline-block w-full text-right text-[1.2vh] not-italic opacity-50">
+          <i className="relative bottom-[calc(1.9vh*var(--ui-scale))] inline-block w-full text-right text-[calc(1.2vh*var(--ui-scale))] not-italic opacity-50">
             {s?.cpu_model || ""}
           </i>
         </h1>
         {Array.from({ length: pairs }, (_, i) => (
-          <div key={i} className="my-[0.278vh] flex w-full flex-row items-center justify-between">
-            <div className="text-[1.3vh] leading-[1.5vh]">
-              <h1 className="m-0 text-[1.3vh] leading-[1.5vh]">
+          <div key={i} className="my-[calc(0.278vh*var(--ui-scale))] flex w-full flex-row items-center justify-between">
+            <div className="text-[calc(1.3vh*var(--ui-scale))] leading-[calc(1.5vh*var(--ui-scale))]">
+              <h1 className="m-0 text-[calc(1.3vh*var(--ui-scale))] leading-[calc(1.5vh*var(--ui-scale))]">
                 #{i * 2 + 1}-{i * 2 + 2}
               </h1>
-              <i className="mt-[0.5vh] text-[1.3vh] not-italic opacity-50">
+              <i className="mt-[calc(0.5vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))] not-italic opacity-50">
                 Avg. {((avg(cores[i * 2]) + avg(cores[i * 2 + 1] ?? cores[i * 2])) / 2).toFixed(0)}%
               </i>
             </div>
             <CoreGraph a={cores[i * 2] ?? []} b={cores[i * 2 + 1] ?? []} />
           </div>
         ))}
-        <div className="dashed-top flex w-[95%] flex-row items-center justify-between pt-[0.838vh]">
+        <div className="dashed-top flex w-[95%] flex-row items-center justify-between pt-[calc(0.838vh*var(--ui-scale))]">
           {([
             ["TEMP", s?.temp_c != null ? `${s.temp_c.toFixed(0)}°C` : "—"],
             ["CORES", s ? String(s.cores_total) : "—"],
@@ -147,8 +147,8 @@ export function CpuInfo({ s }: { s: System | null }) {
             ["HOST", s?.host || "—"],
           ] as [string, string][]).map(([k, v]) => (
             <div key={k} className="w-[20%] text-center">
-              <h1 className="m-0 text-[1.3vh] leading-[1.5vh]">{k}</h1>
-              <i className="text-[1.3vh] not-italic opacity-50">{v}</i>
+              <h1 className="m-0 text-[calc(1.3vh*var(--ui-scale))] leading-[calc(1.5vh*var(--ui-scale))]">{k}</h1>
+              <i className="text-[calc(1.3vh*var(--ui-scale))] not-italic opacity-50">{v}</i>
             </div>
           ))}
         </div>
@@ -177,7 +177,7 @@ const MemCells = memo(function MemCells({ used, cells, cols, step }: {
     [used, cells, step],
   );
   return (
-    <div className="my-[0.5vh] grid gap-[0.14vh] px-[0.46vh]" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+    <div className="my-[calc(0.5vh*var(--ui-scale))] grid gap-[0.14vh] px-[calc(0.46vh*var(--ui-scale))]" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
       {nodes}
     </div>
   );
@@ -196,17 +196,17 @@ export function RamWatcher({ s }: { s: System | null }) {
   const step = 2 * Math.round((cells * 0.309) / 2) + 1;
   const swap = s && s.swap_total ? s.swap_used / s.swap_total : 0;
   return (
-    <div className="rule-top py-[0.645vh] tracking-[0.092vh] font-[var(--font-ui-light)]">
-      <h3 className="m-0 flex justify-between px-[0.46vh] text-[1.3vh]">
+    <div className="rule-top py-[calc(0.645vh*var(--ui-scale))] tracking-[0.092vh] font-[var(--font-ui-light)]">
+      <h3 className="m-0 flex justify-between px-[calc(0.46vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))]">
         <span>MEMORY</span>
         <span className="opacity-50">
           {s ? `USING ${gib(s.mem_used).toFixed(1)} OUT OF ${gib(s.mem_total).toFixed(1)} GIB` : ""}
         </span>
       </h3>
       <MemCells used={used} cells={cells} cols={COLS} step={step} />
-      <div className="flex items-center gap-[0.6vh] px-[0.46vh] text-[1.3vh]">
+      <div className="flex items-center gap-[calc(0.6vh*var(--ui-scale))] px-[calc(0.46vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))]">
         <span>SWAP</span>
-        <div className="h-[0.56vh] flex-1 bg-[rgba(var(--c),0.2)]">
+        <div className="h-[calc(0.56vh*var(--ui-scale))] flex-1 bg-[rgba(var(--c),0.2)]">
           <div className="h-full bg-[rgb(var(--c))]" style={{ width: `${swap * 100}%` }} />
         </div>
         <span className="opacity-50">{s ? `${gib(s.swap_used).toFixed(1)} GiB` : ""}</span>
@@ -217,16 +217,45 @@ export function RamWatcher({ s }: { s: System | null }) {
 
 /* ----------------------------------------------------------- mod_toplist */
 
+/** How many whole rows fit in `ref`, at its own line height.
+ *
+ * A fixed count cannot be right: the column's height depends on the screen,
+ * and the row height depends on `--ui-scale`. Nine rows fitted at 1080 and
+ * clipped the ninth in half at 834 — and a half-drawn row reads as a bug, not
+ * as "there is more". So it is measured. */
+function useRowsThatFit(ref: React.RefObject<HTMLDivElement | null>): number {
+  const [n, setN] = useState(6);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const line = parseFloat(getComputedStyle(el).lineHeight);
+      if (!Number.isFinite(line) || line <= 0) return;
+      setN(Math.max(1, Math.floor(el.clientHeight / line)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return n;
+}
+
 export function TopList({ s }: { s: System | null }) {
+  const list = useRef<HTMLDivElement>(null);
+  const rows = useRowsThatFit(list);
   return (
-    <div className="rule-top flex w-full flex-col py-[0.645vh] tracking-[0.092vh] font-[var(--font-ui-light)]">
-      <h3 className="m-0 flex justify-between px-[0.46vh] text-[1.3vh]">
+    <div className="rule-top flex min-h-0 w-full flex-1 flex-col py-[calc(0.645vh*var(--ui-scale))] tracking-[0.092vh] font-[var(--font-ui-light)]">
+      <h3 className="m-0 flex shrink-0 justify-between px-[calc(0.46vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))]">
         <span>TOP PROCESSES</span>
         <span className="opacity-50">PID | NAME | CPU | MEM</span>
       </h3>
-      <div className="mt-[0.4vh] overflow-hidden px-[0.46vh] text-[1.3vh] leading-[1.75vh]">
-        {(s?.procs ?? []).slice(0, 9).map((p, i) => (
-          <div key={`${p.pid}-${i}`} className="flex justify-between gap-[0.4vh]">
+      <div
+        ref={list}
+        className="mt-[calc(0.4vh*var(--ui-scale))] min-h-0 flex-1 overflow-hidden px-[calc(0.46vh*var(--ui-scale))] text-[calc(1.3vh*var(--ui-scale))] leading-[calc(1.75vh*var(--ui-scale))]"
+      >
+        {(s?.procs ?? []).slice(0, rows).map((p, i) => (
+          <div key={`${p.pid}-${i}`} className="flex justify-between gap-[calc(0.4vh*var(--ui-scale))]">
             <span className="w-[22%] opacity-50">{p.pid}</span>
             <span className="flex-1 truncate font-[var(--font-ui)]">{p.name}</span>
             <span className="w-[18%] text-right opacity-70">{p.cpu.toFixed(1)}%</span>

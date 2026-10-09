@@ -28,6 +28,19 @@
   --ground: #05080d;
   --grid: #262828;
   --rule: rgba(var(--c), 0.3);
+
+  /* ONE KNOB FOR THE WHOLE TYPE SCALE.
+   *
+   * eDEX sizes everything in vh and those numbers are ported literally, but it
+   * set them for United Sans — a wide face with a tall x-height. Khadi
+   * substitutes Rajdhani, which is condensed and OFL where United Sans is
+   * commercial, and at an identical vh it simply reads smaller. 1.3 is the
+   * difference measured against the reference, not a preference.
+   *
+   * Set this to 1 for eDEX's literal sizes. Every type, icon and padding value
+   * in the UI multiplies by it; hairlines and the two big layout heights do
+   * not, because those are composition rather than type. */
+  --ui-scale: 1.3;
 }
 
 @font-face {
@@ -94,7 +107,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: 1.02vh;
+  font-size: calc(1.02vh * var(--ui-scale));
   letter-spacing: 0.092vh;
   padding: 0 0.925vh;
   margin: 0;

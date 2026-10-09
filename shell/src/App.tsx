@@ -124,13 +124,13 @@ export default function App() {
   }, [toggle]);
 
   return (
-    <div className="flex h-full w-full flex-col pt-[1.85vh]">
+    <div className="flex h-full w-full flex-col pt-[calc(1.85vh*var(--ui-scale))]">
       <div className="flex min-h-0 flex-1 flex-row">
         {/* ------------------------------------------------ mod_column_left */}
         {fold.left ? (
           <CollapsedRail label="SYSTEM" side="left" onClick={() => toggle("left")} />
         ) : (
-          <section className="flex w-[17%] shrink-0 flex-col overflow-hidden box-border p-[1.39vh] pt-0">
+          <section className="flex w-[20%] shrink-0 flex-col overflow-hidden box-border p-[calc(1.39vh*var(--ui-scale))] pt-0">
             <Title
               left="PANEL"
               right="SYSTEM"
@@ -146,7 +146,7 @@ export default function App() {
         )}
 
         {/* ------------------------------------------------------ main_shell */}
-        <section className="min-w-0 flex-1 box-border p-[0.74vh] pt-0">
+        <section className="min-w-0 flex-1 box-border p-[calc(0.74vh*var(--ui-scale))] pt-0">
           <MainShell theme={theme} />
         </section>
 
@@ -154,7 +154,7 @@ export default function App() {
         {fold.right ? (
           <CollapsedRail label="NETWORK" side="right" onClick={() => toggle("right")} />
         ) : (
-          <section className="flex w-[17%] shrink-0 flex-col overflow-hidden box-border p-[1.39vh] pt-0">
+          <section className="flex w-[20%] shrink-0 flex-col overflow-hidden box-border p-[calc(1.39vh*var(--ui-scale))] pt-0">
             <Title
               left="PANEL"
               right="NETWORK"
@@ -171,7 +171,7 @@ export default function App() {
       {fold.bottom ? (
         <CollapsedRail label="FILESYSTEM" side="bottom" onClick={() => toggle("bottom")} />
       ) : (
-        <section className="box-border flex h-[22vh] shrink-0 flex-col px-[1.39vh] pb-[1vh]">
+        <section className="box-border flex h-[22vh] shrink-0 flex-col px-[calc(1.39vh*var(--ui-scale))] pb-[calc(1vh*var(--ui-scale))]">
           <FilesystemPanel
             fs={fs}
             action={<CollapseButton side="bottom" collapsed={false} onClick={() => toggle("bottom")} />}
