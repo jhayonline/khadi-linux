@@ -78,9 +78,15 @@ export function MainShell({ theme }: { theme: Theme | null }) {
   useEffect(() => {
     if (!host.current || !theme) return;
     const id = `shell-${active}`;
+    // The chrome scales with --ui-scale and the terminal did not, so the
+    // shell text read a third smaller than every label around it.
+    const uiScale =
+      Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"),
+      ) || 1;
     const term = new Terminal({
       fontFamily: `"${theme.mono}", monospace`,
-      fontSize: 14,
+      fontSize: Math.round(14 * uiScale),
       allowTransparency: true,
       cursorBlink: true,
       // The palette is the theme's, so the shell inside matches the chrome
@@ -118,6 +124,21 @@ export function MainShell({ theme }: { theme: Theme | null }) {
 
     term.onData((d) => void ptyWrite(id, d));
 
+    // THE TERMINAL IS ALWAYS THE KEYBOARD'S DESTINATION. Nothing called
+    // focus(), so on launch the keystrokes went to <body> and the shell
+    // looked dead until you happened to click inside it. eDEX has the same
+    // rule and enforces it the same way: any click anywhere comes back to the
+    // terminal once the thing clicked has had its event. The tab strip, the
+    // workspace buttons and the filesystem are all buttons, so they still
+    // work — you just do not have to click twice to resume typing.
+    //
+    // Safe to do unconditionally HERE and nowhere else: this window has no
+    // text field. The greeter does, and it is a different window.
+    term.focus();
+    const refocus = () => term.focus();
+    window.addEventListener("click", refocus);
+    window.addEventListener("focus", refocus);
+
     const ro = new ResizeObserver(() => {
       fit.fit();
       void ptyResize(id, term.cols, term.rows);
@@ -127,6 +148,8 @@ export function MainShell({ theme }: { theme: Theme | null }) {
     return () => {
       disposed = true;
       ro.disconnect();
+      window.removeEventListener("click", refocus);
+      window.removeEventListener("focus", refocus);
       unlisten.forEach((f) => f());
       term.dispose();
     };
