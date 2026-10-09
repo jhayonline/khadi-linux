@@ -119,21 +119,61 @@ ovmf_code() {
     die "UEFI firmware not found. Run: sudo pacman -S edk2-ovmf"
 }
 
+# How many bytes the disk image actually occupies. A freshly created qcow2 is
+# a few hundred KiB of metadata; past a megabyte, something has been written
+# to it, which is how `run` decides whether Arch is installed yet.
+#
+# IT MUST FAIL RATHER THAN GUESS. The first version piped qemu-img straight
+# into python with no guard. A running VM holds a write lock on the image, so
+# qemu-img could not open it, python read an empty stdin and dumped a
+# traceback, and the empty string it printed compared as zero in the test
+# below. Zero bytes used reads as "not installed yet" — so the one path that
+# offers the Arch installer over a disk that already has Arch on it was
+# reached by a probe failing, which is exactly backwards.
+disk_used_bytes() {
+    local json
+    json="$(qemu-img info --output=json "$DISK" 2>/dev/null)" || return 1
+    [[ -n "$json" ]] || return 1
+    printf '%s' "$json" | python3 -c \
+        'import sys,json
+try: print(json.load(sys.stdin)["actual-size"])
+except Exception: sys.exit(1)' 2>/dev/null
+}
+
 cmd_run() {
     need_qemu
     [[ -f "$DISK" ]] || die "No disk yet. Run: khadi-vm create"
-    local boot=() code; code="$(ovmf_code)"
-    if [[ "${1:-}" == "--iso" || ! -s "$DISK" ]] || [[ "$(qemu-img info --output=json "$DISK" | python3 -c 'import sys,json;print(json.load(sys.stdin)["actual-size"])')" -lt 1000000 ]]; then
+    # One VM, one disk. A second would get as far as qemu's own write lock and
+    # fail there, after printing enough to look like it was starting.
+    local running
+    if running="$(vm_pid)"; then
+        die "Already running (pid $running).
+    ./vm/khadi-vm shot screen.ppm   look at what it is showing
+    ./vm/khadi-vm ssh               get a shell in it
+    ./vm/khadi-vm stop              shut it down"
+    fi
+    local boot=() code used; code="$(ovmf_code)"
+    if [[ "${1:-}" == "--iso" ]]; then
         [[ -f "$ISO" ]] || die "No ISO yet. Run: khadi-vm fetch"
         boot=(-cdrom "$ISO" -boot d)
-        echo "  Booting the installer ISO."
+        echo "  Booting the installer ISO (asked for with --iso)."
+    elif ! used="$(disk_used_bytes)"; then
+        die "Cannot read $DISK — qemu-img could not open it.
+  Something else is holding it open, or it is corrupt. Refusing to guess:
+  guessing here means offering the installer over an installed system.
+  Force the installer with: khadi-vm run --iso"
+    elif (( used < 1000000 )); then
+        [[ -f "$ISO" ]] || die "No ISO yet. Run: khadi-vm fetch"
+        boot=(-cdrom "$ISO" -boot d)
+        echo "  Disk is empty ($used bytes used). Booting the installer ISO."
     else
         echo "  Booting the installed system."
     fi
     echo "  SSH will be on localhost:$SSH_PORT once sshd runs in the guest."
     echo
-    # virtio-gpu-gl + virgl gives the guest a real GPU, which Hyprland needs.
-    # Without it, set WLR_RENDERER=pixman inside the guest to software-render.
+    # virtio-gpu-gl + virgl gives the guest a GPU to render through. khadi-comp
+    # drives DRM and renders with EGL either way; without this it resolves to
+    # llvmpipe and every frame is rasterised on the guest's CPU.
     #
     # EGL vendor selection matters on hybrid graphics. glvnd reads
     # /usr/share/glvnd/egl_vendor.d/ in name order, so 10_nvidia.json wins over
