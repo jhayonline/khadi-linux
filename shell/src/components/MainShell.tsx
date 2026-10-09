@@ -8,6 +8,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { listen } from "@tauri-apps/api/event";
 import "@xterm/xterm/css/xterm.css";
+import { attachCursorTrail, KITTY_DEFAULTS } from "../lib/cursorTrail";
 import {
   getWorkspaces,
   gotoWorkspace,
@@ -78,17 +79,20 @@ export function MainShell({ theme }: { theme: Theme | null }) {
   useEffect(() => {
     if (!host.current || !theme) return;
     const id = `shell-${active}`;
+    const css = getComputedStyle(document.documentElement);
     // The chrome scales with --ui-scale and the terminal did not, so the
     // shell text read a third smaller than every label around it.
-    const uiScale =
-      Number.parseFloat(
-        getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"),
-      ) || 1;
+    const uiScale = Number.parseFloat(css.getPropertyValue("--ui-scale")) || 1;
     const term = new Terminal({
       fontFamily: `"${theme.mono}", monospace`,
       fontSize: Math.round(14 * uiScale),
       allowTransparency: true,
-      cursorBlink: true,
+      // Block, and no blink — kitty.conf has `cursor_shape block` and
+      // `cursor_blink_interval 0`. A blinking cursor also fights the trail:
+      // the smear is drawn from where the cursor WAS, and a cursor that is
+      // invisible half the time leaves the smear pointing at nothing.
+      cursorStyle: "block",
+      cursorBlink: false,
       // The palette is the theme's, so the shell inside matches the chrome
       // around it. khadi-theme already resolves these; nothing is re-derived.
       theme: {
@@ -145,12 +149,44 @@ export function MainShell({ theme }: { theme: Theme | null }) {
     });
     ro.observe(host.current);
 
+    // The smear. xterm.js has no cursor trail of its own, so it is drawn on
+    // an overlay canvas from the cursor's cell position — see cursorTrail.ts
+    // for why the numbers are kitty's rather than new ones.
+    const detachTrail = attachCursorTrail(
+      host.current,
+      () => {
+        // xterm does not expose cell geometry publicly; this is the same
+        // internal the fit addon reads, and it is guarded because a private
+        // field is a thing that can vanish in a minor release. No geometry
+        // means no trail, not a crash.
+        const dims = (term as unknown as {
+          _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } };
+        })._core?._renderService?.dimensions?.css?.cell;
+        if (!dims?.width || !dims?.height) return null;
+        const b = term.buffer.active;
+        return {
+          x: b.cursorX * dims.width,
+          y: b.cursorY * dims.height,
+          w: dims.width,
+          h: dims.height,
+        };
+      },
+      { ...KITTY_DEFAULTS, rgb: css.getPropertyValue("--c").trim() || "170,207,209" },
+      // The terminal's own cursor-move event, so the stillness gate measures
+      // real gaps between moves rather than the gaps between frames.
+      (cb) => {
+        const d = term.onCursorMove(cb);
+        return () => d.dispose();
+      },
+    );
+
     return () => {
       disposed = true;
       ro.disconnect();
       window.removeEventListener("click", refocus);
       window.removeEventListener("focus", refocus);
       unlisten.forEach((f) => f());
+      detachTrail();
       term.dispose();
     };
     // Re-mounting per tab keeps one Terminal per pty, which is what xterm
