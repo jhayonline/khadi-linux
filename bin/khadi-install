@@ -349,20 +349,30 @@ if (( SYSTEM )); then
     # The greeter runs as the `greeter` user, which cannot read anyone's home
     # directory. A link into ~/.local/bin is therefore useless to it: both the
     # binary and the theme have to exist somewhere system-wide.
-    say "install khadi-greet -> /usr/local/bin/khadi-greet"
+    # khadi-shell, because the greeter is `khadi-shell --greeter` under cage —
+    # the same binary and the same stylesheet as the desktop. khadi-greet, the
+    # ratatui VT greeter it replaced, is still built and still installed to
+    # ~/.local/bin; it is not what greetd runs any more.
+    say "install khadi-shell -> /usr/local/bin/khadi-shell"
     say "install resolved theme -> /etc/khadi/theme.toml"
+    say "install fonts -> /usr/local/share/fonts/khadi"
     if (( APPLY )); then
-        if [[ -x "$ROOT/target/release/khadi-greet" ]]; then
-            sudo install -Dm755 "$ROOT/target/release/khadi-greet" /usr/local/bin/khadi-greet
+        if [[ -x "$ROOT/target/release/khadi-shell" ]]; then
+            sudo install -Dm755 "$ROOT/target/release/khadi-shell" /usr/local/bin/khadi-shell
         else
-            say "WARNING: khadi-greet is not built — the login screen will not start."
-            if [[ "$b" == khadi-shell ]]; then
-                say "         cd shell && npm install && npm run tauri build, then re-run"
-            else
-                say "         cargo build --release, then re-run"
-            fi
+            say "WARNING: khadi-shell is not built — the login screen will not start."
+            say "         cd shell && npm install && npm run tauri build, then re-run"
         fi
         sudo install -Dm644 "$ROOT/config/khadi/theme.toml" /etc/khadi/theme.toml
+        # AND THE FONTS. Same reason as the theme, found the same way: the
+        # greeter user cannot read anyone's home, and the user-level install
+        # puts the faces in ~/.local/share/fonts. The VT greeter never cared
+        # — a console has one font and it is the console's — but the graphical
+        # one fell back to whatever fontconfig had left, and the clock came up
+        # in a face whose digits were not the digits.
+        sudo install -d /usr/local/share/fonts/khadi
+        sudo install -m644 "$ROOT"/fonts/*.ttf /usr/local/share/fonts/khadi/
+        sudo fc-cache -f >/dev/null 2>&1 || true
     fi
 
     # The boot splash. Its own script because it is a lot of steps and worth

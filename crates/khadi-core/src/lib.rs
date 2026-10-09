@@ -5,6 +5,7 @@
 //! widget tree belongs in khadi-hud, not here.
 pub mod browse;
 pub mod disks;
+pub mod greetd;
 pub mod hypr;
 pub mod metrics;
 pub mod net;

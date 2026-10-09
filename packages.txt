@@ -13,6 +13,9 @@ mako               # notifications
 hyprlock           # lock screen
 hypridle           # what locks it when you walk away
 greetd             # login daemon
+cage               # Wayland kiosk compositor: one fullscreen window and no
+                   # way out of it, which is what a greeter needs. greetd runs
+                   # `cage -s -- khadi-shell --greeter`.
 plymouth           # the boot splash. PLAN.md section 8: the first impression
                    # starts at boot, not after reboot. Installed by the
                    # separate `khadi-boot`, which needs root.

@@ -8,6 +8,11 @@
 //! **greetd does the authentication.** This process never touches PAM; it
 //! passes a string along and is told success or failure. That boundary is why
 //! a hand-written greeter is a reasonable thing to own at all.
+//!
+//! It lives in khadi-core rather than in a greeter because two of them speak
+//! it now: the VT one and `khadi-shell --greeter`. A protocol with a length
+//! prefix whose byte order is easy to get wrong is exactly the thing not to
+//! implement twice.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -40,7 +45,7 @@ pub struct Greetd {
 impl Greetd {
     pub fn connect() -> Result<Self> {
         let path = std::env::var("GREETD_SOCK")
-            .context("GREETD_SOCK is not set — khadi-greet is a greetd greeter, not a login shell")?;
+            .context("GREETD_SOCK is not set — this is a greetd greeter, not a login shell")?;
         let sock = UnixStream::connect(&path)
             .with_context(|| format!("connect {path}"))?;
         Ok(Self { sock })

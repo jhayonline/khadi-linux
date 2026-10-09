@@ -9,6 +9,7 @@
 //! chatty IPC boundary is the usual way a webview UI ends up janky, and the
 //! panels refresh on a timer anyway.
 
+mod greet;
 mod pty;
 
 use std::sync::{
@@ -18,7 +19,7 @@ use std::sync::{
 
 use khadi_core::{browse::Browser, disks::Filesystem, metrics::Metrics, net::Network, Theme};
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 pub struct Sources {
     metrics: Mutex<Metrics>,
@@ -414,6 +415,34 @@ pub fn selftest() -> i32 {
     bad
 }
 
+/// Greeter mode: a different window, a different — and much shorter —
+/// command list. See `greet.rs` for why the list is the security boundary.
+pub fn run_greeter() {
+    tauri::Builder::default()
+        .setup(|app| {
+            app.manage(greet::Session::default());
+            // Label "greeter". main.tsx reads it before it renders anything,
+            // so the login screen never shows a frame of the desktop first.
+            WebviewWindowBuilder::new(app, "greeter", WebviewUrl::App("index.html".into()))
+                .title("Khadi")
+                .decorations(false)
+                .fullscreen(true)
+                .build()?;
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            theme,
+            greet::greet_begin,
+            greet::greet_answer,
+            greet::greet_start,
+            greet::greet_cancel,
+            greet::greet_session_cmd,
+            greet::greet_host,
+        ])
+        .run(tauri::generate_context!())
+        .expect("khadi-shell --greeter failed to start");
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -421,6 +450,11 @@ pub fn run() {
         .setup(|app| {
             app.manage(Sources::default());
             app.manage(pty::Ptys::default());
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                .title("Khadi")
+                .decorations(false)
+                .inner_size(1920.0, 1080.0)
+                .build()?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -13,7 +13,6 @@
 //! the string, and clears the buffer as soon as it is sent.
 
 mod chrome;
-mod greetd;
 
 use anyhow::Result;
 use chrono::Local;
@@ -22,7 +21,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use greetd::{Greetd, Request, Response};
+use khadi_core::greetd::{Greetd, Request, Response};
 use khadi_core::Theme;
 use chrome::{col, BigClock, Header};
 use ratatui::{

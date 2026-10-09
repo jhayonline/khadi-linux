@@ -10,22 +10,18 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [
-      {
-        "title": "Khadi",
-        "width": 1920,
-        "height": 1080,
-        "decorations": false,
-        "resizable": true,
-        "fullscreen": false,
-        "transparent": false
-      }
-    ],
-    "security": { "csp": null }
+    "windows": [],
+    "security": {
+      "csp": null
+    }
   },
   "bundle": {
     "active": true,
-    "targets": ["deb"],
-    "icon": ["icons/icon.png"]
+    "targets": [
+      "deb"
+    ],
+    "icon": [
+      "icons/icon.png"
+    ]
   }
 }
