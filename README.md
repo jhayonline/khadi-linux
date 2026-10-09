@@ -1,23 +1,27 @@
-# DEs-UI
+# Khadi
 
-A sci-fi terminal desktop for Linux, written in Rust: a Wayland compositor and a
-shell that run as their own login session. It began as a rewrite of
-[eDEX-UI](https://github.com/GitSquared/edex-ui).
+A keyboard-driven, terminal-first Arch desktop, written in Rust: a Wayland
+compositor and a shell that run as their own login session.
 
-The programs, and the files they keep, still carry the working name `edex-rs`.
+Khadi is [DEs-UI](https://github.com/coxy-trophy/des-ui) by Coxwell Wussah,
+renamed and made to build and install on Arch. That project began as a rewrite
+of [eDEX-UI](https://github.com/GitSquared/edex-ui), and almost everything good
+here is his: the compositor, the shell, the settings, the launcher, the globe.
+Khadi's own history before this is a different desktop — Hyprland, with the
+shell in a webview — and is at the tag `pre-des-ui`.
 
 It has two programs:
 
-- **edex-rs** (`shell/`) — the interface: terminal, system panels, file browser.
-- **edex-comp** (`compositor/`) — a Wayland compositor that shows the shell
+- **khadi** (`shell/`) — the interface: terminal, system panels, file browser.
+- **khadi-comp** (`compositor/`) — a Wayland compositor that shows the shell
   fullscreen and places other applications in the middle of its frame.
 
 ## Try it in a window
 
     cargo build
-    ./target/debug/edex-comp                      # the whole desktop
-    ./target/debug/edex-comp -- --theme blade     # arguments after -- go to the shell
-    ./target/debug/edex-rs --windowed             # the shell on its own
+    ./target/debug/khadi-comp                      # the whole desktop
+    ./target/debug/khadi-comp -- --theme blade     # arguments after -- go to the shell
+    ./target/debug/khadi --windowed             # the shell on its own
 
 Open applications with the launcher, or by starting them from the terminal. Hold
 Super (or Ctrl+Alt, which works when running in a window):
@@ -48,12 +52,12 @@ Otherwise the frame is on a laptop's own panel and the others extend to its righ
 Each further display shows its applications at full size, split or not.
 Applications open on the display the pointer is on.
 
-`edex-rs --list-apps` prints what the launcher offers.
+`khadi --list-apps` prints what the launcher offers.
 
 The globe marks this machine and the places it has connections open to. Positions
 come from looking addresses up at get.geojs.io, which tells that service the public
 addresses this machine talks to; each is asked about once and kept in
-`~/.cache/edex-rs/places.tsv`. Your own position is guessed from your address
+`~/.cache/khadi/places.tsv`. Your own position is guessed from your address
 unless you set it.
 
 ## Settings
@@ -77,24 +81,24 @@ Esc closes. Changes apply at once and are saved.
 
 A display change is tried for 15 seconds and kept only if you confirm it; otherwise
 it goes back by itself, so a mode your monitor cannot show does not strand you.
-Confirmed layouts are saved in `~/.config/edex-rs/displays`, one per set of
+Confirmed layouts are saved in `~/.config/khadi/displays`, one per set of
 monitors, and come before GNOME's saved layout.
 
-The rest are kept in `~/.config/edex-rs/config` as `key = value` lines, which can also
+The rest are kept in `~/.config/khadi/config` as `key = value` lines, which can also
 be edited by hand. The compositor reads the keyboard, mouse and touchpad
 settings from the same file. Network and Bluetooth go through `nmcli` and
 `bluetoothctl`; a Wi-Fi password is handed to `nmcli` on its command line. Two can be set from a terminal:
 
-    edex-rs --set-location 48.8566,2.3522,Paris   # or: --set-location auto
-    edex-rs --geo off                             # no lookups at all; on to resume
+    khadi --set-location 48.8566,2.3522,Paris   # or: --set-location auto
+    khadi --geo off                             # no lookups at all; on to resume
 
-X11 applications run through Xwayland, which `edex-comp` starts and manages; the
+X11 applications run through Xwayland, which `khadi-comp` starts and manages; the
 clipboard is shared between them and Wayland applications.
 
 The look is called Signal (`shell/src/ui.rs`): fixed greys, two typefaces, and one
 accent colour. A theme sets that accent and the terminal's colours, in the JSON
 format eDEX-UI uses, so its theme files work here. `themes/` holds the built-in
-one; your own go in `~/.config/edex-rs/themes/`.
+one; your own go in `~/.config/khadi/themes/`.
 
 ## Install as a login session
 
@@ -110,13 +114,13 @@ up as a linker error naming a symbol rather than a package.
 Arch ships no display manager, so nothing will offer the session until one is
 installed. See the note at the end of `packages.txt`.
 
-Then log out and choose **DEs-UI** from the session menu on the login screen.
+Then log out and choose **Khadi** from the session menu on the login screen.
 Exiting the last shell, or Ctrl+Shift+Q, ends the session. `./uninstall.sh`
 removes it again.
 
-In the session, `edex-comp` drives the displays and input devices itself (one GPU,
+In the session, `khadi-comp` drives the displays and input devices itself (one GPU,
 every monitor connected to it, including ones plugged in later). If that fails in the first seconds it falls back to running inside
-`cage`, and the reason is in `~/.local/state/edex-rs/session.log`. What applications started
+`cage`, and the reason is in `~/.local/state/khadi/session.log`. What applications started
 from the launcher print goes to `apps.log` next to it.
 
 Ways out if something goes wrong: **Ctrl+Alt+Backspace** ends the session, and
@@ -169,9 +173,10 @@ Ways out if something goes wrong: **Ctrl+Alt+Backspace** ends the session, and
 
 ## Licence
 
-MIT; see `LICENSE`. `compositor/` is derived from Smithay's `smallvil` example, also
-MIT. The bundled typefaces, Chakra Petch and JetBrains Mono (`shell/assets/fonts/`),
+MIT; see `LICENSE`, which is DEs-UI's and keeps Coxwell Wussah's copyright
+notice, as the licence requires. `compositor/` is derived from Smithay's
+`smallvil` example, also MIT. The bundled typefaces, Chakra Petch and JetBrains Mono (`shell/assets/fonts/`),
 are under the SIL Open Font License.
 
 eDEX-UI's own theme files are GPL-3.0 and are not part of this repository. They
-work as themes here: copy them into `~/.config/edex-rs/themes/`.
+work as themes here: copy them into `~/.config/khadi/themes/`.

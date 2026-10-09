@@ -62,7 +62,7 @@ impl TermTab {
         cmd.cwd(cwd);
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
-        cmd.env("TERM_PROGRAM", "edex-rs");
+        cmd.env("TERM_PROGRAM", "khadi");
         cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
         let child = pair.slave.spawn_command(cmd)?;
         drop(pair.slave);

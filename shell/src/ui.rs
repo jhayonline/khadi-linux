@@ -88,7 +88,7 @@ pub fn install_fonts(ctx: &egui::Context, symbols: Option<&Path>, terminal: Opti
                 add("terminal", FontData::from_owned(bytes));
                 mono_stack.push("terminal".to_owned());
             }
-            Err(e) => eprintln!("edex-rs: cannot read font {}: {e}", path.display()),
+            Err(e) => eprintln!("khadi: cannot read font {}: {e}", path.display()),
         }
     }
     mono_stack.push("jetbrains-mono".to_owned());
@@ -98,7 +98,7 @@ pub fn install_fonts(ctx: &egui::Context, symbols: Option<&Path>, terminal: Opti
                 add("symbols", FontData::from_owned(bytes));
                 mono_stack.push("symbols".to_owned());
             }
-            Err(e) => eprintln!("edex-rs: cannot read font {}: {e}", path.display()),
+            Err(e) => eprintln!("khadi: cannot read font {}: {e}", path.display()),
         }
     }
     // egui's own fonts stay last, for emoji and anything else still missing.

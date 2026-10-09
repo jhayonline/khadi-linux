@@ -1,19 +1,19 @@
 #!/bin/sh
-# Login session for the edex-rs desktop.
+# Login session for the khadi desktop.
 #
-# edex-comp first tries to drive the display and input devices itself. If that fails
+# khadi-comp first tries to drive the display and input devices itself. If that fails
 # within the first seconds, the session tries the build that was installed before this
 # one, and then running inside the cage kiosk compositor, so that a broken build or a
 # problem with the hardware backend does not lock you out.
 #
-# Logs: ~/.local/state/edex-rs/session.log (and session-fallback.log); what launched
+# Logs: ~/.local/state/khadi/session.log (and session-fallback.log); what launched
 # applications print goes to apps.log next to them.
-export XDG_CURRENT_DESKTOP=edex-rs
-# Any display variables inherited from the login manager would make edex-comp think it
+export XDG_CURRENT_DESKTOP=khadi
+# Any display variables inherited from the login manager would make khadi-comp think it
 # is running inside another desktop.
 unset WAYLAND_DISPLAY DISPLAY
 
-log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/edex-rs"
+log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/khadi"
 mkdir -p "$log_dir"
 
 # The desktop portal serves one session at a time: one left over from another desktop
@@ -32,7 +32,7 @@ leave() {
 stop_portal
 
 started=$(date +%s)
-/usr/local/bin/edex-comp --session --backend drm "$@" >"$log_dir/session.log" 2>&1
+/usr/local/bin/khadi-comp --session --backend drm "$@" >"$log_dir/session.log" 2>&1
 status=$?
 elapsed=$(( $(date +%s) - started ))
 
@@ -41,12 +41,12 @@ if [ "$status" -eq 0 ] || [ "$elapsed" -ge 15 ]; then
     leave "$status"
 fi
 
-previous=/usr/local/lib/edex-rs/previous
-if [ -x "$previous/edex-comp" ] && [ -x "$previous/edex-rs" ]; then
-    echo "edex-comp exited with status $status after ${elapsed}s; trying the previous build" \
+previous=/usr/local/lib/khadi/previous
+if [ -x "$previous/khadi-comp" ] && [ -x "$previous/khadi" ]; then
+    echo "khadi-comp exited with status $status after ${elapsed}s; trying the previous build" \
         >>"$log_dir/session.log"
     started=$(date +%s)
-    "$previous/edex-comp" --session --backend drm --shell "$previous/edex-rs" "$@" \
+    "$previous/khadi-comp" --session --backend drm --shell "$previous/khadi" "$@" \
         >"$log_dir/session-previous.log" 2>&1
     status=$?
     elapsed=$(( $(date +%s) - started ))
@@ -55,11 +55,11 @@ if [ -x "$previous/edex-comp" ] && [ -x "$previous/edex-rs" ]; then
     fi
 fi
 
-echo "edex-comp exited with status $status after ${elapsed}s; falling back to cage" \
+echo "khadi-comp exited with status $status after ${elapsed}s; falling back to cage" \
     >>"$log_dir/session.log"
 if command -v cage >/dev/null; then
     # -s keeps Ctrl+Alt+F<n> VT switching available as a way out.
-    cage -s -- /usr/local/bin/edex-comp --session --backend winit "$@" >"$log_dir/session-fallback.log" 2>&1
+    cage -s -- /usr/local/bin/khadi-comp --session --backend winit "$@" >"$log_dir/session-fallback.log" 2>&1
     leave $?
 fi
 leave "$status"

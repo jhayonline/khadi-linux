@@ -208,7 +208,7 @@ impl Cache {
             .map(PathBuf::from)
             .filter(|path| path.is_absolute())
             .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
-            .map(|base| base.join("edex-rs/places.tsv"));
+            .map(|base| base.join("khadi/places.tsv"));
         let mut known = HashMap::new();
         if let Some(text) = path.as_ref().and_then(|path| std::fs::read_to_string(path).ok()) {
             for line in text.lines() {

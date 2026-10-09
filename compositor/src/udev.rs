@@ -56,7 +56,7 @@ use smithay::{
 };
 
 use crate::{EdexComp, monitors};
-use edex_common::ipc::{DisplayInfo, Mode as DisplayMode};
+use khadi_common::ipc::{DisplayInfo, Mode as DisplayMode};
 
 /// How long the first frame may take to reach a screen before the backend gives up.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
@@ -334,7 +334,7 @@ pub fn init_udev(
 }
 
 /// Applies the settings to one input device: touchpads and mice each get their own.
-fn configure_device(device: &mut input::Device, settings: &edex_common::input::InputSettings) {
+fn configure_device(device: &mut input::Device, settings: &khadi_common::input::InputSettings) {
     // Only touchpads can tap.
     let touchpad = device.config_tap_finger_count() > 0;
     if touchpad {

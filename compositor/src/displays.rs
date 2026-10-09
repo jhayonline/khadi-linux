@@ -11,7 +11,7 @@ use crate::{
     EdexComp,
     monitors::{self, Saved},
 };
-use edex_common::ipc::{DisplayChoice, DisplayInfo, Displays, Mode};
+use khadi_common::ipc::{DisplayChoice, DisplayInfo, Displays, Mode};
 
 /// How long a new layout waits to be confirmed.
 pub const CONFIRM_WITHIN: Duration = Duration::from_secs(15);

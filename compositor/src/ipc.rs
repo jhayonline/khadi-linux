@@ -1,6 +1,6 @@
-//! Serves the desktop protocol (see `edex_common::ipc`) to the shell.
+//! Serves the desktop protocol (see `khadi_common::ipc`) to the shell.
 
-use edex_common::ipc::{Command, DesktopState};
+use khadi_common::ipc::{Command, DesktopState};
 use std::io::{ErrorKind, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
@@ -95,7 +95,7 @@ impl IpcServer {
 
 impl IpcServer {
     /// Sends the monitors to every client, unless nothing about them changed.
-    pub fn publish_displays(&mut self, displays: &edex_common::ipc::Displays) {
+    pub fn publish_displays(&mut self, displays: &khadi_common::ipc::Displays) {
         let line = displays.encode();
         if line != self.last_displays {
             self.send(&line);
@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn serves_state_and_receives_commands() {
-        let path = std::env::temp_dir().join(format!("edex-ipc-test-{}.sock", std::process::id()));
+        let path = std::env::temp_dir().join(format!("khadi-ipc-test-{}.sock", std::process::id()));
         let mut server = IpcServer::bind(path.clone()).unwrap();
 
         let mut client = UnixStream::connect(&path).unwrap();
@@ -130,10 +130,10 @@ mod tests {
         let state = DesktopState {
             screens: 2,
             focus: Some(0),
-            apps: vec![edex_common::ipc::AppInfo {
+            apps: vec![khadi_common::ipc::AppInfo {
                 title: "Editor".into(),
                 screen: 1,
-                place: edex_common::ipc::Place::Main,
+                place: khadi_common::ipc::Place::Main,
             }],
             ..Default::default()
         };

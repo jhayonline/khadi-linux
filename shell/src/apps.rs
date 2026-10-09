@@ -183,7 +183,7 @@ fn output_log(command_line: &str) -> Option<(Stdio, Stdio)> {
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state")))?;
-    let dir = state_home.join("edex-rs");
+    let dir = state_home.join("khadi");
     std::fs::create_dir_all(&dir).ok()?;
     let path = dir.join("apps.log");
     let large = std::fs::metadata(&path).is_ok_and(|meta| meta.len() > 1024 * 1024);
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn launches_a_program() {
-        let marker = std::env::temp_dir().join(format!("edex-launch-test-{}", std::process::id()));
+        let marker = std::env::temp_dir().join(format!("khadi-launch-test-{}", std::process::id()));
         let _ = std::fs::remove_file(&marker);
         let entry = AppEntry {
             name: "touch".into(),

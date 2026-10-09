@@ -1,7 +1,7 @@
 //! The shell's link to the compositor: which applications are open, and requests to
 //! switch between them. Absent when the shell runs on its own.
 
-use edex_common::ipc::{Command, DesktopState, Displays, Event, SOCKET_ENV};
+use khadi_common::ipc::{Command, DesktopState, Displays, Event, SOCKET_ENV};
 use eframe::egui;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
@@ -27,7 +27,7 @@ impl Desktop {
         let writer = match UnixStream::connect(&path) {
             Ok(stream) => stream,
             Err(e) => {
-                eprintln!("edex-rs: cannot reach compositor at {}: {e}", path.display());
+                eprintln!("khadi: cannot reach compositor at {}: {e}", path.display());
                 return None;
             }
         };

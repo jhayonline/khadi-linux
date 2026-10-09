@@ -16,7 +16,7 @@ use smithay::{
 };
 
 use crate::{EdexComp, focus::Focus};
-use edex_common::{
+use khadi_common::{
     Panel,
     ipc::{AppInfo, Command, DesktopState, Event, Place},
 };
@@ -204,7 +204,7 @@ impl EdexComp {
             return rect;
         }
         to_rectangle(
-            edex_common::workspace(rect.size.w as f32, rect.size.h as f32, self.panels),
+            khadi_common::workspace(rect.size.w as f32, rect.size.h as f32, self.panels),
             rect.loc,
         )
     }
@@ -216,7 +216,7 @@ impl EdexComp {
         if self.in_place(screen, Place::Side).is_none() {
             return (workspace, workspace);
         }
-        let area = edex_common::Rect {
+        let area = khadi_common::Rect {
             x: workspace.loc.x as f32,
             y: workspace.loc.y as f32,
             width: workspace.size.w as f32,
@@ -565,7 +565,7 @@ impl EdexComp {
     }
 }
 
-fn to_rectangle(rect: edex_common::Rect, origin: Point<i32, Logical>) -> Rectangle<i32, Logical> {
+fn to_rectangle(rect: khadi_common::Rect, origin: Point<i32, Logical>) -> Rectangle<i32, Logical> {
     Rectangle::new(
         (origin.x + rect.x.round() as i32, origin.y + rect.y.round() as i32).into(),
         (rect.width.round() as i32, rect.height.round() as i32).into(),

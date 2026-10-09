@@ -1,12 +1,12 @@
 [package]
-name = "edex-comp"
+name = "khadi-comp"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "Wayland compositor for the DEs-UI desktop"
+description = "Wayland compositor for the Khadi desktop"
 
 [dependencies]
-edex-common = { path = "../common" }
+khadi-common = { path = "../common" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

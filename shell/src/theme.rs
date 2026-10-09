@@ -159,9 +159,9 @@ impl Theme {
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")));
         if let Some(config) = config {
-            dirs.push(config.join("edex-rs/themes"));
+            dirs.push(config.join("khadi/themes"));
         }
-        dirs.push(PathBuf::from("/usr/local/share/edex-rs/themes"));
+        dirs.push(PathBuf::from("/usr/local/share/khadi/themes"));
         dirs.push(PathBuf::from("themes"));
         dirs
     }
@@ -180,11 +180,11 @@ impl Theme {
             };
             match Theme::parse(&json) {
                 Ok(theme) => return theme,
-                Err(e) => eprintln!("edex-rs: cannot parse theme {}: {e}", path.display()),
+                Err(e) => eprintln!("khadi: cannot parse theme {}: {e}", path.display()),
             }
         }
         if name != DEFAULT_NAME {
-            eprintln!("edex-rs: theme '{name}' not found, using {DEFAULT_NAME}");
+            eprintln!("khadi: theme '{name}' not found, using {DEFAULT_NAME}");
         }
         Theme::parse(DEFAULT_THEME).expect("built-in theme is valid")
     }

@@ -1,6 +1,0 @@
-[Desktop Entry]
-Name=DEs-UI
-Comment=Sci-fi terminal desktop
-Exec=/usr/local/bin/edex-rs-session
-Type=Application
-DesktopNames=edex-rs

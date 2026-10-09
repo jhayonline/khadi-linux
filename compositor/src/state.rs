@@ -35,7 +35,7 @@ use crate::{
     policy::{App, ScreenMode},
     udev::UdevData,
 };
-use edex_common::{Panels, ipc::Place};
+use khadi_common::{Panels, ipc::Place};
 use smithay::{reexports::calloop::LoopHandle, wayland::xwayland_shell::XWaylandShellState, xwayland::X11Wm};
 
 /// How to start the shell.
@@ -90,7 +90,7 @@ pub struct EdexComp {
     /// Set while a restart of the shell was asked for and its old process is going away.
     shell_restarting: bool,
     pub shell_pid: Option<u32>,
-    /// The edex-rs shell window: always fullscreen, always at the bottom.
+    /// The khadi shell window: always fullscreen, always at the bottom.
     pub shell: Option<Window>,
     /// The shell's backdrop windows: the nth covers display n + 1 behind its applications.
     pub backdrops: Vec<Window>,
@@ -115,7 +115,7 @@ pub struct EdexComp {
     /// A display layout chosen in the settings and not yet saved, which overrides
     /// the saved ones.
     /// The keyboard, mouse and touchpad settings in force.
-    pub input_settings: edex_common::input::InputSettings,
+    pub input_settings: khadi_common::input::InputSettings,
     /// The keyboard layout and variant last given to the keymap compiler.
     pub keymap_applied: Option<(String, String)>,
     pub display_override: Option<Vec<crate::monitors::Saved>>,
@@ -191,7 +191,7 @@ impl EdexComp {
 
             ipc: None,
             fatal: None,
-            input_settings: edex_common::input::InputSettings::default(),
+            input_settings: khadi_common::input::InputSettings::default(),
             keymap_applied: None,
             display_override: None,
             display_pending: None,
@@ -297,7 +297,7 @@ impl EdexComp {
         };
         let mut command = std::process::Command::new(&spec.program);
         if let Some(server) = &self.ipc {
-            command.env(edex_common::ipc::SOCKET_ENV, server.path());
+            command.env(khadi_common::ipc::SOCKET_ENV, server.path());
         }
         // Only the shell is pointed at our socket; programs started from it inherit it.
         // Never a host desktop's X server: programs must open here.

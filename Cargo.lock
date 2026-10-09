@@ -610,35 +610,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "edex-common"
-version = "0.1.0"
-
-[[package]]
-name = "edex-comp"
-version = "0.1.0"
-dependencies = [
- "edex-common",
- "smithay",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "edex-rs"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "edex-common",
- "eframe",
- "portable-pty",
- "serde",
- "serde_json",
- "sysinfo",
- "vt100",
-]
-
-[[package]]
 name = "eframe"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1437,6 +1408,35 @@ dependencies = [
  "cfg-if",
  "futures-util",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "khadi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "eframe",
+ "khadi-common",
+ "portable-pty",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "vt100",
+]
+
+[[package]]
+name = "khadi-common"
+version = "0.1.0"
+
+[[package]]
+name = "khadi-comp"
+version = "0.1.0"
+dependencies = [
+ "khadi-common",
+ "smithay",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
