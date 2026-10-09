@@ -49,7 +49,7 @@ say()  { printf '  %s\n' "$*"; }
 act()  { if (( APPLY )); then "$@"; fi; }
 
 CONFIGS=(foot zellij hypr yazi fuzzel helix mako khadi gtk-3.0 gtk-4.0 xdg-desktop-portal)
-BINS=(khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontcheck khadi-boot)
+BINS=(khadi-logo khadi-cheatsheet khadi-dev khadi-theme khadi-check khadi-fontcheck khadi-boot)
 # khadi-shell is the odd one. Tauri embeds its whole frontend into the binary,
 # so there is still exactly one file to install and nothing to put beside it —
 # but it MUST be built through the Tauri CLI. `cargo build --release` produces

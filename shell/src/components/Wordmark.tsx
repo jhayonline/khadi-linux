@@ -1,58 +1,50 @@
 // The Khadi wordmark.
 //
-// Same pixel grid the boot splash is rasterised from — `wordmark.json` is the
-// one definition, and a logo that differs between the boot screen and the
-// login screen is worse than no logo. Here it is inline SVG, so it scales to
-// any size, takes the theme colour through `currentColor`, and needs no asset
+// The same pixel grid the boot splash is rasterised from — `wordmark.json` is
+// the one definition, and a logo that differs between the boot screen and the
+// login screen is worse than no logo. Inline SVG here, so it scales to any
+// size, takes the theme colour through `currentColor`, and needs no asset
 // pipeline to reach a webview.
 //
-// The face is after Omarchy's: a coarse bitmap, condensed, blackletter-ish,
-// every diagonal a stair. 7 cells wide by 13 tall per letter, measured off
-// its logo.png.
+// The face is Delta Corps Priest 1, the FIGlet font Omarchy's own wordmark is
+// drawn in. FIGlet renders it in half-blocks, which are a pixel grid at twice
+// the resolution in both directions, so `logo.txt` converts into that grid
+// with nothing lost. Two earlier versions of this file redrew the letterforms
+// by hand; these are the real ones.
 
 import spec from "../assets/wordmark.json";
 
-type Spec = { cell_w: number; cell_h: number; glyphs: Record<string, string[]> };
+type Spec = { w: number; h: number; rows: string[] };
 
-export function Wordmark({ text = "KHADI", className = "" }: { text?: string; className?: string }) {
-  const { cell_w: gw, cell_h: gh, glyphs } = spec as Spec;
-  const GAP = 1;
-  const cols = text.length * gw + (text.length - 1) * GAP;
+export function Wordmark({ className = "" }: { className?: string }) {
+  const { w, h, rows } = spec as Spec;
 
+  // One rect per RUN of lit cells, not per cell. The grid is 109x34 and
+  // mostly ink, so runs turn roughly 1,500 nodes into about 200 — and
+  // adjacent rects would seam at fractional scales where a run does not.
   const rects: React.ReactElement[] = [];
-  let x0 = 0;
-  for (const ch of text) {
-    const g = glyphs[ch];
-    if (!g) continue;
-    g.forEach((row, y) => {
-      // One rect per RUN of lit cells, not per cell: a run of four is four
-      // nodes the browser does not have to lay out, and the edges stay hard
-      // because adjacent rects would otherwise seam at fractional scales.
-      let run = 0;
-      for (let x = 0; x <= row.length; x++) {
-        if (row[x] === "#") {
-          run++;
-          continue;
-        }
-        if (run > 0) {
-          rects.push(
-            <rect key={`${x0}-${y}-${x}`} x={x0 + x - run} y={y} width={run} height={1} />,
-          );
-          run = 0;
-        }
+  rows.forEach((row, y) => {
+    let run = 0;
+    for (let x = 0; x <= row.length; x++) {
+      if (row[x] === "#") {
+        run++;
+        continue;
       }
-    });
-    x0 += gw + GAP;
-  }
+      if (run > 0) {
+        rects.push(<rect key={`${y}-${x}`} x={x - run} y={y} width={run} height={1} />);
+        run = 0;
+      }
+    }
+  });
 
   return (
     <svg
-      viewBox={`0 0 ${cols} ${gh}`}
+      viewBox={`0 0 ${w} ${h}`}
       className={className}
       fill="currentColor"
       shapeRendering="crispEdges"
       role="img"
-      aria-label={text}
+      aria-label="KHADI"
     >
       {rects}
     </svg>

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# khadi-logo — print the wordmark.
+#
+# The terminal half of the same mark the boot splash and the login screen
+# draw. `logo.txt` is Delta Corps Priest 1, the FIGlet font Omarchy's wordmark
+# is drawn in, and `shell/src/assets/wordmark.json` is that same text
+# converted to a pixel grid for the two graphical surfaces — so all three are
+# the same letterforms by construction.
+#
+# Colour comes from the theme, flattened: the file is plain text so it can go
+# anywhere a terminal can, including a VT with sixteen colours.
+set -euo pipefail
+
+# Through the symlink, not to it. khadi-install links this into ~/.local/bin,
+# so BASH_SOURCE is the link and `dirname ../` lands on ~/.local — which is
+# where it went looking for logo.txt the first time it was installed.
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
+LOGO="$ROOT/logo.txt"
+[[ -f "$LOGO" ]] || { echo "khadi-logo: no $LOGO" >&2; exit 1; }
+
+if [[ "${1:-}" == "--help" ]]; then
+    sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    exit 0
+fi
+
+# role.text from the resolved theme, if there is one. No theme is not an
+# error: the mark should print on a machine that has not been set up yet.
+# `|| true` because sed exits non-zero on a file that is not there, and under
+# `set -e` that kills the script in exactly the case this fallback exists for:
+# a machine with no theme built yet.
+hex=$(sed -n 's/^text *= *"\?#\([0-9a-fA-F]\{6\}\)"\?.*/\1/p' \
+        "${XDG_CONFIG_HOME:-$HOME/.config}/khadi/theme.toml" /etc/khadi/theme.toml \
+        2>/dev/null | head -1 || true)
+
+if [[ -n "$hex" && -t 1 ]]; then
+    printf '\033[38;2;%d;%d;%dm' "0x${hex:0:2}" "0x${hex:2:2}" "0x${hex:4:2}"
+    cat "$LOGO"
+    printf '\033[0m'
+else
+    cat "$LOGO"
+fi

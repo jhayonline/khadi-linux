@@ -229,41 +229,41 @@ def _png(width, height, pixels):
 
 # THE WORDMARK IS A PIXEL GRID, and it is defined exactly once.
 #
-# The first version set it as polygons — squared, angled, drawn to sit beside
-# Orbitron. It was clean and it was not Khadi's: the brief was Omarchy's text
-# logo, which is a coarse bitmap display face, condensed and blackletter-ish,
-# every diagonal a stair. Measured off its logo.png: 800px for seven letters
-# at a ~16px pixel is 7 cells across, 188px tall is 12 down, and that ratio is
-# the whole character — a 2-cell stem against a 3-cell counter.
+# It took two wrong turns to get here. First it was polygons, squared and
+# angled to sit beside Orbitron — clean, and not Khadi's. Then it was a
+# hand-drawn 7x13 bitmap measured off Omarchy's logo.png, which was the right
+# idiom and still a redrawing.
 #
-# `shell/src/assets/wordmark.json` is the one definition. khadi-theme reads it
-# to rasterise the splash, which cannot use a font at all, and the greeter
-# imports the same file to emit inline SVG. A logo that differs between the
-# boot screen and the login screen is worse than no logo.
+# It is the real letterforms now. Omarchy's wordmark is FIGlet's Delta Corps
+# Priest 1, and FIGlet draws it in half-blocks — which are a pixel grid at
+# twice the resolution in both directions, `█` all four quadrants, `▌` the
+# left two. So logo.txt converts straight into this grid with nothing lost.
+#
+# `shell/src/assets/wordmark.json` is the one definition, and it feeds three
+# surfaces: this rasteriser for the splash, the greeter's inline SVG, and
+# logo.txt itself. A logo that differs between the boot screen and the login
+# screen is worse than no logo.
 WORDMARK = Path(__file__).resolve().parent.parent / "shell/src/assets/wordmark.json"
 
 
-def wordmark_png(word, rgb, height=120, gap=1):
+def wordmark_png(_word, rgb, height=120, _gap=1):
+    """The wordmark, from the shared grid, at `height` pixels."""
     import json
     spec = json.loads(WORDMARK.read_text())
-    g, gw, gh = spec["glyphs"], spec["cell_w"], spec["cell_h"]
+    rows, gw, gh = spec["rows"], spec["w"], spec["h"]
     cell = max(1, round(height / gh))
-    cols = len(word) * gw + (len(word) - 1) * gap
-    w, h = cols * cell, gh * cell
-    r, gg, b = rgb
+    w, h = gw * cell, gh * cell
+    r, g, b = rgb
     out = bytearray(w * h * 4)
-    x0 = 0
-    for ch in word:
-        for y, row in enumerate(g[ch]):
-            for x, v in enumerate(row):
-                if v != "#":
-                    continue
-                for py in range(y * cell, (y + 1) * cell):
-                    base = (py * w + (x0 + x) * cell) * 4
-                    for k in range(cell):
-                        i = base + k * 4
-                        out[i], out[i + 1], out[i + 2], out[i + 3] = r, gg, b, 255
-        x0 += gw + gap
+    for y, row in enumerate(rows):
+        for x, v in enumerate(row):
+            if v != "#":
+                continue
+            for py in range(y * cell, (y + 1) * cell):
+                base = (py * w + x * cell) * 4
+                for k in range(cell):
+                    i = base + k * 4
+                    out[i], out[i + 1], out[i + 2], out[i + 3] = r, g, b, 255
     return _png(w, h, out)
 
 
