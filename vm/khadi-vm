@@ -305,6 +305,13 @@ cmd_push() {
              mkdir -p ~/.khadi-incoming
              tar -C ~/.khadi-incoming -xf -
              if [ -d ~/khadi ]; then mv ~/khadi ~/.khadi-outgoing; fi
+             # The build cache moves across rather than being thrown away with the
+             # old tree. It is not in the tar (--exclude=target), so replacing the
+             # tree wholesale meant every push cost a twenty-minute rebuild of a
+             # dependency graph that had not changed.
+             if [ -d ~/.khadi-outgoing/target ]; then
+                 mv ~/.khadi-outgoing/target ~/.khadi-incoming/target
+             fi
              mv ~/.khadi-incoming ~/khadi
              rm -rf ~/.khadi-outgoing'
     echo "  ✓ repo is at ~/khadi in the guest"
