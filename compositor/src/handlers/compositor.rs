@@ -46,6 +46,12 @@ impl CompositorHandler for EdexComp {
         let window = self.window_for(surface);
         xdg_shell::handle_commit(&mut self.popups, window.as_ref(), surface);
     }
+
+    /// A lock screen that crashed shows up here rather than through `unlock`, and
+    /// must not be mistaken for one: see `lock.rs`.
+    fn destroyed(&mut self, surface: &WlSurface) {
+        self.lock_surface_gone(surface);
+    }
 }
 
 impl BufferHandler for EdexComp {

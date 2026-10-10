@@ -69,7 +69,10 @@ render_elements! {
     pub OutputElements<=GlesRenderer>;
     Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
     Cursor=MemoryRenderBufferRenderElement<GlesRenderer>,
-    ClientCursor=WaylandSurfaceRenderElement<GlesRenderer>,
+    // A plain surface drawn at a position we choose: the pointer image a client
+    // supplied, or the lock screen. One variant, because `render_elements!` derives
+    // a `From` for each and two variants of the same type cannot both have one.
+    Surface=WaylandSurfaceRenderElement<GlesRenderer>,
 }
 
 /// One monitor and the means to draw on it.
@@ -86,6 +89,9 @@ struct Monitor {
     modes: Vec<DisplayMode>,
     /// When the frame currently waiting for its page flip was queued.
     pending_since: Option<Instant>,
+    /// Whether the frame now in flight was drawn under a session lock. Read when the
+    /// flip completes, which is the first moment the desktop is really off the screen.
+    lock_frame: bool,
     /// Whether a frame has reached this monitor yet.
     lit: bool,
 }
@@ -278,6 +284,7 @@ pub fn init_udev(
                 let Some(udev) = data.udev.as_mut() else {
                     return;
                 };
+                let mut blanked = None;
                 if let Some(monitor) = udev.monitors.iter_mut().find(|monitor| monitor.crtc == crtc) {
                     if let Err(e) = monitor.surface.frame_submitted() {
                         tracing::warn!("page flip bookkeeping failed: {e}");
@@ -286,7 +293,16 @@ pub fn init_udev(
                     if !std::mem::replace(&mut monitor.lit, true) {
                         tracing::info!(output = %monitor.output.name(), "first frame on screen");
                     }
+                    if std::mem::take(&mut monitor.lock_frame) {
+                        blanked = Some(monitor.output.clone());
+                    }
                     udev.flips += 1;
+                }
+                // Outside the borrow of `udev`, and only now: a queued frame is not
+                // a frame anyone can see, and the lock is confirmed on what is on
+                // the screen rather than on what has been handed to the kernel.
+                if let Some(output) = blanked {
+                    data.lock_frame_presented(&output);
                 }
             }
             DrmEvent::Error(e) => tracing::error!("display error: {e}"),
@@ -531,6 +547,7 @@ impl EdexComp {
                 output,
                 refresh: Duration::from_secs_f64(1000.0 / wl_mode.refresh.max(1) as f64),
                 pending_since: None,
+                lock_frame: false,
                 lit: false,
             });
         }
@@ -651,6 +668,7 @@ impl EdexComp {
             ..
         } = udev;
 
+        let locked = self.lock.is_some();
         for monitor in monitors.iter_mut() {
             // A page flip that never completes must not freeze the screen for good.
             match monitor.pending_since {
@@ -701,23 +719,51 @@ impl EdexComp {
                     }
                 }
             }
-            match space_render_elements(renderer, [&self.space], &monitor.output, 1.0) {
-                Ok(space) => elements.extend(space.into_iter().map(OutputElements::Space)),
-                Err(e) => tracing::error!("cannot collect windows to draw: {e:?}"),
+            // While locked, the desktop is not drawn at all — not hidden behind
+            // something, not drawn and covered. A display the lock screen has not
+            // reached shows the clear colour, which is black.
+            match self.lock.as_ref() {
+                Some(lock) => {
+                    if let Some(surface) = lock.surface_for(&monitor.output) {
+                        elements.extend(
+                            render_elements_from_surface_tree(
+                                renderer,
+                                surface.wl_surface(),
+                                (0, 0),
+                                1.0,
+                                1.0,
+                                Kind::Unspecified,
+                            )
+                            .into_iter()
+                            .map(OutputElements::Surface),
+                        );
+                    }
+                }
+                None => match space_render_elements(renderer, [&self.space], &monitor.output, 1.0) {
+                    Ok(space) => elements.extend(space.into_iter().map(OutputElements::Space)),
+                    Err(e) => tracing::error!("cannot collect windows to draw: {e:?}"),
+                },
             }
 
             let drawn = monitor
                 .surface
                 .render_frame(renderer, &elements, [0.0, 0.0, 0.0, 1.0], FrameFlags::empty())
                 .map(|result| !result.is_empty);
+
             match drawn {
                 Ok(true) => match monitor.surface.queue_frame(()) {
-                    Ok(()) => monitor.pending_since = Some(Instant::now()),
+                    Ok(()) => {
+                        monitor.pending_since = Some(Instant::now());
+                        // The desktop was not collected above when locked, so what
+                        // is in flight has none of it in it.
+                        monitor.lock_frame = locked;
+                    }
                     Err(e) => tracing::error!("cannot present frame: {e}"),
                 },
                 Ok(false) => {}
                 Err(e) => tracing::error!("cannot draw frame: {e}"),
             }
+
         }
     }
 }

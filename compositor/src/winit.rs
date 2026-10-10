@@ -6,7 +6,8 @@ use smithay::{
         egl::EGLDevice,
         renderer::{
             ExportMem, ImportDma, damage::OutputDamageTracker,
-            element::surface::WaylandSurfaceRenderElement, gles::GlesRenderer,
+            element::Kind, element::surface::WaylandSurfaceRenderElement,
+            element::surface::render_elements_from_surface_tree, gles::GlesRenderer,
         },
         winit::{self, WinitEvent},
     },
@@ -118,23 +119,47 @@ pub fn init_winit(
 
                 {
                     let (renderer, mut framebuffer) = backend.bind().unwrap();
-                    smithay::desktop::space::render_output::<
-                        _,
-                        WaylandSurfaceRenderElement<GlesRenderer>,
-                        _,
-                        _,
-                    >(
-                        &output,
-                        renderer,
-                        &mut framebuffer,
-                        1.0,
-                        0,
-                        [&state.space],
-                        &[],
-                        &mut damage_tracker,
-                        [0.0, 0.0, 0.0, 1.0],
-                    )
-                    .unwrap();
+                    // While locked, only the lock screen is drawn. A render pass over
+                    // the space with the lock on top would still have the desktop in
+                    // the framebuffer for anything that reads it back.
+                    match state.lock.as_ref().map(|lock| lock.surface_for(&output).cloned()) {
+                        Some(surface) => {
+                            let elements: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = surface
+                                .map(|surface| {
+                                    render_elements_from_surface_tree(
+                                        renderer,
+                                        surface.wl_surface(),
+                                        (0, 0),
+                                        1.0,
+                                        1.0,
+                                        Kind::Unspecified,
+                                    )
+                                })
+                                .unwrap_or_default();
+                            damage_tracker
+                                .render_output(renderer, &mut framebuffer, 0, &elements, [0.0, 0.0, 0.0, 1.0])
+                                .unwrap();
+                        }
+                        None => {
+                            smithay::desktop::space::render_output::<
+                                _,
+                                WaylandSurfaceRenderElement<GlesRenderer>,
+                                _,
+                                _,
+                            >(
+                                &output,
+                                renderer,
+                                &mut framebuffer,
+                                1.0,
+                                0,
+                                [&state.space],
+                                &[],
+                                &mut damage_tracker,
+                                [0.0, 0.0, 0.0, 1.0],
+                            )
+                            .unwrap();
+                        }
+                    }
 
                     if capture {
                         let region = Rectangle::from_size((size.w, size.h).into());
@@ -155,6 +180,7 @@ pub fn init_winit(
                 if let Err(e) = backend.submit(Some(&[damage])) {
                     tracing::error!("cannot present frame: {e}");
                 }
+                state.lock_frame_presented(&output);
 
                 state.after_frame();
                 let _ = state.display_handle.flush_clients();

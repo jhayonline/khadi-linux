@@ -24,6 +24,7 @@ use smithay::{
         dmabuf::{DmabufGlobal, DmabufState},
         output::OutputManagerState,
         selection::data_device::DataDeviceState,
+        session_lock::SessionLockManagerState,
         shell::xdg::{XdgShellState, decoration::XdgDecorationState},
         shm::ShmState,
         socket::ListeningSocketSource,
@@ -32,6 +33,7 @@ use smithay::{
 
 use crate::{
     ipc::IpcServer,
+    lock::Lock,
     policy::{App, ScreenMode},
     udev::UdevData,
 };
@@ -76,6 +78,9 @@ pub struct EdexComp {
     pub output_manager_state: OutputManagerState,
     pub seat_state: SeatState<EdexComp>,
     pub data_device_state: DataDeviceState,
+    pub session_lock_state: SessionLockManagerState,
+    /// Set while the session is locked. See `lock.rs`.
+    pub lock: Option<Lock>,
     pub dmabuf_state: DmabufState,
     pub dmabuf_global: Option<DmabufGlobal>,
     pub popups: PopupManager,
@@ -137,6 +142,10 @@ impl EdexComp {
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(&dh);
         let mut seat_state = SeatState::new();
         let data_device_state = DataDeviceState::new::<Self>(&dh);
+        // Any client may lock the session. Restricting this to one trusted program
+        // would need a way to tell them apart that Khadi does not have yet, and the
+        // protocol's own guarantees do not depend on who asks.
+        let session_lock_state = SessionLockManagerState::new::<Self, _>(&dh, |_| true);
         let popups = PopupManager::default();
 
         let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, "winit");
@@ -169,6 +178,8 @@ impl EdexComp {
             output_manager_state,
             seat_state,
             data_device_state,
+            session_lock_state,
+            lock: None,
             dmabuf_state: DmabufState::new(),
             dmabuf_global: None,
             popups,
@@ -236,6 +247,23 @@ impl EdexComp {
     }
 
     pub fn surface_under(&self, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
+        // While locked the pointer can only be over the lock screen. Without this the
+        // desktop underneath would still take clicks and hovers, and would still say
+        // what the pointer should look like over it.
+        if let Some(lock) = self.lock.as_ref() {
+            let output = self
+                .space
+                .outputs()
+                .find(|output| {
+                    self.space
+                        .output_geometry(output)
+                        .is_some_and(|geometry| geometry.to_f64().contains(pos))
+                })
+                .cloned()?;
+            let origin = self.space.output_geometry(&output)?.loc.to_f64();
+            let surface = lock.surface_for(&output)?.wl_surface().clone();
+            return Some((surface, origin));
+        }
         self.space.element_under(pos).and_then(|(window, location)| {
             window
                 .surface_under(pos - location.to_f64(), WindowSurfaceType::ALL)

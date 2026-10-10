@@ -33,6 +33,8 @@ enum Action {
     SwitchVt(i32),
     /// End the session (Ctrl+Alt+Backspace).
     Quit,
+    /// Lock the screen.
+    Lock,
 }
 
 #[derive(Clone, Copy)]
@@ -154,6 +156,7 @@ impl EdexComp {
                 let time = Event::time_msec(&event);
 
                 let pressed = event.state() == KeyState::Pressed;
+                let locked = self.locked();
                 let action = self.seat.get_keyboard().unwrap().input(
                     self,
                     event.key_code(),
@@ -174,6 +177,15 @@ impl EdexComp {
                         }
                         if let Some(media) = Media::from_keysym(sym) {
                             return FilterResult::Intercept(Action::Media(media));
+                        }
+                        // While locked, no shortcut runs. Switching VT above is
+                        // deliberate — it is the way out if the lock screen wedges,
+                        // and the other terminal asks for a password of its own.
+                        // Everything from here down would act on the session behind
+                        // the lock, and Ctrl+Alt+Backspace would end it outright,
+                        // which is a lock screen you can walk past.
+                        if locked {
+                            return FilterResult::Forward;
                         }
                         if !held {
                             return FilterResult::Forward;
@@ -200,6 +212,7 @@ impl EdexComp {
                             Keysym::backslash => {
                                 FilterResult::Intercept(Action::Panel(khadi_common::Panel::Bottom))
                             }
+                            Keysym::Escape => FilterResult::Intercept(Action::Lock),
                             Keysym::q | Keysym::Q => FilterResult::Intercept(Action::Close),
                             _ => FilterResult::Forward,
                         }
@@ -225,6 +238,10 @@ impl EdexComp {
                         }
                     }
                     Some(Action::Quit) => self.loop_signal.stop(),
+                    // Started, not waited for: the lock takes effect when the client
+                    // asks for it, and this process has a screen to keep drawing in
+                    // the meantime.
+                    Some(Action::Lock) => run("khadi-lock", &[]),
                     None => {}
                 }
             }
@@ -280,7 +297,7 @@ impl EdexComp {
                 let button_state = event.state();
 
                 // Click to focus: the keyboard follows the display that was clicked.
-                if ButtonState::Pressed == button_state && !pointer.is_grabbed() {
+                if ButtonState::Pressed == button_state && !pointer.is_grabbed() && !self.locked() {
                     self.focus_at(pointer.current_location());
                 };
 

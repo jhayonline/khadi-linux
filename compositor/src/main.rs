@@ -8,6 +8,7 @@
 mod handlers;
 mod input;
 mod ipc;
+mod lock;
 mod monitors;
 mod policy;
 mod state;
