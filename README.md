@@ -15,6 +15,7 @@ It has two programs:
 - **khadi** (`shell/`) — the interface: terminal, system panels, file browser.
 - **khadi-comp** (`compositor/`) — a Wayland compositor that shows the shell
   fullscreen and places other applications in the middle of its frame.
+- **khadi-lock** (`lock/`) — the lock screen.
 
 ## Try it in a window
 
@@ -35,6 +36,7 @@ Super (or Ctrl+Alt, which works when running in a window):
 - **[  ]  \\** — collapse or open the left, right and bottom panels
 - **Q** — close the current application
 - **O** — move the current application to the next display
+- **Esc** — lock the screen
 
 The bar above the workspace lists the terminal tabs and every open application;
 click one to switch to it. The application in use shows an arrow, to send it to
@@ -59,6 +61,28 @@ come from looking addresses up at get.geojs.io, which tells that service the pub
 addresses this machine talks to; each is asked about once and kept in
 `~/.cache/khadi/places.tsv`. Your own position is guessed from your address
 unless you set it.
+
+## Locking the screen
+
+**Super+Esc** locks it. Type the password and press Enter; Esc clears what was
+typed. A wrong password is shown for a moment and then the screen goes back to
+waiting.
+
+The compositor does the locking, through `ext-session-lock-v1`, and it is the
+compositor that makes it mean something: from the moment the lock is taken it stops
+drawing the desktop and stops delivering input to it, and goes on doing that
+whatever becomes of `khadi-lock`. Kill the lock screen and the display stays black
+and locked rather than falling open. Any other client speaking that protocol works
+too — `swaylock`, for instance.
+
+The cost of that guarantee: if `khadi-lock` crashes, the screen is black and there
+is no way back into the session. **Ctrl+Alt+F2** reaches a virtual terminal, where
+ending `khadi-comp` gets the machine back and loses the session. Sway recovers by
+letting a second lock client take the screen over; smithay 0.7 does not allow that,
+for the reason written down at the top of `compositor/src/lock.rs`.
+
+Not yet: nothing locks the screen on its own. There is no idle timer and no lock on
+suspend, so this is a lock you have to ask for.
 
 ## Settings
 
@@ -156,12 +180,16 @@ Ways out if something goes wrong: **Ctrl+Alt+Backspace** ends the session, and
 - `compositor/src/udev.rs`, `winit.rs` — the hardware and windowed backends
 - `compositor/src/displays.rs`, `monitors.rs` — display settings and saved layouts
 - `compositor/src/xwayland.rs`, `focus.rs` — X11 applications
+- `compositor/src/lock.rs` — the session lock, and what it refuses to do
+- `lock/src/main.rs` — the lock screen: Wayland by hand, no toolkit
+- `lock/src/auth.rs` — PAM, on a thread of its own
 - `compositor/src/ipc.rs`, `shell/src/desktop.rs` — the socket the two talk over
 - `common/` — frame geometry and that socket's protocol, shared by both
 - `session/` — login session entry and launcher
 
 ## Not done yet
 
+- Locking on idle, and on suspend; a display plugged in while locked is not covered
 - Mirroring displays
 - Keyboard layout setting; display scaling for high-density screens
 - Dialogs at their natural size; sharing the middle-click selection with X11 applications

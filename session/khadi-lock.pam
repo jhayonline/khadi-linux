@@ -1,0 +1,17 @@
+#
+# PAM configuration for khadi-lock, the Khadi lock screen.
+#
+# Only `auth` and `account`. An unlock asks one question — is this the person who
+# locked it — and nothing else. `session` would set a session up again when one is
+# already open, and `password` would let the screen change the password, which is
+# not something a lock screen should be able to do.
+#
+# `system-auth` is the Arch stack: pam_unix plus whatever else the machine has been
+# configured with, so a fingerprint reader or a smart card set up there works here
+# without this file knowing about it.
+#
+# khadi-lock runs as the user and is not setuid. pam_unix reaches the shadow file
+# through the setuid `unix_chkpwd` helper, which is what makes that possible.
+
+auth      include   system-auth
+account   include   system-auth

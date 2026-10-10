@@ -37,6 +37,14 @@ for program in khadi khadi-comp; do
 done
 sudo install -Dm755 target/release/khadi /usr/local/bin/khadi
 sudo install -Dm755 target/release/khadi-comp /usr/local/bin/khadi-comp
+sudo install -Dm755 target/release/khadi-lock /usr/local/bin/khadi-lock
+# Without this file PAM has no rules for khadi-lock and refuses every password, so
+# the screen locks and nothing can unlock it. Installed before the binary is ever
+# run, and never overwritten: a machine whose administrator has changed the unlock
+# rules should keep them across an upgrade.
+if [ ! -e /etc/pam.d/khadi-lock ]; then
+    sudo install -Dm644 session/khadi-lock.pam /etc/pam.d/khadi-lock
+fi
 sudo install -Dm755 session/khadi-session /usr/local/bin/khadi-session
 sudo install -Dm644 session/khadi.desktop /usr/share/wayland-sessions/khadi.desktop
 sudo install -Dm644 session/khadi-portals.conf /usr/share/xdg-desktop-portal/khadi-portals.conf

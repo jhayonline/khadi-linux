@@ -1,0 +1,23 @@
+[package]
+name = "khadi-lock"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "The Khadi lock screen"
+
+[dependencies]
+# The lock screen cannot use the toolkit the shell uses. eframe draws into a window
+# the compositor hands out through xdg-shell, and a lock surface is not that: it is
+# its own role under ext-session-lock, which winit has no way to ask for. So this
+# talks to Wayland directly and puts its pixels in a shared-memory buffer.
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+xkbcommon = "0.8"
+memmap2 = "0.9"
+rustix = { version = "1.1", features = ["fs", "shm", "process", "event", "pipe"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# 0.7, not 0.8. The newer pam-sys generates its bindings with bindgen, which needs
+# libclang at build time — a 150 MB build dependency for about a hundred lines of
+# declarations. 0.5, which this pulls, ships them written out.
+pam = "0.7"

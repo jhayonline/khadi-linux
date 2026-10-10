@@ -55,6 +55,12 @@ gnome-keyring
 # and renders tofu without one.
 ttf-jetbrains-mono-nerd
 
+# --- the lock screen -----------------------------------------------------
+pam                # khadi-lock asks PAM whether the password is right. Part of
+                   # any Arch install already; named so the dependency is written
+                   # down rather than assumed. The rules live in
+                   # /etc/pam.d/khadi-lock, which install.sh puts there.
+
 # --- login ---------------------------------------------------------------
 # NOT YET SETTLED. install.sh registers a session in /usr/share/wayland-sessions,
 # which needs a display manager to offer it, and Arch ships none by default.
