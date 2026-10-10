@@ -50,6 +50,8 @@ sudo install -Dm644 session/khadi.desktop /usr/share/wayland-sessions/khadi.desk
 sudo install -Dm644 session/khadi-portals.conf /usr/share/xdg-desktop-portal/khadi-portals.conf
 sudo install -d /usr/local/share/khadi/themes
 sudo install -m644 themes/*.json /usr/local/share/khadi/themes/
+# The name Khadi goes by. Not /etc/os-release — see the top of the file for why.
+sudo install -Dm644 session/os-release /usr/local/share/khadi/os-release
 
 if [ "${XDG_CURRENT_DESKTOP:-}" = khadi ]; then
     echo "Installed. Super+Shift+R restarts the shell on the new build (terminal tabs close);"

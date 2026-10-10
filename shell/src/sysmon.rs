@@ -49,6 +49,60 @@ pub struct SysMon {
 /// Stands for "not known" in the shared volume reading.
 const NO_VOLUME: u8 = u8::MAX;
 
+/// Where Khadi keeps the name it goes by, in preference to the base system's.
+/// See `session/os-release` for why it is not /etc/os-release.
+const KHADI_OS_RELEASE: [&str; 2] = [
+    "/usr/local/share/khadi/os-release",
+    "/usr/share/khadi/os-release",
+];
+
+/// The name of the operating system, for the system panel.
+///
+/// Khadi's own file first, then whatever the base system says. Reading Khadi's
+/// rather than printing "Khadi" outright keeps the panel honest: the shell runs on
+/// a plain Arch machine during development, through `dev.sh`, and there it should
+/// say Arch — nothing has been installed that would make it anything else.
+fn os_name() -> String {
+    KHADI_OS_RELEASE
+        .iter()
+        .find_map(|path| std::fs::read_to_string(path).ok())
+        .and_then(|text| os_release_name(&text))
+        .or_else(System::name)
+        .unwrap_or_else(|| "Linux".into())
+}
+
+/// Strips one layer of matching quotes, which os-release values usually carry.
+fn unquote(value: &str) -> &str {
+    for quote in ['"', '\''] {
+        if let Some(rest) = value.strip_prefix(quote)
+            && let Some(inner) = rest.strip_suffix(quote)
+        {
+            return inner;
+        }
+    }
+    value
+}
+
+/// `NAME=` from an os-release(5) file. Values may be quoted, and `#` starts a
+/// comment, which this file has at the top of it.
+fn os_release_name(text: &str) -> Option<String> {
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('#') {
+            continue;
+        }
+        let Some(value) = line.strip_prefix("NAME=") else {
+            continue;
+        };
+        let value = value.trim();
+        let value = unquote(value);
+        if !value.is_empty() {
+            return Some(value.to_string());
+        }
+    }
+    None
+}
+
 impl SysMon {
     pub fn new() -> SysMon {
         let mut sys = System::new();
@@ -58,7 +112,7 @@ impl SysMon {
             nets: Networks::new_with_refreshed_list(),
             last: None,
             host: System::host_name().unwrap_or_else(|| "localhost".into()),
-            os: System::name().unwrap_or_else(|| "Linux".into()),
+            os: os_name(),
             kernel: System::kernel_version().unwrap_or_default(),
             cpu_hist: VecDeque::from(vec![0.0; HISTORY]),
             cores: Vec::new(),
@@ -253,5 +307,22 @@ mod tests {
         assert!(!mon.cores.is_empty());
         assert!(!mon.top.is_empty());
         assert_eq!(mon.cpu_hist.len(), HISTORY);
+    }
+
+    #[test]
+    fn reads_the_name_out_of_os_release() {
+        let text = "# a comment\nID=khadi\nNAME=\"Khadi Linux\"\nPRETTY_NAME=\"Khadi Linux\"\n";
+        assert_eq!(os_release_name(text).as_deref(), Some("Khadi Linux"));
+    }
+
+    #[test]
+    fn takes_name_unquoted_and_ignores_the_rest() {
+        assert_eq!(os_release_name("NAME=Khadi\n").as_deref(), Some("Khadi"));
+        assert_eq!(os_release_name("NAME='Khadi Linux'\n").as_deref(), Some("Khadi Linux"));
+        // PRETTY_NAME ends in NAME= but is not it, and must not be mistaken for it.
+        assert_eq!(os_release_name("PRETTY_NAME=\"Arch\"\nNAME=\"Khadi\"\n").as_deref(), Some("Khadi"));
+        // Nothing to report rather than an empty string, so the caller falls back.
+        assert_eq!(os_release_name("ID=khadi\n"), None);
+        assert_eq!(os_release_name("NAME=\"\"\n"), None);
     }
 }

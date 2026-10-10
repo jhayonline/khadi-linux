@@ -1,0 +1,19 @@
+# Who Khadi says it is.
+#
+# os-release(5) format, and in the long run this is what /etc/os-release should
+# hold. It cannot be that yet. On Arch /etc/os-release is a symlink owned by the
+# `filesystem` package, so putting a real file there picks a fight with pacman on
+# every upgrade of it, over a name. Khadi installs this where nothing else claims
+# it, and the shell reads it in preference to the base system's.
+#
+# When Khadi has its own package and its own ISO it will ship this as
+# /usr/lib/os-release and the question goes away.
+#
+# ID_LIKE is the useful half: it tells anything that cares that this is Arch
+# underneath, which is true and which scripts rely on.
+
+NAME="Khadi Linux"
+PRETTY_NAME="Khadi Linux"
+ID=khadi
+ID_LIKE=arch
+HOME_URL="https://github.com/jhayonline/khadi-linux"
