@@ -19,3 +19,6 @@ omarchy/
 
 __pycache__/
 *.pyc
+
+# The upstream project this descends from, kept here to merge from.
+des-ui/
