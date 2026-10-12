@@ -66,6 +66,21 @@ vm_pid() {
     return 1
 }
 
+# How a running VM is being displayed, read from its own command line. Without
+# this, "Already running" is an unhelpful answer to someone who ran `run` precisely
+# because they could not see anything: a headless VM is invisible and perfectly
+# healthy at the same time.
+vm_display() {
+    local p; p="$(vm_pid)" || return 1
+    local args; args="$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)" || return 1
+    case "$args" in
+        *"-display none"*) echo "headless — no window; see it with 'shot' or over VNC" ;;
+        *"-full-screen"*)  echo "a window, full screen" ;;
+        *"-display gtk"*)  echo "a window" ;;
+        *)                 echo "unknown" ;;
+    esac
+}
+
 cmd_deps() {
     cat <<DEPS
 
@@ -150,10 +165,14 @@ cmd_run() {
     # fail there, after printing enough to look like it was starting.
     local running
     if running="$(vm_pid)"; then
-        die "Already running (pid $running).
-    ./vm/khadi-vm shot screen.ppm   look at what it is showing
-    ./vm/khadi-vm ssh               get a shell in it
-    ./vm/khadi-vm stop              shut it down"
+        die "Already running (pid $running), showing: $(vm_display)
+
+  To look at it:            ./vm/khadi-vm shot screen.ppm
+  To get a shell in it:     ./vm/khadi-vm ssh
+  To stop it:               KHADI_VM_USER=\${KHADI_VM_USER:-you} ./vm/khadi-vm stop
+
+  A headless VM has no window and never will; stop it and start it again without
+  KHADI_VM_HEADLESS to get one."
     fi
     local boot=() code used; code="$(ovmf_code)"
     if [[ "${1:-}" == "--iso" ]]; then
@@ -462,7 +481,7 @@ GUEST
 }
 
 cmd_status() {
-    printf '  %-12s %s\n' "vm" "$(vm_pid >/dev/null && echo "running (pid $(vm_pid))" || echo 'stopped')"
+    printf '  %-12s %s\n' "vm" "$(vm_pid >/dev/null && echo "running (pid $(vm_pid)), showing: $(vm_display)" || echo 'stopped')"
     printf '  %-12s %s\n' "qemu"  "$(have qemu-system-x86_64 && qemu-system-x86_64 --version | head -1 || echo 'NOT INSTALLED')"
     printf '  %-12s %s\n' "kvm"   "$( [[ -w /dev/kvm ]] && echo ok || echo unavailable )"
     printf '  %-12s %s\n' "iso"   "$( [[ -f $ISO ]] && du -h "$ISO" | cut -f1 || echo 'not fetched' )"
