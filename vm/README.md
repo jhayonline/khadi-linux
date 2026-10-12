@@ -75,6 +75,25 @@ been provisioned before the khadi replacement still execing `start-hyprland`
 at login — the new compositor installed, the old desktop booting over the top
 of it, and nothing anywhere saying so.
 
+## Stopping it
+
+```sh
+KHADI_VM_USER=you ./vm/khadi-vm stop
+```
+
+**The power button does not stop this guest, and that is Khadi working as
+designed.** The shell takes a blocking `handle-power-key` inhibitor so it can show
+its own power menu, and QEMU's power button arrives as exactly that key event. So
+logind hands it to the shell, the menu opens, and it waits for someone to choose —
+which on a headless VM nobody can. The machine then runs for ever while the host
+reports that it sent the request.
+
+`stop` asks over ssh instead, with `systemctl poweroff`: a shutdown request rather
+than a key press, with no inhibitor in front of it. Give it `KHADI_VM_USER` or it
+cannot log in. Failing that it tries the power button, waits, and then ends QEMU
+itself — losing whatever the guest had not written down. Each step is checked
+rather than assumed.
+
 ## Knobs
 
 | Variable | Default | |

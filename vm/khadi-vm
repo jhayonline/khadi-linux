@@ -239,18 +239,59 @@ cmd_run() {
         -usb -device usb-tablet
 }
 
+# Waits up to $1 seconds for the VM to go. True if it did.
+vm_gone_within() {
+    local waited=0
+    while (( waited < $1 )); do
+        vm_pid >/dev/null || return 0
+        sleep 1
+        waited=$(( waited + 1 ))
+    done
+    ! vm_pid >/dev/null
+}
+
 cmd_stop() {
-    # ACPI power button, the way the guest expects. Falls back to SIGTERM.
+    vm_pid >/dev/null || { echo "  not running"; return; }
+
+    # Asking the guest politely first, then insisting. Each step is checked rather
+    # than assumed: the version that printed "✓ power button sent" and returned was
+    # reporting that a request had been *sent*, which is not the same claim as the
+    # machine having stopped — and on this desktop it usually has not.
+    #
+    # Khadi's shell takes a blocking `handle-power-key` inhibitor so it can show its
+    # own power menu. QEMU's power button arrives as an ACPI power-key event, so
+    # logind hands it to the shell instead of powering off, and the menu waits for
+    # someone to choose. On a headless VM nobody can, and the guest runs for ever.
+    #
+    # `systemctl poweroff` over ssh is the one that works, because it is a shutdown
+    # request rather than a key press and no inhibitor sits in front of it.
+    if ssh -n -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+           -o LogLevel=ERROR -o ConnectTimeout=5 "${KHADI_VM_USER:-root}@localhost" \
+           'sudo systemctl poweroff' >/dev/null 2>&1; then
+        echo "  shutting down from inside…"
+        vm_gone_within 30 && { echo "  ✓ stopped"; return; }
+    fi
+
     if [[ -S "$QMP" ]] && have python3; then
-        python3 - "$QMP" <<'QPY' 2>/dev/null && { echo "  ✓ power button sent"; return; }
-import socket, json, sys
+        python3 - "$QMP" <<'QPY' 2>/dev/null && echo "  power button sent; waiting…"
+import socket, sys
 s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1])
 s.recv(4096)
 s.sendall(b'{"execute":"qmp_capabilities"}\n'); s.recv(4096)
 s.sendall(b'{"execute":"system_powerdown"}\n'); s.recv(4096)
 QPY
+        vm_gone_within 20 && { echo "  ✓ stopped"; return; }
+        echo "  the guest did not answer the power button."
     fi
-    local p; p="$(vm_pid)" && { kill -TERM "$p"; echo "  ✓ SIGTERM sent to $p"; } || echo "  not running"
+
+    local p
+    p="$(vm_pid)" || { echo "  ✓ stopped"; return; }
+    echo "  ending QEMU itself (pid $p). The guest loses anything unsaved."
+    kill -TERM "$p"
+    vm_gone_within 10 && { echo "  ✓ stopped"; return; }
+    kill -KILL "$p" 2>/dev/null
+    vm_gone_within 5 && { echo "  ✓ stopped (killed)"; return; }
+    die "QEMU (pid $p) will not stop."
 }
 
 cmd_shot() {

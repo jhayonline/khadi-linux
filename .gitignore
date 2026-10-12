@@ -12,6 +12,9 @@ vm/*.iso.part
 vm/*.qcow2
 vm/OVMF_VARS.fd
 vm/.qmp.sock
+# Screen captures. `khadi-vm shot` writes one wherever you ask it to, and the
+# obvious place to ask for is the directory you are standing in.
+*.ppm
 
 # Reference clones, not ours to version
 edex-ui/
