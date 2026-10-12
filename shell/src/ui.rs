@@ -374,6 +374,8 @@ pub enum Icon {
     PanelLeft,
     PanelBottom,
     PanelRight,
+    /// A frame divided down the middle: split the terminal.
+    SplitPane,
 }
 
 /// A small square button drawn with lines. `lit` draws it in the accent.
@@ -398,6 +400,11 @@ pub fn icon_button(ui: &mut Ui, theme: &Theme, icon: Icon, size: f32, lit: bool)
             painter.line_segment([c + vec2(-6.0, 0.0), c + vec2(5.0, 0.0)], stroke);
             painter.line_segment([c + vec2(1.0, -4.0), c + vec2(5.0, 0.0)], stroke);
             painter.line_segment([c + vec2(1.0, 4.0), c + vec2(5.0, 0.0)], stroke);
+        }
+        Icon::SplitPane => {
+            let frame = Rect::from_center_size(c, vec2(14.0, 10.0));
+            painter.rect_stroke(frame, 0.0, Stroke::new(1.0, color), StrokeKind::Inside);
+            painter.vline(c.x, frame.y_range(), Stroke::new(1.0, color));
         }
         Icon::PanelLeft | Icon::PanelBottom | Icon::PanelRight => {
             // A screen outline with the panel's region filled when it is open.

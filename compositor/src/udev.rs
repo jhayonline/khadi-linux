@@ -56,7 +56,7 @@ use smithay::{
 };
 
 use crate::{DesComp, monitors};
-use des_common::ipc::{DisplayInfo, Mode as DisplayMode};
+use des_common::ipc::{DisplayInfo, Mode as DisplayMode, Setup, Usage};
 
 /// How long the first frame may take to reach a screen before the backend gives up.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
@@ -69,10 +69,68 @@ render_elements! {
     pub OutputElements<=GlesRenderer>;
     Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
     Cursor=MemoryRenderBufferRenderElement<GlesRenderer>,
-    // A plain surface drawn at a position we choose: the pointer image a client
-    // supplied, or the lock screen. One variant, because `render_elements!` derives
-    // a `From` for each and two variants of the same type cannot both have one.
-    Surface=WaylandSurfaceRenderElement<GlesRenderer>,
+    ClientCursor=WaylandSurfaceRenderElement<GlesRenderer>,
+    Toast=crate::toast::ToastElement,
+    Solid=smithay::backend::renderer::element::solid::SolidColorRenderElement,
+}
+
+/// The pointer as something to draw at `position` on a display: the arrow, or the
+/// image the application under it supplies.
+pub fn cursor_elements(
+    renderer: &mut GlesRenderer,
+    cursor: &MemoryRenderBuffer,
+    status: &CursorImageStatus,
+    position: smithay::utils::Point<f64, smithay::utils::Logical>,
+    scale: f64,
+) -> Vec<OutputElements> {
+    let mut elements = Vec::new();
+    match status {
+        CursorImageStatus::Hidden => {}
+        CursorImageStatus::Surface(surface) => {
+            let hotspot = with_states(surface, |states| {
+                states
+                    .data_map
+                    .get::<Mutex<CursorImageAttributes>>()
+                    .map(|attributes| attributes.lock().unwrap().hotspot)
+                    .unwrap_or_default()
+            });
+            elements.extend(render_elements_from_surface_tree(
+                renderer,
+                surface,
+                (position - hotspot.to_f64()).to_physical(scale).to_i32_round(),
+                scale,
+                1.0,
+                Kind::Cursor,
+            ));
+        }
+        CursorImageStatus::Named(_) => {
+            if let Ok(arrow) =
+                MemoryRenderBufferRenderElement::from_buffer(renderer, position.to_physical(scale), cursor, None, None, None, Kind::Cursor)
+            {
+                elements.push(OutputElements::Cursor(arrow));
+            }
+        }
+    }
+    elements
+}
+
+/// The splash as something to draw on a display, in this backend's terms.
+pub fn splash_elements(
+    splash: &mut crate::splash::Splash,
+    renderer: &mut GlesRenderer,
+    size: smithay::utils::Size<i32, smithay::utils::Logical>,
+    scale: f64,
+) -> Vec<OutputElements> {
+    splash
+        .elements(renderer, size, scale)
+        .into_iter()
+        .map(|element| match element {
+            crate::splash::TopElements::Buffer(buffer) => OutputElements::Cursor(buffer),
+            crate::splash::TopElements::Solid(solid) => OutputElements::Solid(solid),
+            crate::splash::TopElements::Toast(toast) => OutputElements::Toast(toast),
+            crate::splash::TopElements::_GenericCatcher(never) => match never {},
+        })
+        .collect()
 }
 
 /// One monitor and the means to draw on it.
@@ -87,6 +145,8 @@ struct Monitor {
     refresh: Duration,
     /// The modes it can run at, best first.
     modes: Vec<DisplayMode>,
+    /// How it was asked to be set: scaled, turned, mirroring.
+    setup: Setup,
     /// When the frame currently waiting for its page flip was queued.
     pending_since: Option<Instant>,
     /// Whether the frame now in flight was drawn under a session lock. Read when the
@@ -100,8 +160,10 @@ pub struct UdevData {
     pub renderer: GlesRenderer,
     /// Connected monitors, the main display first.
     monitors: Vec<Monitor>,
+    /// Connected monitors that are turned off in the settings.
+    dark: Vec<DisplayInfo>,
     manager: Manager,
-    cursor: MemoryRenderBuffer,
+    pub cursor: MemoryRenderBuffer,
     /// False while another virtual terminal owns the displays.
     active: bool,
     /// Frames that have reached a screen.
@@ -209,6 +271,7 @@ pub fn init_udev(
     state.udev = Some(UdevData {
         renderer,
         monitors: Vec::new(),
+        dark: Vec::new(),
         manager,
         cursor: cursor_buffer(),
         active: true,
@@ -336,6 +399,7 @@ pub fn init_udev(
                 return TimeoutAction::Drop;
             }
             state.render_udev();
+            state.record_tick();
             state.after_frame();
             let _ = state.display_handle.flush_clients();
             let frame_time = state
@@ -400,6 +464,15 @@ fn offered_modes(info: &connector::Info) -> Vec<DisplayMode> {
     modes
 }
 
+/// How a saved layout sets a monitor beyond its mode.
+fn setup_of(saved: &monitors::Saved) -> Setup {
+    Setup {
+        scale: (saved.scale * 100.0).round() as u32,
+        turn: saved.turn,
+        usage: saved.usage,
+    }
+}
+
 /// The kernel's name for a connector, such as `HDMI-A-1`.
 fn connector_name(info: &connector::Info) -> String {
     format!("{}-{}", info.interface().as_str(), info.interface_id())
@@ -444,14 +517,25 @@ impl DesComp {
             _ => monitors::pick(&monitors::load_all(), &names),
         };
 
+        // Monitors turned off in the settings are left alone, unless that is all of them.
+        let off = |name: &str| saved.get(&monitors::gnome_name(name)).is_some_and(|saved| saved.own && saved.usage == Usage::Off);
+        let any_on = connected.iter().any(|info| !off(&connector_name(info)));
+        let off = |name: &str| any_on && off(name);
+        udev.dark.clear();
+
         let mut index = 0;
         while index < udev.monitors.len() {
-            if connected.iter().any(|info| info.handle() == udev.monitors[index].connector) {
+            let monitor = &udev.monitors[index];
+            if connected.iter().any(|info| info.handle() == monitor.connector) && !off(&monitor.output.name()) {
                 index += 1;
                 continue;
             }
             let gone = udev.monitors.remove(index);
-            tracing::info!(output = %gone.output.name(), "monitor disconnected");
+            tracing::info!(output = %gone.output.name(), "monitor disconnected or turned off");
+            // Dropping the surface is not enough to stop the monitor showing its last picture.
+            if let Err(e) = gone.surface.with_compositor(|compositor| compositor.clear()) {
+                tracing::warn!("cannot turn the screen off: {e}");
+            }
             self.space.unmap_output(&gone.output);
             self.display_handle.remove_global::<DesComp>(gone.global.clone());
         }
@@ -461,6 +545,31 @@ impl DesComp {
                 continue;
             }
             let name = connector_name(info);
+            if off(&name) {
+                let modes = offered_modes(info);
+                let wanted = saved.get(&monitors::gnome_name(&name));
+                let current = wanted
+                    .and_then(|saved| {
+                        modes
+                            .iter()
+                            .filter(|mode| (mode.width as i32, mode.height as i32) == (saved.width, saved.height))
+                            .min_by_key(|mode| (mode.refresh as f64 - saved.rate * 1000.0).abs() as u64)
+                    })
+                    .or(modes.first())
+                    .copied();
+                if let Some(current) = current {
+                    udev.dark.push(DisplayInfo {
+                        name,
+                        main: false,
+                        x: i32::MAX,
+                        y: 0,
+                        current,
+                        modes,
+                        setup: wanted.map_or(Setup::default(), setup_of),
+                    });
+                }
+                continue;
+            }
             // Each monitor needs a CRTC of its own, out of those its connector can use.
             let crtc = info
                 .encoders()
@@ -546,6 +655,7 @@ impl DesComp {
                 global: output.create_global::<DesComp>(&self.display_handle),
                 output,
                 refresh: Duration::from_secs_f64(1000.0 / wl_mode.refresh.max(1) as f64),
+                setup: Setup::default(),
                 pending_since: None,
                 lock_frame: false,
                 lit: false,
@@ -555,29 +665,65 @@ impl DesComp {
         // Arrange the monitors as saved, if what is saved describes exactly this set.
         let place = |monitor: &Monitor| saved.get(&monitors::gnome_name(&monitor.output.name()));
         let arranged = saved.arranged && udev.monitors.iter().all(|monitor| place(monitor).is_some());
+        // Scale, turn and mirroring are this desktop's own settings, never GNOME's.
+        for monitor in udev.monitors.iter_mut() {
+            monitor.setup = saved
+                .get(&monitors::gnome_name(&monitor.output.name()))
+                .filter(|saved| saved.own)
+                .map_or(Setup::default(), setup_of);
+        }
         if arranged {
-            udev.monitors
-                .sort_by_key(|monitor| place(monitor).map(|saved| (!saved.primary, saved.x, saved.y)));
+            udev.monitors.sort_by_key(|monitor| {
+                place(monitor).map(|saved| (!saved.primary, monitor.setup.usage == Usage::Mirror, saved.x, saved.y))
+            });
         } else {
             // The built-in panel leads; everything else follows it, left to right.
-            udev.monitors.sort_by_key(|monitor| !monitor.internal);
+            udev.monitors.sort_by_key(|monitor| (monitor.setup.usage == Usage::Mirror, !monitor.internal));
         }
-        let mut screens = Vec::new();
+        // Whatever leads is a display of its own: there has to be one.
+        if let Some(main) = udev.monitors.first_mut() {
+            main.setup.usage = Usage::Own;
+        }
+        let mut screens: Vec<Rectangle<i32, smithay::utils::Logical>> = Vec::new();
         let mut next_x = 0;
         for monitor in &udev.monitors {
             let Some(mode) = monitor.output.current_mode() else {
                 continue;
             };
-            let position = match place(monitor) {
-                Some(saved) if arranged => (saved.x, saved.y),
-                _ => (next_x, 0),
+            let transform = match monitor.setup.turn {
+                90 => Transform::_90,
+                180 => Transform::_180,
+                270 => Transform::_270,
+                _ => Transform::Normal,
             };
-            next_x += mode.size.w;
-            monitor
-                .output
-                .change_current_state(None, None, None, Some(position.into()));
+            let turned = transform.transform_size(mode.size);
+            let mirrored = screens.first().copied().filter(|_| monitor.setup.usage == Usage::Mirror);
+            let (scale, position) = match mirrored {
+                // A mirror shows the main display whole: as large as fits its own shape.
+                Some(main) => {
+                    let scale = (turned.w as f64 / main.size.w.max(1) as f64).min(turned.h as f64 / main.size.h.max(1) as f64);
+                    (scale.max(0.1), (main.loc.x, main.loc.y))
+                }
+                None => {
+                    let position = match place(monitor) {
+                        Some(saved) if arranged => (saved.x, saved.y),
+                        _ => (next_x, 0),
+                    };
+                    (monitor.setup.scale as f64 / 100.0, position)
+                }
+            };
+            monitor.output.change_current_state(
+                None,
+                Some(transform),
+                Some(smithay::output::Scale::Fractional(scale)),
+                Some(position.into()),
+            );
             self.space.map_output(&monitor.output, position);
-            screens.push(Rectangle::new(position.into(), (mode.size.w, mode.size.h).into()));
+            if mirrored.is_none() {
+                let size = turned.to_f64().to_logical(scale).to_i32_round::<i32>();
+                next_x += size.w;
+                screens.push(Rectangle::new(position.into(), size));
+            }
         }
         self.set_screens(screens);
     }
@@ -614,10 +760,13 @@ impl DesComp {
                         refresh: mode.refresh as u32,
                     },
                     modes: monitor.modes.clone(),
+                    setup: monitor.setup,
                 })
             })
             .collect();
-        displays.sort_by_key(|display| display.x);
+        displays.extend(udev.dark.iter().cloned());
+        // Left to right; a mirror follows what it shows, and the dark ones come last.
+        displays.sort_by_key(|display| (display.x, display.setup.usage != Usage::Own));
         Some(displays)
     }
 
@@ -650,7 +799,33 @@ impl DesComp {
         self.rescan_monitors();
     }
 
+    /// Turns every screen off, or back on. Off, nothing is drawn; on, the next frame
+    /// lights them again.
+    pub fn blank(&mut self, off: bool) {
+        self.screens_off = off;
+        let Some(udev) = self.udev.as_mut() else {
+            tracing::info!(off, "screens would be switched, were this not a window");
+            return;
+        };
+        for monitor in udev.monitors.iter_mut() {
+            monitor.pending_since = None;
+            if off {
+                if let Err(e) = monitor.surface.with_compositor(|compositor| compositor.clear()) {
+                    tracing::warn!("cannot turn a screen off: {e}");
+                }
+            } else {
+                // Everything is drawn afresh, which is what switches the screen on.
+                monitor.surface.reset_buffers();
+            }
+        }
+    }
+
     fn render_udev(&mut self) {
+        if self.screens_off {
+            return;
+        }
+        let toast_area = self.toast_area();
+        let primary = self.screens.first().map(|screen| screen.loc);
         let Some(udev) = self.udev.as_mut() else {
             return;
         };
@@ -682,67 +857,22 @@ impl DesComp {
 
             // Front to back: the pointer is above everything.
             let mut elements: Vec<OutputElements> = Vec::new();
-            if geometry.to_f64().contains(pointer) {
+            let scale = monitor.output.current_scale().fractional_scale();
+            // The splash covers everything, the pointer included.
+            if let Some(splash) = self.splash.as_mut() {
+                elements.extend(splash_elements(splash, renderer, geometry.size, scale));
+            } else if geometry.to_f64().contains(pointer) {
                 let position = pointer - geometry.loc.to_f64();
-                match &self.cursor_status {
-                    CursorImageStatus::Hidden => {}
-                    // The application under the pointer supplies its own image.
-                    CursorImageStatus::Surface(surface) => {
-                        let hotspot = with_states(surface, |states| {
-                            states
-                                .data_map
-                                .get::<Mutex<CursorImageAttributes>>()
-                                .map(|attributes| attributes.lock().unwrap().hotspot)
-                                .unwrap_or_default()
-                        });
-                        elements.extend(render_elements_from_surface_tree(
-                            renderer,
-                            surface,
-                            (position - hotspot.to_f64()).to_physical(1.0).to_i32_round(),
-                            1.0,
-                            1.0,
-                            Kind::Cursor,
-                        ));
-                    }
-                    CursorImageStatus::Named(_) => {
-                        if let Ok(arrow) = MemoryRenderBufferRenderElement::from_buffer(
-                            renderer,
-                            position.to_physical(1.0),
-                            cursor,
-                            None,
-                            None,
-                            None,
-                            Kind::Cursor,
-                        ) {
-                            elements.push(OutputElements::Cursor(arrow));
-                        }
-                    }
-                }
+                elements.extend(cursor_elements(renderer, cursor, &self.cursor_status, position, scale));
             }
-            // While locked, the desktop is not drawn at all — not hidden behind
-            // something, not drawn and covered. A display the lock screen has not
-            // reached shows the clear colour, which is black.
-            match self.lock.as_ref() {
-                Some(lock) => {
-                    if let Some(surface) = lock.surface_for(&monitor.output) {
-                        elements.extend(
-                            render_elements_from_surface_tree(
-                                renderer,
-                                surface.wl_surface(),
-                                (0, 0),
-                                1.0,
-                                1.0,
-                                Kind::Unspecified,
-                            )
-                            .into_iter()
-                            .map(OutputElements::Surface),
-                        );
-                    }
-                }
-                None => match space_render_elements(renderer, [&self.space], &monitor.output, 1.0) {
-                    Ok(space) => elements.extend(space.into_iter().map(OutputElements::Space)),
-                    Err(e) => tracing::error!("cannot collect windows to draw: {e:?}"),
-                },
+            elements.extend(
+                crate::toast::elements(renderer, self.shell.as_ref(), toast_area, primary, &self.toast_id, geometry.loc, scale)
+                    .into_iter()
+                    .map(OutputElements::Toast),
+            );
+            match space_render_elements(renderer, [&self.space], &monitor.output, 1.0) {
+                Ok(space) => elements.extend(space.into_iter().map(OutputElements::Space)),
+                Err(e) => tracing::error!("cannot collect windows to draw: {e:?}"),
             }
 
             let drawn = monitor

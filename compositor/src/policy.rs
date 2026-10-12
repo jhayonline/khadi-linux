@@ -44,7 +44,7 @@ fn is_toplevel(window: &Window, surface: &WlSurface) -> bool {
 }
 
 /// What to give the keyboard to for it to reach `window`.
-fn focus_of(window: &Window) -> Option<Focus> {
+pub fn focus_of(window: &Window) -> Option<Focus> {
     match window.x11_surface() {
         Some(x11) => Some(Focus::X11(x11.clone())),
         None => window.wl_surface().map(|surface| Focus::Surface(surface.into_owned())),
@@ -153,7 +153,7 @@ impl DesComp {
 
     /// The application that has the keyboard on a display: the one in the half last
     /// used, or the only one there is.
-    fn focused_on(&self, screen: usize) -> Option<usize> {
+    pub fn focused_on(&self, screen: usize) -> Option<usize> {
         let side = self.in_place(screen, Place::Side);
         match side {
             Some(side) if self.mode(screen).side_focused => Some(side),
@@ -237,7 +237,7 @@ impl DesComp {
             let split = self.apps.iter().any(|app| app.screen == screen && app.place == Place::Side);
             mode.side_focused &= split;
         }
-        let focus_app = self.focused_on(self.focus_screen);
+        let focus_app = self.focused_on(self.focus_screen).filter(|_| !self.locked);
 
         if let Some(shell) = self.shell.clone() {
             configure(&shell, primary, true, focus_app.is_none());
@@ -255,7 +255,9 @@ impl DesComp {
         for i in 0..self.apps.len() {
             let (window, screen, place) = {
                 let app = &self.apps[i];
-                (app.window.clone(), app.screen, app.place)
+                // Locked, nothing but the shell is shown, wherever it was.
+                let place = if self.locked { Place::Hidden } else { app.place };
+                (app.window.clone(), app.screen, place)
             };
             let (main, side) = self.slots(screen);
             let area = if place == Place::Side { side } else { main };
@@ -273,7 +275,11 @@ impl DesComp {
 
         // X11 menus stay above the windows that were just raised.
         for popup in &self.x_popups {
-            self.space.raise_element(popup, false);
+            if self.locked {
+                self.space.unmap_elem(popup);
+            } else {
+                self.space.raise_element(popup, false);
+            }
         }
 
         let focus = focus_app
@@ -290,6 +296,9 @@ impl DesComp {
         if from_shell && self.shell.is_none() {
             tracing::info!("shell window connected");
             self.shell = Some(window);
+            if let Some(splash) = &mut self.splash {
+                splash.shell_ready();
+            }
         } else if from_shell {
             tracing::info!(count = self.backdrops.len() + 1, "shell backdrop connected");
             self.backdrops.push(window);
@@ -315,6 +324,7 @@ impl DesComp {
         if self.shell.as_ref().is_some_and(|w| is_toplevel(w, surface)) {
             // Whether this ends the session is decided when the shell's process exits.
             tracing::info!("shell window closed");
+            self.toast = None;
             if let Some(window) = self.shell.take() {
                 self.space.unmap_elem(&window);
             }
@@ -470,6 +480,53 @@ impl DesComp {
         self.arrange();
     }
 
+    /// Asks the shell to lock the screen. It answers when it can show the lock screen,
+    /// so that a shell unable to unlock is never locked.
+    pub fn request_lock(&mut self) {
+        if let Some(ipc) = self.ipc.as_mut() {
+            ipc.send(Event::LOCK_REQUESTED);
+        }
+    }
+
+    /// Asks for the lock once the machine has been left alone for as long as the
+    /// settings say, unless something on screen is being watched.
+    pub fn check_idle(&mut self) {
+        self.idle_inhibitors.retain(smithay::utils::IsAlive::alive);
+        let watched = self.idle_held || !self.idle_inhibitors.is_empty();
+        if watched {
+            // The wait starts over when the watching ends.
+            self.last_input = std::time::Instant::now();
+            return;
+        }
+        if let Some(minutes) = self.input_settings.screen_off_after {
+            if !self.screens_off && self.last_input.elapsed() >= std::time::Duration::from_secs(minutes as u64 * 60) {
+                tracing::info!(minutes, "left alone: turning the screens off");
+                self.blank(true);
+            }
+        }
+        let Some(minutes) = self.input_settings.lock_after else {
+            return;
+        };
+        let waited = self.last_input.elapsed() >= std::time::Duration::from_secs(minutes as u64 * 60);
+        if waited && !self.locked && !self.idle_lock_asked && self.shell.is_some() {
+            tracing::info!(minutes, "left alone: asking for the lock");
+            self.idle_lock_asked = true;
+            self.request_lock();
+        }
+    }
+
+    /// Hides everything but the shell and gives it the keyboard, or undoes that.
+    pub fn set_locked(&mut self, locked: bool) {
+        if self.locked != locked {
+            tracing::info!(locked, "screen lock");
+            self.locked = locked;
+            if locked {
+                self.focus_screen = 0;
+            }
+            self.arrange();
+        }
+    }
+
     /// Asks the shell to show its application launcher.
     pub fn open_launcher(&mut self) {
         self.ask_shell(Event::LAUNCHER);
@@ -480,9 +537,24 @@ impl DesComp {
         self.ask_shell(Event::SETTINGS);
     }
 
+    /// Asks the shell to show the music player.
+    pub fn open_music(&mut self) {
+        self.ask_shell(Event::MUSIC);
+    }
+
+    /// Asks the shell to show the power menu.
+    pub fn open_power(&mut self) {
+        self.ask_shell(Event::POWER);
+    }
+
+    /// Asks the shell to show the list of notifications.
+    pub fn ask_notifications(&mut self) {
+        self.ask_shell(Event::NOTIFICATIONS);
+    }
+
     /// Uncovers the shell's workspace, where it shows such things, and sends `event`.
     fn ask_shell(&mut self, event: &str) {
-        if self.modes.is_empty() {
+        if self.modes.is_empty() || self.locked {
             return;
         }
         self.show_terminal();
@@ -525,6 +597,10 @@ impl DesComp {
             if self.modes.is_empty() {
                 break;
             }
+            // Locked, the shell may only unlock: nothing else changes behind the lock.
+            if self.locked && !matches!(command, Command::Unlock | Command::ReloadInput) {
+                continue;
+            }
             match command {
                 // The window may have closed while the request was on its way.
                 Command::Activate(index) if index < self.apps.len() => {
@@ -542,6 +618,25 @@ impl DesComp {
                 Command::KeepDisplays => self.keep_displays(),
                 Command::RevertDisplays => self.revert_displays(),
                 Command::ReloadInput => self.reload_input(),
+                Command::Lock => self.set_locked(true),
+                Command::Unlock => self.set_locked(false),
+                Command::Shot(mode) => self.take_shot(mode),
+                Command::Record(path) => self.start_recording(&path),
+                Command::RecordStop => self.stop_recording(),
+                Command::HoldIdle(held) => {
+                    tracing::info!(held, "an application is asking that the screen be left alone");
+                    self.idle_held = held;
+                }
+                Command::Toast(area) => {
+                    self.toast = area.map(|(x, y, w, h)| Rectangle::new((x, y).into(), (w.max(0), h.max(0)).into()));
+                    // The shell is done choosing what to picture: the keyboard goes
+                    // back to whatever had it.
+                    let whole = self.screens.first().copied();
+                    if self.picking && !self.toast.zip(whole).is_some_and(|(toast, whole)| toast.contains_rect(whole)) {
+                        self.picking = false;
+                        self.arrange();
+                    }
+                }
             }
         }
         let last_screen = self.screens.len().saturating_sub(1);
@@ -561,7 +656,20 @@ impl DesComp {
                 .collect(),
         });
         ipc.publish_displays(&self.display_report());
+        ipc.publish_locked(self.locked);
+        // What handling the commands gave rise to, while the socket was out of reach.
+        for line in std::mem::take(&mut self.unsaid) {
+            ipc.send(&line);
+        }
         self.ipc = Some(ipc);
+    }
+
+    /// Says something to the shell: at once, or as soon as the socket is back in hand.
+    pub fn tell(&mut self, line: String) {
+        match self.ipc.as_mut() {
+            Some(ipc) => ipc.send(&line),
+            None => self.unsaid.push(line),
+        }
     }
 }
 

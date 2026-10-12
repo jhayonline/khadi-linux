@@ -78,9 +78,9 @@ pub struct DesComp {
     pub output_manager_state: OutputManagerState,
     pub seat_state: SeatState<DesComp>,
     pub data_device_state: DataDeviceState,
-    pub session_lock_state: SessionLockManagerState,
-    /// Set while the session is locked. See `lock.rs`.
-    pub lock: Option<Lock>,
+    /// Lets clipboard tools (such as `wl-copy`, which screenshots use) set and read
+    /// the clipboard without a window of their own.
+    pub data_control_state: smithay::wayland::selection::wlr_data_control::DataControlState,
     pub dmabuf_state: DmabufState,
     pub dmabuf_global: Option<DmabufGlobal>,
     pub popups: PopupManager,
@@ -97,6 +97,32 @@ pub struct DesComp {
     pub shell_pid: Option<u32>,
     /// The des-ui shell window: always fullscreen, always at the bottom.
     pub shell: Option<Window>,
+    /// What is shown while the shell is being restarted, until it has a window again.
+    pub splash: Option<crate::splash::Splash>,
+    /// When a key, button or pointer was last used.
+    pub last_input: Instant,
+    /// Lines for the shell that arose while its socket was being read.
+    pub unsaid: Vec<String>,
+    /// When the windowed backend last drew a frame.
+    pub last_frame: Instant,
+    /// The recording under way, if any.
+    pub recording: Option<crate::capture::Recording>,
+    /// How many screenshots have been taken, to name each one's file.
+    pub shots: u32,
+    /// The shell is asking what to picture, and has the keyboard for it.
+    pub picking: bool,
+    /// Whether the screens are turned off for want of anyone looking.
+    pub screens_off: bool,
+    /// Whether the lock was already asked for since then.
+    pub idle_lock_asked: bool,
+    /// Whether the shell says an application is showing something to watch.
+    pub idle_held: bool,
+    /// Windows that asked, themselves, that the screen be left alone.
+    pub idle_inhibitors: Vec<WlSurface>,
+    /// Where in the shell's window its toasts are, to be shown above everything.
+    pub toast: Option<Rectangle<i32, Logical>>,
+    /// The name the toasts go by when drawn.
+    pub toast_id: smithay::backend::renderer::element::Id,
     /// The shell's backdrop windows: the nth covers display n + 1 behind its applications.
     pub backdrops: Vec<Window>,
     /// Application windows, in the order they were opened.
@@ -123,10 +149,18 @@ pub struct DesComp {
     pub input_settings: des_common::input::InputSettings,
     /// The keyboard layout and variant last given to the keymap compiler.
     pub keymap_applied: Option<(String, String)>,
+    /// While locked, only the shell is on screen, showing the lock screen, and the
+    /// keyboard is its alone.
+    pub locked: bool,
     pub display_override: Option<Vec<crate::monitors::Saved>>,
     /// Set while a new layout waits to be confirmed: what to go back to, and since when.
     pub display_pending: Option<(Option<Vec<crate::monitors::Saved>>, Instant)>,
     pub screenshot: Option<PathBuf>,
+}
+
+/// A length of time in milliseconds that a test may set through the environment.
+pub fn test_millis(name: &str, usual: u64) -> u64 {
+    std::env::var(name).ok().and_then(|value| value.parse().ok()).unwrap_or(usual)
 }
 
 impl DesComp {
@@ -137,15 +171,14 @@ impl DesComp {
 
         let compositor_state = CompositorState::new::<Self>(&dh);
         let xdg_shell_state = XdgShellState::new::<Self>(&dh);
+        smithay::wayland::idle_inhibit::IdleInhibitManagerState::new::<Self>(&dh);
         let xdg_decoration_state = XdgDecorationState::new::<Self>(&dh);
         let shm_state = ShmState::new::<Self>(&dh, vec![]);
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(&dh);
         let mut seat_state = SeatState::new();
         let data_device_state = DataDeviceState::new::<Self>(&dh);
-        // Any client may lock the session. Restricting this to one trusted program
-        // would need a way to tell them apart that DEs-UI does not have yet, and the
-        // protocol's own guarantees do not depend on who asks.
-        let session_lock_state = SessionLockManagerState::new::<Self, _>(&dh, |_| true);
+        let data_control_state =
+            smithay::wayland::selection::wlr_data_control::DataControlState::new::<Self, _>(&dh, None, |_| true);
         let popups = PopupManager::default();
 
         let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, "winit");
@@ -178,8 +211,7 @@ impl DesComp {
             output_manager_state,
             seat_state,
             data_device_state,
-            session_lock_state,
-            lock: None,
+            data_control_state,
             dmabuf_state: DmabufState::new(),
             dmabuf_global: None,
             popups,
@@ -191,6 +223,20 @@ impl DesComp {
             shell_restarting: false,
             shell_pid: None,
             shell: None,
+            last_input: Instant::now(),
+            unsaid: Vec::new(),
+            last_frame: Instant::now(),
+            recording: None,
+            shots: 0,
+            picking: false,
+            screens_off: false,
+            idle_lock_asked: false,
+            idle_held: false,
+            idle_inhibitors: Vec::new(),
+            toast: None,
+            // A session starts quickly enough to need none; a test may ask for one.
+            splash: std::env::var_os("DES_TEST_SPLASH_MS").map(|_| crate::splash::Splash::new(Duration::from_millis(test_millis("DES_TEST_SPLASH_MS", 1400)))),
+            toast_id: smithay::backend::renderer::element::Id::new(),
             backdrops: Vec::new(),
             apps: Vec::new(),
             screens: Vec::new(),
@@ -204,6 +250,7 @@ impl DesComp {
             fatal: None,
             input_settings: des_common::input::InputSettings::default(),
             keymap_applied: None,
+            locked: false,
             display_override: None,
             display_pending: None,
             screenshot: None,
@@ -229,6 +276,17 @@ impl DesComp {
             })
             .expect("Failed to init the wayland event source.");
 
+        // Left alone for long enough, the screen locks.
+        loop_handle
+            .insert_source(
+                smithay::reexports::calloop::timer::Timer::from_duration(Duration::from_secs(5)),
+                |_, _, state| {
+                    state.check_idle();
+                    smithay::reexports::calloop::timer::TimeoutAction::ToDuration(Duration::from_secs(5))
+                },
+            )
+            .expect("Failed to start the idle timer.");
+
         // The display itself is an event source, so that client requests get dispatched.
         loop_handle
             .insert_source(
@@ -247,22 +305,14 @@ impl DesComp {
     }
 
     pub fn surface_under(&self, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
-        // While locked the pointer can only be over the lock screen. Without this the
-        // desktop underneath would still take clicks and hovers, and would still say
-        // what the pointer should look like over it.
-        if let Some(lock) = self.lock.as_ref() {
-            let output = self
-                .space
-                .outputs()
-                .find(|output| {
-                    self.space
-                        .output_geometry(output)
-                        .is_some_and(|geometry| geometry.to_f64().contains(pos))
-                })
-                .cloned()?;
-            let origin = self.space.output_geometry(&output)?.loc.to_f64();
-            let surface = lock.surface_for(&output)?.wl_surface().clone();
-            return Some((surface, origin));
+        // A toast is the shell's, whatever window lies under it.
+        if let (Some(area), Some(shell), Some(primary)) = (self.toast_area(), &self.shell, self.screens.first()) {
+            if area.to_f64().contains(pos) {
+                let origin = primary.loc.to_f64();
+                return shell
+                    .surface_under(pos - origin, WindowSurfaceType::ALL)
+                    .map(|(surface, at)| (surface, (at.to_f64() + origin)));
+            }
         }
         self.space.element_under(pos).and_then(|(window, location)| {
             window
@@ -282,6 +332,9 @@ impl DesComp {
 
     /// Work due before drawing a frame. Returns false once the session is over.
     pub fn before_frame(&mut self) -> bool {
+        if self.splash.as_ref().is_some_and(|splash| splash.done()) {
+            self.splash = None;
+        }
         if let Some(child) = self.shell_child.as_mut() {
             if let Ok(Some(status)) = child.try_wait() {
                 self.shell_child = None;
@@ -357,6 +410,8 @@ impl DesComp {
         if let Some(child) = self.shell_child.as_mut() {
             tracing::info!("restarting the shell");
             self.shell_restarting = true;
+            // Briefly, in place of the blank the shell leaves behind it.
+            self.splash = Some(crate::splash::Splash::new(Duration::from_millis(500)));
             let _ = child.kill();
         }
     }

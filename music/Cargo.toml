@@ -1,0 +1,18 @@
+[package]
+name = "des-music"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "The DEs-UI music service: plays Spotify without its application"
+
+[dependencies]
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "signal"] }
+librespot-core = { version = "0.8", default-features = false, features = ["native-tls"] }
+librespot-playback = { version = "0.8", default-features = false, features = ["native-tls"] }
+librespot-connect = { version = "0.8", default-features = false, features = ["native-tls"] }
+librespot-metadata = { version = "0.8", default-features = false, features = ["native-tls"] }
+librespot-oauth = { version = "0.8", default-features = false, features = ["native-tls"] }
+http = "1"
+bytes = "1"
+http-body-util = "0.1"

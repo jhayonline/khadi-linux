@@ -202,6 +202,7 @@ pub fn right(
     desktop: Option<&DesktopState>,
     rotation: f32,
     geo: &Snapshot,
+    playing: impl FnOnce(&mut Ui),
 ) {
     ui.spacing_mut().item_spacing.y = 7.0;
     let online = !mon.ip.is_empty();
@@ -278,6 +279,8 @@ pub fn right(
         });
     }
 
+    playing(ui);
+
     if let Some(desktop) = desktop {
         ui.add_space(SECTION_GAP);
         ui::section(ui, "DISPLAYS", |ui| {
@@ -318,6 +321,10 @@ pub fn right(
     for (action, key) in [
         ("Launcher", "SPACE"),
         ("Settings", ","),
+        ("Music", "M"),
+        ("Notifications", "N"),
+        ("Power", "ESC"),
+        ("Lock", "L"),
         ("Next application", "TAB"),
         ("Split the workspace", "S"),
         ("Full screen", "F"),
@@ -345,23 +352,35 @@ pub fn status(
     desktop: Option<&DesktopState>,
     panels: Panels,
     overlay: Option<&str>,
-) -> (Option<Panel>, bool) {
+    notices: usize,
+    recording: Option<std::time::Duration>,
+) -> (Option<Panel>, bool, bool, bool, bool, bool) {
     let mut toggled = None;
     ui.spacing_mut().item_spacing.x = 20.0;
     ui::tracked(ui, "DEs-UI", ui::display_bold(11.0), theme.main, 3.0);
     // The way into the settings, lit while they are open.
-    let in_settings = overlay == Some("SETTINGS");
-    let label = ui::galley(ui, "SETTINGS", ui::display(11.0), ui::SECONDARY, 2.0);
-    let (rect, response) = ui.allocate_exact_size(label.size() + vec2(0.0, 8.0), Sense::click());
-    let ink = if in_settings {
-        theme.main
-    } else if response.hovered() {
-        ui::TEXT
-    } else {
-        ui::SECONDARY
+    let way_in = |ui: &mut Ui, name: &str, hint: &str| {
+        let label = ui::galley(ui, name, ui::display(11.0), ui::SECONDARY, 2.0);
+        let (rect, response) = ui.allocate_exact_size(label.size() + vec2(0.0, 8.0), Sense::click());
+        let ink = if overlay == Some(name) {
+            theme.main
+        } else if response.hovered() {
+            ui::TEXT
+        } else {
+            ui::SECONDARY
+        };
+        ui.painter().galley(rect.left_center() - vec2(0.0, label.size().y / 2.0), label, ink);
+        response.on_hover_text(hint).clicked()
     };
-    ui.painter().galley(rect.left_center() - vec2(0.0, label.size().y / 2.0), label, ink);
-    let settings_clicked = response.on_hover_text("Settings (Super+,)").clicked();
+    let settings_clicked = way_in(ui, "SETTINGS", "Settings (Super+,)");
+    let music_clicked = way_in(ui, "MUSIC", "Music (Super+M)");
+    let power_clicked = way_in(ui, "POWER", "Sleep, restart, shut down (Super+Escape, or the power key)");
+    let notices_clicked = way_in(ui, "NOTIFICATIONS", "Notifications (Super+N)");
+    if notices > 0 {
+        // Close up to the word it counts.
+        ui.add_space(-14.0);
+        ui::text(ui, &notices.to_string(), ui::mono(11.0), theme.main);
+    }
 
     let holder = match (overlay, desktop.and_then(|d| d.focus.and_then(|index| d.apps.get(index)))) {
         (Some(overlay), _) => overlay.to_string(),
@@ -370,9 +389,27 @@ pub fn status(
     };
     ui::text(ui, &format!("{holder} HAS THE KEYBOARD"), ui::mono(11.0), ui::SECONDARY);
 
+    let mut stop_clicked = false;
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        if let Some(battery) = mon.battery {
-            ui::text(ui, &format!("BAT {battery}%"), ui::mono(11.0), ui::TEXT);
+        if let Some(running) = recording {
+            // The one thing here that is happening to the user, so it is the one in colour.
+            let seconds = running.as_secs();
+            let label = ui::galley(ui, &format!("REC {:02}:{:02}  STOP", seconds / 60, seconds % 60), ui::mono(11.0), ui::CAUTION, 0.0);
+            let (rect, response) = ui.allocate_exact_size(label.size() + vec2(14.0, 8.0), Sense::click());
+            ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0, ui::CAUTION), StrokeKind::Inside);
+            ui.painter().galley(rect.center() - label.size() / 2.0, label, ui::CAUTION);
+            stop_clicked = response.on_hover_text("End the recording").clicked();
+        }
+        if let Some(battery) = mon.power {
+            // Low and running down is the one reading here that asks for something.
+            let low = !battery.plugged && battery.percent <= 15;
+            let left = battery.minutes.map_or(String::new(), |minutes| format!("  {}", crate::power::duration(minutes)));
+            let label = match (battery.plugged, battery.minutes) {
+                (true, Some(_)) => format!("CHARGING {}%{left}", battery.percent),
+                (true, None) => format!("MAINS {}%", battery.percent),
+                (false, _) => format!("BAT {}%{left}", battery.percent),
+            };
+            ui::text(ui, &label, ui::mono(11.0), if low { ui::CAUTION } else { ui::TEXT });
         }
         if let Some(volume) = mon.volume() {
             ui::text(ui, &format!("VOL {volume}"), ui::mono(11.0), ui::SECONDARY);
@@ -407,7 +444,7 @@ pub fn status(
             }
         }
     });
-    (toggled, settings_clicked)
+    (toggled, settings_clicked, music_clicked, notices_clicked, power_clicked, stop_clicked)
 }
 
 /// What a further display shows while no application is on it.

@@ -13,6 +13,18 @@ export XDG_CURRENT_DESKTOP=des-ui
 # is running inside another desktop.
 unset WAYLAND_DISPLAY DISPLAY
 
+# This desktop was called edex-rs before: bring along what it kept under that name.
+for kept in "${XDG_CONFIG_HOME:-$HOME/.config}" "${XDG_CACHE_HOME:-$HOME/.cache}" "${XDG_STATE_HOME:-$HOME/.local/state}"; do
+    if [ -d "$kept/edex-rs" ] && [ ! -e "$kept/des-ui" ]; then
+        mv "$kept/edex-rs" "$kept/des-ui"
+    elif [ -d "$kept/edex-rs" ] && [ ! -e "$kept/des-ui/.carried-over" ]; then
+        # Both are there: something made the new one first. Whatever only the old
+        # one has still comes along, once.
+        cp -r --update=none "$kept/edex-rs/." "$kept/des-ui/" 2>/dev/null
+        : > "$kept/des-ui/.carried-over"
+    fi
+done
+
 log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/des-ui"
 mkdir -p "$log_dir"
 
@@ -26,6 +38,9 @@ stop_portal() {
 }
 leave() {
     stop_portal
+    # The music service runs apart from the shell, so that restarting the shell does
+    # not stop the music; it ends with the session.
+    pkill -u "$(id -u)" -x des-music 2>/dev/null
     systemctl --user unset-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE 2>/dev/null
     exit "$1"
 }

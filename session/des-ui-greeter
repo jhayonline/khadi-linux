@@ -1,0 +1,26 @@
+#!/bin/sh
+# Runs the DEs-UI login screen for greetd, the login manager.
+#
+# The screen is shown by des-comp, the same compositor the desktop uses, with the
+# login screen in the shell's place. If that cannot start, a plain text login takes
+# over, so that a broken build never leaves the machine with no way to sign in.
+log=/var/lib/des-ui/greeter/login.log
+[ -w "$(dirname "$log")" ] || log=/dev/null
+
+started=$(date +%s)
+/usr/local/bin/des-comp --backend drm --no-xwayland -- --greeter >"$log" 2>&1
+status=$?
+elapsed=$(( $(date +%s) - started ))
+echo "des-comp exited with status $status after ${elapsed}s" >>"$log"
+
+# It exits cleanly once someone has signed in; greetd starts their session next.
+# After running for a while, a failure is something greetd should simply retry.
+if [ "$status" -eq 0 ] || [ "$elapsed" -ge 10 ]; then
+    exit "$status"
+fi
+
+echo "The DEs-UI login screen could not start (status $status). Sign in here instead."
+if command -v agreety >/dev/null; then
+    exec agreety --cmd /usr/local/bin/des-ui-session
+fi
+exit "$status"

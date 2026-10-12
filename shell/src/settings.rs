@@ -1,6 +1,7 @@
 //! The settings screen, shown in place of the terminal. It only draws and reports what
 //! the user asked for; applying and saving a change is the caller's job.
 
+use eframe::egui;
 use crate::config::{Config, LINE_HEIGHT_RANGE, MAX_FONT_SIZE, MIN_FONT_SIZE, SCROLLBACK_CHOICES};
 use crate::radio::Radio;
 use crate::term::CursorShape;
@@ -11,7 +12,7 @@ use crate::theme::{self, Theme};
 use crate::ui;
 use des_common::{
     Panel, Panels,
-    ipc::{DisplayChoice, DisplayInfo, Displays, Mode},
+    ipc::{DisplayChoice, DisplayInfo, Displays, Mode, Setup, Usage},
 };
 use eframe::egui::{
     Align, Align2, Color32, Key, Layout, Modifiers, Rect, ScrollArea, Sense, Stroke, StrokeKind,
@@ -39,7 +40,44 @@ pub enum Change {
     ApplyDisplays(Vec<DisplayChoice>),
     KeepDisplays,
     RevertDisplays,
+    Lock,
     LogOut,
+    /// Use this picture on the lock and login screens; `None` goes back to none.
+    Avatar(Option<std::path::PathBuf>),
+}
+
+/// The pictures on offer for the lock and login screens, read in the background:
+/// a large photograph takes a moment to make small.
+struct Faces {
+    read: std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, egui::ColorImage)>>>,
+    shown: Vec<(std::path::PathBuf, egui::TextureHandle)>,
+    /// The picture in use, once looked for.
+    current: Option<Option<egui::TextureHandle>>,
+    path: String,
+}
+
+impl Faces {
+    fn new(ctx: &egui::Context) -> Faces {
+        let read: std::sync::Arc<std::sync::Mutex<Vec<(std::path::PathBuf, egui::ColorImage)>>> = Default::default();
+        let (into, ctx) = (read.clone(), ctx.clone());
+        std::thread::spawn(move || {
+            let home = std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
+            let folders = [home.join("Pictures"), std::path::PathBuf::from("/usr/share/pixmaps/faces")];
+            for path in crate::greeter::pictures_in(&folders, 36) {
+                // One that cannot be read is simply not offered.
+                let Some(image) = image::ImageReader::open(&path).ok().and_then(|reader| reader.with_guessed_format().ok()).and_then(|reader| reader.decode().ok()) else {
+                    continue;
+                };
+                // Square, from the middle, as it will be used.
+                let side = image.width().min(image.height());
+                let square = image.crop_imm((image.width() - side) / 2, (image.height() - side) / 2, side, side).thumbnail(128, 128).to_rgba8();
+                let pixels = egui::ColorImage::from_rgba_unmultiplied([square.width() as usize, square.height() as usize], square.as_raw());
+                into.lock().unwrap().push((path, pixels));
+                ctx.request_repaint();
+            }
+        });
+        Faces { read, shown: Vec::new(), current: None, path: String::new() }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -92,6 +130,8 @@ pub struct Settings {
     fonts: Vec<(String, std::path::PathBuf)>,
     layout_text: String,
     radio: Option<Radio>,
+    faces: Option<Faces>,
+    sound: Option<crate::sound::Sound>,
 }
 
 impl Default for Settings {
@@ -111,6 +151,8 @@ impl Default for Settings {
             fonts: Vec::new(),
             layout_text: String::new(),
             radio: None,
+            faces: None,
+            sound: None,
         }
     }
 }
@@ -123,6 +165,7 @@ fn current_choices(monitors: &[DisplayInfo]) -> Vec<DisplayChoice> {
             name: monitor.name.clone(),
             mode: monitor.current,
             main: monitor.main,
+            setup: monitor.setup,
         })
         .collect()
 }
@@ -263,6 +306,7 @@ impl Settings {
                             Section::Network => {
                                 let radio = self.radio.get_or_insert_with(|| Radio::new(ui.ctx().clone()));
                                 radio.show_wifi(ui, theme);
+                                radio.show_links(ui, theme);
                             }
                             Section::Bluetooth => {
                                 let radio = self.radio.get_or_insert_with(|| Radio::new(ui.ctx().clone()));
@@ -272,8 +316,8 @@ impl Settings {
                             Section::Pointer => self.pointer(ui, theme, input, &mut changes),
                             Section::Displays => self.displays(ui, theme, displays, &mut changes),
                             Section::Globe => self.globe(ui, theme, config, geo, &mut changes),
-                            Section::Sound => self.sound(ui, theme, mon, &mut changes),
-                            Section::Session => self.session(ui, theme, &mut changes),
+                            Section::Sound => self.sound(ui, theme, config, mon, &mut changes),
+                            Section::Session => self.session(ui, theme, config, input, &mut changes),
                         }
                     });
                 });
@@ -529,23 +573,39 @@ impl Settings {
 
         heading(ui, "ARRANGEMENT", "As they stand on your desk, left to right. Click one to change it.");
         // The monitors to scale, in a row.
-        let total: f32 = self.draft.iter().map(|choice| choice.mode.width as f32).sum();
-        let tallest = self.draft.iter().map(|choice| choice.mode.height).max().unwrap_or(1) as f32;
+        // Each is drawn the shape it has on the desktop: turned, and as large as its
+        // scale leaves it. Those that are no display of their own keep a place here,
+        // so that they can be chosen and changed back.
+        let shape = |choice: &DisplayChoice| {
+            let (width, height) = choice.setup.logical(choice.mode);
+            (width as f32, height as f32)
+        };
+        let total: f32 = self.draft.iter().map(|choice| shape(choice).0).sum();
+        let tallest = self.draft.iter().map(|choice| shape(choice).1).fold(1.0, f32::max);
         let scale = ((ui.available_width() - 8.0 * self.draft.len() as f32) / total.max(1.0)).min(130.0 / tallest);
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
             for (index, choice) in self.draft.iter().enumerate() {
-                let size = vec2(choice.mode.width as f32 * scale, choice.mode.height as f32 * scale);
+                let size = vec2(shape(choice).0 * scale, shape(choice).1 * scale).max(vec2(92.0, 64.0));
                 let (rect, response) = ui.allocate_exact_size(size, Sense::click());
                 let chosen = index == self.selected_display;
                 let painter = ui.painter_at(rect);
                 painter.rect_filled(rect, 0.0, if chosen { theme.tint() } else { ui::PANEL });
                 let line = if chosen { theme.main } else if response.hovered() { ui::SECONDARY } else { ui::LINE_STRONG };
                 painter.rect_stroke(rect, 0.0, Stroke::new(if chosen { 2.0 } else { 1.0 }, line), StrokeKind::Inside);
-                painter.text(rect.left_top() + vec2(10.0, 8.0), Align2::LEFT_TOP, &choice.name, ui::mono(12.0), ui::TEXT);
+                let lit = choice.setup.usage != Usage::Off;
+                painter.text(rect.left_top() + vec2(10.0, 8.0), Align2::LEFT_TOP, &choice.name, ui::mono(12.0), if lit { ui::TEXT } else { ui::LABEL });
                 let detail = format!("{} × {}", choice.mode.width, choice.mode.height);
-                painter.text(rect.left_top() + vec2(10.0, 26.0), Align2::LEFT_TOP, detail, ui::mono(11.0), ui::SECONDARY);
-                if choice.main {
+                painter.text(rect.left_top() + vec2(10.0, 26.0), Align2::LEFT_TOP, detail, ui::mono(11.0), if lit { ui::SECONDARY } else { ui::LABEL });
+                let role = match choice.setup.usage {
+                    Usage::Mirror => Some("MIRROR"),
+                    Usage::Off => Some("OFF"),
+                    Usage::Own => None,
+                };
+                if let Some(role) = role {
+                    let label = ui::galley(ui, role, ui::display_bold(11.0), ui::SECONDARY, 2.0);
+                    painter.galley(rect.left_bottom() + vec2(10.0, -8.0 - label.size().y), label, ui::SECONDARY);
+                } else if choice.main {
                     let label = ui::galley(ui, "MAIN", ui::display_bold(11.0), theme.main, 2.0);
                     painter.galley(rect.left_bottom() + vec2(10.0, -8.0 - label.size().y), label, theme.main);
                 }
@@ -578,6 +638,8 @@ impl Settings {
                     for (index, choice) in self.draft.iter_mut().enumerate() {
                         choice.main = index == chosen;
                     }
+                    // The main display is one of its own.
+                    self.draft[chosen].setup.usage = Usage::Own;
                 }
             }
         });
@@ -588,6 +650,26 @@ impl Settings {
         ui.add_space(24.0);
 
         let selected = self.selected_display;
+        if self.draft.len() > 1 {
+            heading(ui, "USE", &format!("What {} shows.", monitor.name));
+            let is_main = self.draft[selected].main;
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+                for (usage, label) in [(Usage::Own, "ITS OWN DESKTOP"), (Usage::Mirror, "MIRROR THE MAIN DISPLAY"), (Usage::Off, "OFF")] {
+                    let chosen = self.draft[selected].setup.usage == usage;
+                    // The main display stays one: another has to be made main first.
+                    if (usage == Usage::Own || !is_main) && ui::chip(ui, theme, label, None, chosen).clicked() {
+                        self.draft[selected].setup.usage = usage;
+                    }
+                }
+            });
+            if is_main {
+                ui.add_space(6.0);
+                note(ui, "To mirror or turn off this one, make another the main display first.");
+            }
+            ui.add_space(22.0);
+        }
+
         heading(ui, "RESOLUTION", &format!("For {}.", monitor.name));
         let mode = self.draft[selected].mode;
         ui.horizontal_wrapped(|ui| {
@@ -612,6 +694,30 @@ impl Settings {
                 let chosen = rate.refresh == mode.refresh;
                 if ui::chip(ui, theme, &hertz(rate.refresh), None, chosen).clicked() {
                     self.draft[selected].mode = *rate;
+                }
+            }
+        });
+        ui.add_space(22.0);
+
+        heading(ui, "SCALE", "How large everything is drawn. Larger suits a dense or distant screen.");
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+            for scale in Setup::SCALES {
+                let chosen = self.draft[selected].setup.scale == scale;
+                if ui::chip(ui, theme, &format!("{scale}%"), None, chosen).clicked() {
+                    self.draft[selected].setup.scale = scale;
+                }
+            }
+        });
+        ui.add_space(22.0);
+
+        heading(ui, "TURN", "How the monitor itself stands.");
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+            for (turn, label) in [(0, "UPRIGHT"), (90, "ON ITS RIGHT SIDE"), (180, "UPSIDE DOWN"), (270, "ON ITS LEFT SIDE")] {
+                let chosen = self.draft[selected].setup.turn == turn;
+                if ui::chip(ui, theme, label, None, chosen).clicked() {
+                    self.draft[selected].setup.turn = turn;
                 }
             }
         });
@@ -698,7 +804,7 @@ impl Settings {
         }
     }
 
-    fn sound(&mut self, ui: &mut Ui, theme: &Theme, mon: &SysMon, changes: &mut Vec<Change>) {
+    fn sound(&mut self, ui: &mut Ui, theme: &Theme, config: &Config, mon: &SysMon, changes: &mut Vec<Change>) {
         heading(ui, "SOUND & SCREEN", "The volume and brightness keys do the same.");
         let volume = held(&mut self.volume_held, mon.volume());
         let brightness = held(&mut self.brightness_held, mon.brightness);
@@ -739,9 +845,99 @@ impl Settings {
         if let Some(battery) = mon.battery {
             note(ui, &format!("Battery at {battery}%."));
         }
+        ui.add_space(22.0);
+        self.sound.get_or_insert_with(|| crate::sound::Sound::new(ui.ctx().clone())).show(ui, theme);
+        ui.add_space(26.0);
+        heading(ui, "NOTIFICATIONS", "");
+        if switch_row(ui, theme, "Sounds", "A notification that shows also makes a sound, unless it asks not to", config.notification_sounds) {
+            changes.push(Change::Set("notification_sounds", config.notification_sounds.then(|| "off".to_string())));
+        }
     }
 
-    fn session(&mut self, ui: &mut Ui, theme: &Theme, changes: &mut Vec<Change>) {
+    /// The user's picture changed: show the new one.
+    pub fn forget_picture(&mut self) {
+        if let Some(faces) = &mut self.faces {
+            faces.current = None;
+        }
+    }
+
+    /// Choosing the picture the lock and login screens show.
+    fn picture(&mut self, ui: &mut Ui, theme: &Theme, changes: &mut Vec<Change>) {
+        heading(ui, "YOUR PICTURE", "Shown on the lock screen and the login screen.");
+        let user = std::env::var("USER").unwrap_or_default();
+        let faces = self.faces.get_or_insert_with(|| Faces::new(ui.ctx()));
+        for (path, pixels) in std::mem::take(&mut *faces.read.lock().unwrap()) {
+            let texture = ui.ctx().load_texture(format!("face-{}", path.display()), pixels, egui::TextureOptions::LINEAR);
+            faces.shown.push((path, texture));
+        }
+        let current = faces.current.get_or_insert_with(|| crate::greeter::load_picture(ui.ctx(), &user)).clone();
+        let whole = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 16.0;
+            let (frame, _) = ui.allocate_exact_size(vec2(84.0, 84.0), Sense::hover());
+            ui.painter().rect_filled(frame, 0.0, ui::PANEL);
+            ui::corners(ui.painter(), frame, 10.0, Stroke::new(1.5, theme.main));
+            match &current {
+                Some(texture) => {
+                    ui.painter().image(texture.id(), frame.shrink(6.0), whole, egui::Color32::WHITE);
+                }
+                None => {
+                    ui.painter().text(frame.center(), Align2::CENTER_CENTER, "NONE", ui::display_bold(11.0), ui::LABEL);
+                }
+            }
+            ui.vertical(|ui| {
+                ui.add_space(8.0);
+                if current.is_some() {
+                    if ui::button(ui, theme, "REMOVE", None, false).clicked() {
+                        changes.push(Change::Avatar(None));
+                    }
+                } else {
+                    ui::text(ui, "Without one, a pattern made from your name is drawn.", ui::mono(12.0), ui::LABEL);
+                }
+            });
+        });
+        ui.add_space(14.0);
+        if faces.shown.is_empty() {
+            note(ui, "Pictures in ~/Pictures are offered here.");
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+            for (path, texture) in &faces.shown {
+                let (tile, response) = ui.allocate_exact_size(vec2(64.0, 64.0), Sense::click());
+                ui.painter().image(texture.id(), tile, whole, egui::Color32::WHITE);
+                let line = if response.hovered() { theme.main } else { ui::LINE_STRONG };
+                ui.painter().rect_stroke(tile, 0.0, Stroke::new(if response.hovered() { 2.0 } else { 1.0 }, line), StrokeKind::Inside);
+                let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+                if response.on_hover_text(name).clicked() {
+                    changes.push(Change::Avatar(Some(path.clone())));
+                }
+            }
+        });
+        ui.add_space(12.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            let (field, _) = ui.allocate_exact_size(vec2(420.0_f32.min(ui.available_width() - 80.0), 28.0), Sense::hover());
+            ui.painter().rect_filled(field, 0.0, ui::PANEL);
+            ui.painter().rect_stroke(field, 0.0, Stroke::new(1.0, ui::LINE_STRONG), StrokeKind::Inside);
+            let edit = ui.put(
+                field.shrink2(vec2(8.0, 4.0)),
+                egui::TextEdit::singleline(&mut faces.path).frame(false).font(ui::mono(13.0)).text_color(ui::TEXT).hint_text("or the path to any picture"),
+            );
+            let entered = edit.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+            let ready = !faces.path.trim().is_empty();
+            if (ui::button(ui, theme, "USE", None, ready).clicked() || entered) && ready {
+                let typed = faces.path.trim().to_string();
+                let path = match typed.strip_prefix("~/") {
+                    Some(rest) => std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(rest),
+                    None => std::path::PathBuf::from(typed),
+                };
+                faces.path.clear();
+                changes.push(Change::Avatar(Some(path)));
+            }
+        });
+    }
+
+    fn session(&mut self, ui: &mut Ui, theme: &Theme, config: &Config, input: &InputSettings, changes: &mut Vec<Change>) {
         heading(ui, "SESSION", "");
         for (name, value) in [
             ("Version", env!("CARGO_PKG_VERSION")),
@@ -757,6 +953,51 @@ impl Settings {
         }
         ui.add_space(22.0);
         note(ui, "Super+Shift+R restarts the shell on a newly installed build. Applications stay open; terminal tabs close.");
+        ui.add_space(22.0);
+        self.picture(ui, theme, changes);
+        ui.add_space(26.0);
+
+        if ui::button(ui, theme, "LOCK NOW", Some("SUPER L"), false).clicked() {
+            changes.push(Change::Lock);
+        }
+        ui.add_space(8.0);
+        note(ui, "Locking hides everything behind your password. Everything keeps running.");
+        ui.add_space(14.0);
+        ui::text(ui, "Lock by itself when the machine is left alone for", ui::mono(12.0), ui::SECONDARY);
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            for minutes in [Some(1), Some(5), Some(10), Some(30), Some(60), None] {
+                let chosen = input.lock_after == minutes;
+                let label = minutes.map_or("NEVER".to_string(), |minutes| format!("{minutes} MIN"));
+                if ui::chip(ui, theme, &label, None, chosen).clicked() && !chosen {
+                    let value = minutes.map_or("never".to_string(), |minutes| minutes.to_string());
+                    changes.push(Change::Set("lock_after", Some(value)));
+                }
+            }
+        });
+        ui.add_space(8.0);
+        note(ui, "Not while an application is playing something to watch.");
+        ui.add_space(8.0);
+        ui::text(ui, "Turn the screen off when the machine is left alone for", ui::mono(12.0), ui::SECONDARY);
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            for minutes in [Some(2), Some(5), Some(15), Some(30), None] {
+                let chosen = input.screen_off_after == minutes;
+                let label = minutes.map_or("NEVER".to_string(), |minutes| format!("{minutes} MIN"));
+                if ui::chip(ui, theme, &label, None, chosen).clicked() && !chosen {
+                    let value = minutes.map(|minutes| minutes.to_string());
+                    changes.push(Change::Set("screen_off_after", value));
+                }
+            }
+        });
+        ui.add_space(8.0);
+        note(ui, "Any key or movement of the pointer turns it back on.");
+        ui.add_space(8.0);
+        if switch_row(ui, theme, "Lock before sleep", "When the lid closes or the machine is put to sleep, it wakes to the lock screen", config.lock_on_sleep) {
+            changes.push(Change::Set("lock_on_sleep", config.lock_on_sleep.then(|| "off".to_string())));
+        }
         ui.add_space(22.0);
 
         let armed = self.log_out_armed.is_some_and(|at| at.elapsed() < Duration::from_secs(5));
@@ -854,6 +1095,7 @@ mod tests {
             y: 0,
             current: mode(1920, 1080, 60000),
             modes: vec![mode(3840, 2160, 30000), mode(1920, 1080, 60000), mode(1920, 1080, 59940), mode(1280, 720, 60000)],
+            setup: Setup { scale: 150, turn: 90, usage: Usage::Own },
         };
         assert_eq!(sizes(&monitor), [(3840, 2160), (1920, 1080), (1280, 720)]);
         assert_eq!(best_mode(&monitor, (1920, 1080)), Some(mode(1920, 1080, 60000)));
@@ -863,6 +1105,7 @@ mod tests {
         assert_eq!(hertz(60052), "60.05 Hz");
         let choices = current_choices(std::slice::from_ref(&monitor));
         assert_eq!(choices[0].mode, monitor.current);
+        assert_eq!(choices[0].setup.logical(monitor.current), (720, 1280), "on its side, at one and a half times");
     }
 
     #[test]

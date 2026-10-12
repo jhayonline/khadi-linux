@@ -91,3 +91,23 @@ delegate_data_device!(DesComp);
 
 impl OutputHandler for DesComp {}
 delegate_output!(DesComp);
+
+impl smithay::wayland::idle_inhibit::IdleInhibitHandler for DesComp {
+    fn inhibit(&mut self, surface: smithay::reexports::wayland_server::protocol::wl_surface::WlSurface) {
+        if !self.idle_inhibitors.contains(&surface) {
+            self.idle_inhibitors.push(surface);
+        }
+    }
+
+    fn uninhibit(&mut self, surface: smithay::reexports::wayland_server::protocol::wl_surface::WlSurface) {
+        self.idle_inhibitors.retain(|held| *held != surface);
+    }
+}
+smithay::delegate_idle_inhibit!(DesComp);
+
+impl smithay::wayland::selection::wlr_data_control::DataControlHandler for DesComp {
+    fn data_control_state(&self) -> &smithay::wayland::selection::wlr_data_control::DataControlState {
+        &self.data_control_state
+    }
+}
+smithay::delegate_data_control!(DesComp);

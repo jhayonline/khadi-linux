@@ -7,6 +7,7 @@ description = "The DEs-UI shell: a sci-fi terminal desktop"
 
 [dependencies]
 anyhow = "1.0.104"
+zbus = "5"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 eframe = { version = "0.31", default-features = false, features = ["glow", "wayland", "x11", "default_fonts"] }
 portable-pty = "0.9.0"
@@ -15,3 +16,4 @@ serde_json = "1.0.151"
 sysinfo = "0.38.4"
 vt100 = "0.16.2"
 des-common = { path = "../common" }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

@@ -38,6 +38,8 @@ pub struct SysMon {
     pub rx_total: u64,
     pub tx_total: u64,
     pub battery: Option<u8>,
+    /// The battery in full: whether it is plugged in, and the time left.
+    pub power: Option<Battery>,
     /// Screen backlight, in percent of its range.
     pub brightness: Option<u8>,
     /// Wireless link quality, in percent.
@@ -128,6 +130,7 @@ impl SysMon {
             rx_total: 0,
             tx_total: 0,
             battery: None,
+            power: None,
             brightness: None,
             wifi: None,
             volume: watch_volume(),
@@ -201,7 +204,8 @@ impl SysMon {
             }
         }
 
-        self.battery = read_battery();
+        self.power = read_battery();
+        self.battery = self.power.map(|battery| battery.percent);
         self.brightness = read_brightness();
         self.wifi = read_wifi();
     }
@@ -271,17 +275,53 @@ fn read_wifi() -> Option<u8> {
     Some((quality / 70.0 * 100.0).round().clamp(0.0, 100.0) as u8)
 }
 
-fn read_battery() -> Option<u8> {
+/// How the battery stands.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Battery {
+    pub percent: u8,
+    /// On mains power, whether still filling or full.
+    pub plugged: bool,
+    /// Minutes until empty, or until full when plugged in, where the battery says.
+    pub minutes: Option<u32>,
+}
+
+/// Works out the time left from what a battery reports: how much it holds (`now`),
+/// how much when full, and how fast that is changing, all in the same unit.
+pub fn minutes_left(now: f64, full: f64, rate: f64, plugged: bool) -> Option<u32> {
+    if rate <= 0.0 {
+        return None;
+    }
+    let hours = if plugged { (full - now).max(0.0) / rate } else { now / rate };
+    let minutes = (hours * 60.0).round();
+    // A reading of days is a battery that is barely being drawn on, not a forecast.
+    (minutes > 0.0 && minutes < 48.0 * 60.0).then_some(minutes as u32)
+}
+
+fn read_battery() -> Option<Battery> {
     for entry in std::fs::read_dir("/sys/class/power_supply").ok()?.flatten() {
         let path = entry.path();
-        let is_battery = std::fs::read_to_string(path.join("type"))
-            .map(|t| t.trim() == "Battery")
-            .unwrap_or(false);
-        if is_battery {
-            if let Ok(cap) = std::fs::read_to_string(path.join("capacity")) {
-                return cap.trim().parse().ok();
-            }
+        let text = |file: &str| std::fs::read_to_string(path.join(file)).ok().map(|text| text.trim().to_string());
+        let number = |file: &str| text(file).and_then(|text| text.parse::<f64>().ok());
+        if text("type").as_deref() != Some("Battery") {
+            continue;
         }
+        let Some(percent) = text("capacity").and_then(|text| text.parse().ok()) else {
+            continue;
+        };
+        let status = text("status").unwrap_or_default();
+        let plugged = status != "Discharging";
+        // Batteries count in charge or in energy, never both.
+        let reading = match (number("charge_now"), number("charge_full"), number("current_now")) {
+            (Some(now), Some(full), Some(rate)) => Some((now, full, rate)),
+            _ => match (number("energy_now"), number("energy_full"), number("power_now")) {
+                (Some(now), Some(full), Some(rate)) => Some((now, full, rate)),
+                _ => None,
+            },
+        };
+        let minutes = reading
+            .filter(|_| status != "Full" && status != "Not charging")
+            .and_then(|(now, full, rate)| minutes_left(now, full, rate.abs(), plugged));
+        return Some(Battery { percent, plugged, minutes });
     }
     None
 }
@@ -289,6 +329,16 @@ fn read_battery() -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn works_out_the_time_left() {
+        // Half of a 4 Ah battery, drawn at 1 A: two hours to empty.
+        assert_eq!(minutes_left(2.0, 4.0, 1.0, false), Some(120));
+        // The same, filling at 2 A: an hour to full.
+        assert_eq!(minutes_left(2.0, 4.0, 2.0, true), Some(60));
+        assert_eq!(minutes_left(2.0, 4.0, 0.0, false), None, "no rate, no forecast");
+        assert_eq!(minutes_left(4.0, 4.0, 0.001, false), None, "days are not a forecast");
+    }
 
     #[test]
     fn reads_volume() {

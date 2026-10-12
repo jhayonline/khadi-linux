@@ -21,6 +21,14 @@ enum Action {
     MoveDisplay,
     Launcher,
     Settings,
+    Music,
+    Notifications,
+    /// The power key, or its shortcut.
+    Power,
+    Shot(des_common::ipc::ShotMode),
+    Lock,
+    /// Super with a key that is no shortcut: swallowed, so that it types nothing.
+    Ignore,
     Split,
     Fullscreen,
     /// Give the keyboard to the left (false) or right (true) half of a split.
@@ -44,6 +52,17 @@ enum Media {
     Mute,
     BrightnessUp,
     BrightnessDown,
+    PlayPause,
+    NextTrack,
+    PreviousTrack,
+}
+
+/// Passes a playback key on to the music service, which is installed beside this
+/// program. Nothing happens when the service is not running.
+fn music(command: &str) {
+    let beside = std::env::current_exe().ok().and_then(|exe| Some(exe.parent()?.join("des-music")));
+    let program = beside.filter(|path| path.exists()).unwrap_or_else(|| "des-music".into());
+    run(&program.to_string_lossy(), &["send", command]);
 }
 
 /// Runs a helper program without waiting for it.
@@ -100,6 +119,9 @@ impl Media {
             Keysym::XF86_AudioMute => Media::Mute,
             Keysym::XF86_MonBrightnessUp => Media::BrightnessUp,
             Keysym::XF86_MonBrightnessDown => Media::BrightnessDown,
+            Keysym::XF86_AudioPlay | Keysym::XF86_AudioPause => Media::PlayPause,
+            Keysym::XF86_AudioNext => Media::NextTrack,
+            Keysym::XF86_AudioPrev => Media::PreviousTrack,
             _ => return None,
         })
     }
@@ -112,6 +134,9 @@ impl Media {
             Media::Mute => run("wpctl", &["set-mute", SINK, "toggle"]),
             Media::BrightnessUp => step_brightness(true),
             Media::BrightnessDown => step_brightness(false),
+            Media::PlayPause => music("toggle"),
+            Media::NextTrack => music("next"),
+            Media::PreviousTrack => music("prev"),
         }
     }
 }
@@ -150,13 +175,18 @@ impl DesComp {
     }
 
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
+        self.last_input = std::time::Instant::now();
+        self.idle_lock_asked = false;
+        if self.screens_off {
+            self.blank(false);
+        }
         match event {
             InputEvent::Keyboard { event, .. } => {
                 let serial = SERIAL_COUNTER.next_serial();
                 let time = Event::time_msec(&event);
 
                 let pressed = event.state() == KeyState::Pressed;
-                let locked = self.locked();
+                let locked = self.locked;
                 let action = self.seat.get_keyboard().unwrap().input(
                     self,
                     event.key_code(),
@@ -178,16 +208,25 @@ impl DesComp {
                         if let Some(media) = Media::from_keysym(sym) {
                             return FilterResult::Intercept(Action::Media(media));
                         }
-                        // While locked, no shortcut runs. Switching VT above is
-                        // deliberate — it is the way out if the lock screen wedges,
-                        // and the other terminal asks for a password of its own.
-                        // Everything from here down would act on the session behind
-                        // the lock, and Ctrl+Alt+Backspace would end it outright,
-                        // which is a lock screen you can walk past.
-                        if locked {
-                            return FilterResult::Forward;
+                        // Print asks what to take; with Alt it is the window at once,
+                        // with Shift a piece.
+                        if sym == Keysym::Print || sym == Keysym::Sys_Req {
+                            use des_common::ipc::ShotMode;
+                            let mode = if modifiers.shift {
+                                ShotMode::Region
+                            } else if modifiers.alt {
+                                ShotMode::Window
+                            } else {
+                                ShotMode::Pick
+                            };
+                            return FilterResult::Intercept(Action::Shot(mode));
                         }
-                        if !held {
+                        if sym == Keysym::XF86_PowerOff {
+                            return FilterResult::Intercept(Action::Power);
+                        }
+                        // Locked, every other key goes to the lock screen: no shortcut
+                        // reaches what is behind it, and the session cannot be ended.
+                        if !held || locked {
                             return FilterResult::Forward;
                         }
                         match sym {
@@ -197,6 +236,10 @@ impl DesComp {
                             Keysym::Tab => FilterResult::Intercept(Action::Cycle),
                             Keysym::space => FilterResult::Intercept(Action::Launcher),
                             Keysym::comma => FilterResult::Intercept(Action::Settings),
+                            Keysym::m | Keysym::M => FilterResult::Intercept(Action::Music),
+                            Keysym::n | Keysym::N => FilterResult::Intercept(Action::Notifications),
+                            Keysym::Escape => FilterResult::Intercept(Action::Power),
+                            Keysym::l | Keysym::L => FilterResult::Intercept(Action::Lock),
                             Keysym::o | Keysym::O => FilterResult::Intercept(Action::MoveDisplay),
                             Keysym::R if modifiers.shift => FilterResult::Intercept(Action::RestartShell),
                             Keysym::s | Keysym::S => FilterResult::Intercept(Action::Split),
@@ -214,6 +257,10 @@ impl DesComp {
                             }
                             Keysym::Escape => FilterResult::Intercept(Action::Lock),
                             Keysym::q | Keysym::Q => FilterResult::Intercept(Action::Close),
+                            // Not a shortcut, but not a letter for the application either.
+                            other if modifiers.logo && other.key_char().is_some_and(|c| !c.is_control()) => {
+                                FilterResult::Intercept(Action::Ignore)
+                            }
                             _ => FilterResult::Forward,
                         }
                     },
@@ -224,6 +271,16 @@ impl DesComp {
                     Some(Action::MoveDisplay) => self.move_active(),
                     Some(Action::Launcher) => self.open_launcher(),
                     Some(Action::Settings) => self.open_settings(),
+                    Some(Action::Music) => self.open_music(),
+                    Some(Action::Notifications) => self.ask_notifications(),
+                    // Behind the lock there is no menu to show: the key puts the machine to sleep.
+                    // Nothing behind the lock is to be pictured.
+                    Some(Action::Shot(_)) if self.locked => {}
+                    Some(Action::Shot(mode)) => self.take_shot(mode),
+                    Some(Action::Power) if self.locked => run("systemctl", &["suspend"]),
+                    Some(Action::Power) => self.open_power(),
+                    Some(Action::Lock) => self.request_lock(),
+                    Some(Action::Ignore) => {}
                     Some(Action::RestartShell) => self.restart_shell(),
                     Some(Action::Split) => self.toggle_split(),
                     Some(Action::Fullscreen) => self.toggle_fullscreen(),
@@ -297,7 +354,9 @@ impl DesComp {
                 let button_state = event.state();
 
                 // Click to focus: the keyboard follows the display that was clicked.
-                if ButtonState::Pressed == button_state && !pointer.is_grabbed() && !self.locked() {
+                // A click on a toast is for the toast alone.
+                let on_toast = self.toast_area().is_some_and(|area| area.to_f64().contains(pointer.current_location()));
+                if ButtonState::Pressed == button_state && !pointer.is_grabbed() && !on_toast {
                     self.focus_at(pointer.current_location());
                 };
 

@@ -11,20 +11,26 @@ use crate::{
     DesComp,
     monitors::{self, Saved},
 };
-use des_common::ipc::{DisplayChoice, DisplayInfo, Displays, Mode};
+use des_common::ipc::{DisplayChoice, DisplayInfo, Displays, Mode, Setup, Usage};
 
 /// How long a new layout waits to be confirmed.
 pub const CONFIRM_WITHIN: Duration = Duration::from_secs(15);
 
-/// Turns the user's choices into a layout: monitors side by side in the order given,
-/// tops aligned. Returns `None` unless they name exactly the connected monitors, each
-/// with a mode it offers.
+/// Turns the user's choices into a layout: the monitors that are displays of their own
+/// side by side in the order given, tops aligned, and those that mirror the main
+/// display where it is. Returns `None` unless the choices name exactly the connected
+/// monitors, each with a mode it offers.
 pub fn layout_for(choices: &[DisplayChoice], connected: &[DisplayInfo]) -> Option<Vec<Saved>> {
     if choices.len() != connected.len() {
         return None;
     }
-    // Exactly one main display: the first one marked, or the leftmost.
-    let main = choices.iter().position(|choice| choice.main).unwrap_or(0);
+    // Exactly one main display, which is one of its own: the first such marked, or
+    // the leftmost. Without any, nothing would be left to change this on.
+    let own = |choice: &DisplayChoice| choice.setup.usage == Usage::Own;
+    let main = choices
+        .iter()
+        .position(|choice| choice.main && own(choice))
+        .or_else(|| choices.iter().position(own))?;
     let mut x = 0;
     let mut layout = Vec::new();
     for (index, choice) in choices.iter().enumerate() {
@@ -32,17 +38,30 @@ pub fn layout_for(choices: &[DisplayChoice], connected: &[DisplayInfo]) -> Optio
         if !monitor.modes.contains(&choice.mode) || layout.iter().any(|saved: &Saved| saved.connector == monitors::gnome_name(&choice.name)) {
             return None;
         }
+        if !Setup::SCALES.contains(&choice.setup.scale) || !matches!(choice.setup.turn, 0 | 90 | 180 | 270) {
+            return None;
+        }
         layout.push(Saved {
             connector: monitors::gnome_name(&choice.name),
             width: choice.mode.width as i32,
             height: choice.mode.height as i32,
             rate: choice.mode.refresh as f64 / 1000.0,
-            x,
+            x: if own(choice) { x } else { 0 },
             y: 0,
-            scale: 1.0,
+            scale: choice.setup.scale as f64 / 100.0,
             primary: index == main,
+            turn: choice.setup.turn,
+            usage: choice.setup.usage,
+            own: true,
         });
-        x += choice.mode.width as i32;
+        if own(choice) {
+            x += choice.setup.logical(choice.mode).0;
+        }
+    }
+    // What mirrors the main display lies where it does.
+    let main_x = layout[main].x;
+    for saved in layout.iter_mut().filter(|saved| saved.usage == Usage::Mirror) {
+        saved.x = main_x;
     }
     Some(layout)
 }
@@ -68,6 +87,7 @@ impl DesComp {
                         y: rect.loc.y,
                         current: mode,
                         modes: vec![mode],
+                        setup: Setup::default(),
                     }
                 })
                 .collect()
@@ -152,6 +172,7 @@ mod tests {
                 y: 0,
                 current: mode(1920, 1080, 60052),
                 modes: vec![mode(1920, 1080, 60052), mode(1280, 720, 60000)],
+                setup: Setup::default(),
             },
             DisplayInfo {
                 name: "HDMI-A-1".into(),
@@ -160,12 +181,40 @@ mod tests {
                 y: 0,
                 current: mode(1920, 1080, 60000),
                 modes: vec![mode(3840, 2160, 30000), mode(1920, 1080, 60000)],
+                setup: Setup::default(),
             },
         ]
     }
 
     fn choice(name: &str, mode: Mode, main: bool) -> DisplayChoice {
-        DisplayChoice { name: name.into(), mode, main }
+        DisplayChoice { name: name.into(), mode, main, setup: Setup::default() }
+    }
+
+    fn set(name: &str, mode: Mode, main: bool, scale: u32, turn: u16, usage: Usage) -> DisplayChoice {
+        DisplayChoice { name: name.into(), mode, main, setup: Setup { scale, turn, usage } }
+    }
+
+    #[test]
+    fn turned_and_scaled_monitors_take_the_room_they_come_to() {
+        let (laptop, hdmi) = (mode(1920, 1080, 60052), mode(3840, 2160, 30000));
+        // The first stands on its side at one and a half times: 1080 wide becomes 720.
+        let layout = layout_for(&[set("eDP-1", laptop, true, 150, 90, Usage::Own), set("HDMI-A-1", hdmi, false, 200, 0, Usage::Own)], &connected()).unwrap();
+        assert_eq!((layout[0].x, layout[0].scale, layout[0].turn), (0, 1.5, 90));
+        assert_eq!((layout[1].x, layout[1].scale), (720, 2.0));
+        assert_eq!(layout_for(&[set("eDP-1", laptop, true, 110, 0, Usage::Own), choice("HDMI-A-1", hdmi, false)], &connected()), None, "not a scale on offer");
+        assert_eq!(layout_for(&[set("eDP-1", laptop, true, 100, 45, Usage::Own), choice("HDMI-A-1", hdmi, false)], &connected()), None, "not a quarter turn");
+    }
+
+    #[test]
+    fn mirrors_and_dark_monitors_take_no_room_and_are_never_main() {
+        let (laptop, hdmi) = (mode(1920, 1080, 60052), mode(1920, 1080, 60000));
+        let layout = layout_for(&[set("HDMI-A-1", hdmi, true, 100, 0, Usage::Mirror), set("eDP-1", laptop, false, 100, 0, Usage::Own)], &connected()).unwrap();
+        assert_eq!((layout[0].x, layout[0].primary, layout[0].usage), (0, false, Usage::Mirror));
+        assert_eq!((layout[1].x, layout[1].primary), (0, true));
+        let layout = layout_for(&[set("eDP-1", laptop, true, 100, 0, Usage::Off), set("HDMI-A-1", hdmi, false, 100, 0, Usage::Own)], &connected()).unwrap();
+        assert_eq!((layout[1].x, layout[1].primary, layout[0].primary), (0, true, false));
+        let none = [set("eDP-1", laptop, true, 100, 0, Usage::Off), set("HDMI-A-1", hdmi, false, 100, 0, Usage::Mirror)];
+        assert_eq!(layout_for(&none, &connected()), None, "something has to be a display");
     }
 
     #[test]

@@ -1,13 +1,21 @@
 //! des-ui: a Rust rewrite of the eDEX-UI sci-fi terminal desktop.
 
 mod apps;
+mod capture;
 mod config;
 mod desktop;
 mod geo;
 mod globe;
+mod greeter;
 mod launcher;
+mod lock;
+mod music;
+mod notify;
 mod panels;
+mod power;
+mod bootsplash;
 mod radio;
+mod sound;
 mod settings;
 mod sysmon;
 mod term;
@@ -42,10 +50,21 @@ Options:
   --font <FILE>        Font for prompt symbols (default: an installed Nerd Font, if any)
   --windowed           Run in a window instead of fullscreen
   --launcher           Start with the application launcher open
+  --split-terminal[=below]
+                       Start with the terminal split in two
   --settings[=SECTION] Start with the settings open, optionally on a section
+  --music              Start with the music player open
+  --power              Start with the power menu open
                        (appearance, terminal, frame, displays, network, bluetooth,
                        keyboard, mouse, globe, sound, session)
   --list-apps          Print the applications the launcher would offer, and exit
+  --unlock             Unlock a locked screen from outside it, such as from a text
+                       console you have signed in on
+  --greeter            Run as the login screen (under greetd; alone, as a preview)
+  --set-avatar <FILE>  Use this picture on the login screen
+  --write-boot-splash <DIR>
+                       Write the boot splash's pictures, in your theme's colours
+                       (install-boot-splash.sh uses this)
   --set-location <LAT,LON[,NAME]>
                        Mark this place as yours on the globe, instead of the one
                        guessed from your address; 'auto' goes back to guessing
@@ -59,13 +78,36 @@ struct App {
     theme: Theme,
     shell: String,
     tabs: Vec<TermTab>,
+    /// The tab in view; with the terminal split, the one on the left or on top.
     active: usize,
+    /// The tab in the second pane of a split terminal.
+    side: Option<usize>,
+    /// Whether that second pane has the keyboard.
+    side_focused: bool,
+    /// Whether the panes are one above the other rather than side by side.
+    stacked: bool,
     mon: SysMon,
     fs: FsView,
     /// The compositor connection; `None` when running as an ordinary window.
     desktop: Option<Desktop>,
     launcher: Launcher,
     settings: settings::Settings,
+    music: music::Music,
+    notices: notify::Center,
+    /// Sleep, and what holds off the lock.
+    power: power::Power,
+    power_menu: power::Menu,
+    /// Screenshots and recordings.
+    capture: capture::Capture,
+    /// Whether the compositor was last told that something is being watched.
+    idle_held: bool,
+    /// What the desktop itself gives notice of, as last seen.
+    watch: notify::Watch,
+    /// Where the compositor was last told the toasts are.
+    toast_area: Option<Option<(i32, i32, i32, i32)>>,
+    lock: lock::Lock,
+    /// Whether the compositor has confirmed the lock now showing.
+    lock_confirmed: bool,
     config: config::Config,
     /// The keyboard, mouse and touchpad settings, as last saved.
     input: des_common::input::InputSettings,
@@ -96,17 +138,35 @@ impl App {
             .unwrap_or_else(|| PathBuf::from("/"));
         let first = TermTab::spawn(&shell, &home, ctx.clone(), config.scrollback)?;
         let desktop = Desktop::connect(ctx.clone());
+        let music = music::Music::new(ctx.clone());
+        let capture = capture::Capture::new(ctx.clone());
+        let power = power::Power::start(ctx.clone(), desktop.is_some());
+        let mut notices = notify::Center::new(ctx.clone(), config.do_not_disturb, true);
+        notices.sounds = config.notification_sounds;
         Ok(App {
             ctx,
             theme,
             shell,
             tabs: vec![first],
             active: 0,
+            side: None,
+            side_focused: false,
+            stacked: false,
             mon: SysMon::new(),
             fs: FsView::new(),
             desktop,
             launcher: Launcher::default(),
             settings: settings::Settings::default(),
+            music,
+            notices,
+            power,
+            power_menu: power::Menu::default(),
+            capture,
+            idle_held: false,
+            watch: notify::Watch::default(),
+            toast_area: None,
+            lock: lock::Lock::new(),
+            lock_confirmed: false,
             geo: geo::Geo::start(config.lookups, config.location.clone()),
             local_panels: config.panels,
             config,
@@ -126,15 +186,65 @@ impl App {
         }
         let cwd = self
             .tabs
-            .get(self.active)
+            .get(self.focus_tab())
             .and_then(|t| t.cwd())
             .unwrap_or_else(|| PathBuf::from("/"));
         match TermTab::spawn(&self.shell, &cwd, self.ctx.clone(), self.config.scrollback) {
             Ok(tab) => {
                 self.tabs.push(tab);
-                self.active = self.tabs.len() - 1;
+                self.show_tab(self.tabs.len() - 1);
             }
             Err(e) => eprintln!("des-ui: cannot open tab: {e}"),
+        }
+    }
+
+    /// The tab that has the keyboard.
+    fn focus_tab(&self) -> usize {
+        match self.side {
+            Some(side) if self.side_focused => side,
+            _ => self.active,
+        }
+    }
+
+    /// Brings a tab into view: in the pane it is already in, or else the pane in use.
+    fn show_tab(&mut self, index: usize) {
+        if self.side == Some(index) {
+            self.side_focused = true;
+        } else if index == self.active {
+            self.side_focused = false;
+        } else if self.side_focused {
+            self.side = Some(index);
+        } else {
+            self.active = index;
+        }
+    }
+
+    /// Splits the terminal in two, side by side or one above the other, with a new
+    /// tab in the second pane; or, when it is split, makes it whole again around the
+    /// pane in use. Both tabs stay open either way.
+    fn split_terminal(&mut self, stacked: bool) {
+        if let Some(side) = self.side.take() {
+            if self.side_focused {
+                self.active = side;
+            }
+            self.side_focused = false;
+            return;
+        }
+        let before = self.tabs.len();
+        self.side_focused = false;
+        let left = self.active;
+        self.new_tab();
+        // Out of tabs: put one that is already open in the second pane instead.
+        let second = if self.tabs.len() > before {
+            Some(self.tabs.len() - 1)
+        } else {
+            (0..self.tabs.len()).find(|index| *index != left)
+        };
+        self.active = left;
+        if let Some(second) = second {
+            self.side = Some(second);
+            self.side_focused = true;
+            self.stacked = stacked;
         }
     }
 
@@ -142,13 +252,89 @@ impl App {
     fn toggle_settings(&mut self) {
         if self.settings.open {
             self.settings.open = false;
+            self.music.open = false;
+            self.notices.open = false;
+            self.power_menu.open = false;
             return;
         }
         self.launcher.open = false;
+        self.music.open = false;
+        self.notices.open = false;
+        self.power_menu.open = false;
         self.settings.open(&self.config);
         if let Some(desktop) = &mut self.desktop {
             desktop.send(Command::Terminal);
         }
+    }
+
+    /// Opens or closes the music player, which also takes the terminal's place.
+    fn toggle_music(&mut self) {
+        self.launcher.open = false;
+        self.settings.open = false;
+        self.notices.open = false;
+        self.power_menu.open = false;
+        self.music.toggle();
+        if self.music.open {
+            self.send(Command::Terminal);
+        }
+    }
+
+    /// Opens or closes the list of notifications, which also takes the terminal's place.
+    fn toggle_notices(&mut self) {
+        self.launcher.open = false;
+        self.settings.open = false;
+        self.music.open = false;
+        self.notices.toggle();
+        if self.notices.open {
+            self.send(Command::Terminal);
+        }
+    }
+
+    fn toggle_recording(&mut self) {
+        if let Some(command) = self.capture.toggle_recording(&mut self.notices) {
+            self.send(command);
+        }
+    }
+
+    /// Opens or closes the power menu, which also takes the terminal's place.
+    fn toggle_power(&mut self) {
+        self.launcher.open = false;
+        self.settings.open = false;
+        self.music.open = false;
+        self.notices.open = false;
+        self.power_menu.toggle();
+        if self.power_menu.open {
+            self.send(Command::Terminal);
+        }
+    }
+
+    /// Brings into view the application a notification came from, if it has a window.
+    fn follow(&mut self, chosen: notify::Chosen) {
+        let name = chosen.app.to_lowercase();
+        let index = self.desktop.as_ref().and_then(|desktop| {
+            desktop.state.apps.iter().position(|app| !name.is_empty() && app.title.to_lowercase().contains(&name))
+        });
+        if let Some(index) = index {
+            self.notices.open = false;
+            self.power_menu.open = false;
+            self.send(Command::Activate(index));
+        }
+    }
+
+    /// Locks the screen, if a password can be checked to unlock it again.
+    fn lock_now(&mut self) {
+        if !lock::can_check() {
+            eprintln!("des-ui: not locking: this system has no way to check the password");
+            return;
+        }
+        self.launcher.open = false;
+        self.settings.open = false;
+        self.music.open = false;
+        self.notices.open = false;
+        self.power_menu.open = false;
+        self.lock.engage();
+        self.lock_confirmed = false;
+        self.send(Command::Lock);
     }
 
     fn send(&mut self, command: Command) {
@@ -212,12 +398,13 @@ impl App {
                 let font = self.config.terminal_font.clone();
                 self.config = config::Config::load();
                 self.config.theme = theme;
+                self.notices.sounds = self.config.notification_sounds;
                 self.input = des_common::input::InputSettings::load();
                 if self.config.terminal_font != font {
                     ui::install_fonts(ctx, self.symbols.as_deref(), self.config.terminal_font.as_deref());
                 }
                 // The compositor owns the devices these are about.
-                if ["keyboard_", "mouse_", "touchpad_"].iter().any(|prefix| key.starts_with(prefix)) {
+                if ["keyboard_", "mouse_", "touchpad_", "lock_after", "screen_off_after"].iter().any(|prefix| key.starts_with(prefix)) {
                     self.send(Command::ReloadInput);
                 }
             }
@@ -229,6 +416,20 @@ impl App {
             Change::ApplyDisplays(choices) => self.send(Command::ApplyDisplays(choices)),
             Change::KeepDisplays => self.send(Command::KeepDisplays),
             Change::RevertDisplays => self.send(Command::RevertDisplays),
+            Change::Lock => self.lock_now(),
+            Change::Avatar(picture) => {
+                let outcome = match &picture {
+                    Some(path) => greeter::set_avatar(path).map(|_| ()),
+                    None => greeter::remove_avatar(),
+                };
+                match outcome {
+                    Ok(()) => {
+                        self.lock.forget_picture();
+                        self.settings.forget_picture();
+                    }
+                    Err(why) => self.notices.post("Picture not changed", &why, true),
+                }
+            }
             Change::LogOut => ctx.send_viewport_cmd(ViewportCommand::Close),
         }
     }
@@ -237,6 +438,9 @@ impl App {
     /// covering that must make way.
     fn toggle_launcher(&mut self) {
         self.settings.open = false;
+        self.music.open = false;
+        self.notices.open = false;
+        self.power_menu.open = false;
         self.launcher.toggle();
         if self.launcher.open {
             if let Some(desktop) = &mut self.desktop {
@@ -251,7 +455,8 @@ impl App {
         self.new_tab();
         let words: Vec<String> = entry.exec.iter().map(|word| panels::shell_quote(word)).collect();
         let line = format!("{}\n", words.join(" "));
-        self.tabs[self.active].write(line.as_bytes());
+        let tab = self.focus_tab();
+        self.tabs[tab].write(line.as_bytes());
     }
 
     /// Implements `--screenshot`: captures one frame, writes it as a PPM, then quits.
@@ -305,22 +510,70 @@ impl App {
                     self.toggle_settings();
                     continue;
                 }
+                if modifiers.ctrl && modifiers.shift && *key == Key::M {
+                    self.toggle_music();
+                    continue;
+                }
+                if modifiers.ctrl && modifiers.shift && *key == Key::N {
+                    self.toggle_notices();
+                    continue;
+                }
+                if modifiers.ctrl && modifiers.shift && *key == Key::P {
+                    self.toggle_power();
+                    continue;
+                }
                 if modifiers.ctrl && modifiers.shift && *key == Key::Q {
                     ctx.send_viewport_cmd(ViewportCommand::Close);
                     continue;
                 }
+                if modifiers.ctrl && modifiers.shift && matches!(key, Key::E | Key::O) {
+                    self.split_terminal(*key == Key::O);
+                    continue;
+                }
+                // With the terminal split, Ctrl+Shift and an arrow moves between panes.
+                let arrow = matches!(key, Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown);
+                if modifiers.ctrl && modifiers.shift && arrow && self.side.is_some() {
+                    self.side_focused = matches!(key, Key::ArrowRight | Key::ArrowDown);
+                    continue;
+                }
                 if modifiers.ctrl && *key == Key::Tab {
-                    self.active = if modifiers.shift {
-                        (self.active + count - 1) % count
-                    } else {
-                        (self.active + 1) % count
-                    };
+                    // The next tab for the pane in use, passing over the other pane's.
+                    let other = if self.side_focused { Some(self.active) } else { self.side };
+                    let step = if modifiers.shift { count - 1 } else { 1 };
+                    let mut next = self.focus_tab();
+                    for _ in 0..count {
+                        next = (next + step) % count;
+                        if Some(next) != other {
+                            break;
+                        }
+                    }
+                    if Some(next) != other {
+                        self.show_tab(next);
+                    }
                     continue;
                 }
             }
             rest.push(event);
         }
         rest
+    }
+}
+
+/// Where the tabs in view end up once tabs whose shells exited are removed. `alive`
+/// says which tabs remain. Returns the new first-pane tab and second-pane tab; the
+/// split ends if either of its tabs is gone.
+fn remap_panes(alive: &[bool], active: usize, side: Option<usize>) -> (usize, Option<usize>) {
+    let moved = |old: usize| alive.get(old).copied().unwrap_or(false).then(|| alive[..old].iter().filter(|a| **a).count());
+    let remaining = alive.iter().filter(|a| **a).count();
+    match (moved(active), side.and_then(moved)) {
+        (Some(active), side) => (active, side),
+        // The first pane's tab is gone: the second pane's takes over.
+        (None, Some(side)) => (side, None),
+        // Neither is left: the tab that was next to the one in view.
+        (None, None) => {
+            let before = alive[..active.min(alive.len())].iter().filter(|a| **a).count();
+            (before.min(remaining.saturating_sub(1)), None)
+        }
     }
 }
 
@@ -344,6 +597,7 @@ fn region<R>(
 struct BarActions {
     command: Option<Command>,
     open_tab: bool,
+    split_terminal: bool,
     toggle_launcher: bool,
 }
 
@@ -417,7 +671,7 @@ impl App {
         let mut actions = BarActions::default();
         ui.spacing_mut().item_spacing.x = 4.0;
         let covered = state.and_then(|s| s.covering()).is_some();
-        let terminal_in_use = !covered && !self.launcher.open && !self.settings.open;
+        let terminal_in_use = !covered && !self.launcher.open && !self.settings.open && !self.music.open && !self.notices.open && !self.power_menu.open;
 
         for i in 0..self.tabs.len() {
             let process = self.tabs[i]
@@ -428,12 +682,15 @@ impl App {
                 name: if i == 0 { "main" } else { "term" },
                 detail: Some(&process),
                 badge: None,
-                selected: i == self.active && terminal_in_use,
+                selected: (i == self.active || Some(i) == self.side) && terminal_in_use,
             };
             if tab(ui, theme, look).clicked() {
-                self.active = i;
+                self.show_tab(i);
                 self.launcher.open = false;
                 self.settings.open = false;
+                self.music.open = false;
+                self.notices.open = false;
+                self.power_menu.open = false;
                 actions.command = Some(Command::Terminal);
             }
         }
@@ -448,6 +705,24 @@ impl App {
             }
         }
 
+        let split_hint = if self.side.is_some() {
+            "Make the terminal whole again (Ctrl+Shift+E)"
+        } else {
+            "Split the terminal: Ctrl+Shift+E side by side, Ctrl+Shift+O one above the other"
+        };
+        if ui::icon_button(ui, theme, Icon::SplitPane, 28.0, self.side.is_some())
+            .on_hover_text(split_hint)
+            .clicked()
+        {
+            actions.split_terminal = true;
+            self.launcher.open = false;
+            self.settings.open = false;
+            self.music.open = false;
+            self.notices.open = false;
+            self.power_menu.open = false;
+            actions.command = Some(Command::Terminal);
+        }
+
         if let Some(state) = state.filter(|state| !state.apps.is_empty()) {
             let (rule, _) = ui.allocate_exact_size(vec2(21.0, ui.available_height()), Sense::hover());
             ui.painter()
@@ -459,11 +734,14 @@ impl App {
                     detail: None,
                     badge: (state.screens > 1).then(|| (app.screen + 1).to_string()),
                     selected: app.place != Place::Hidden
-                        && !((self.launcher.open || self.settings.open) && app.screen == 0),
+                        && !((self.launcher.open || self.settings.open || self.music.open || self.notices.open || self.power_menu.open) && app.screen == 0),
                 };
                 if tab(ui, theme, look).clicked() {
                     self.launcher.open = false;
                     self.settings.open = false;
+                    self.music.open = false;
+                    self.notices.open = false;
+                    self.power_menu.open = false;
                     actions.command = Some(Command::Activate(i));
                 }
                 // The application in use carries its own controls.
@@ -523,11 +801,37 @@ impl eframe::App for App {
             desktop.pump();
             if std::mem::take(&mut desktop.launcher_requested) && !self.launcher.open {
                 self.settings.open = false;
+                self.music.open = false;
+                self.notices.open = false;
+                self.power_menu.open = false;
                 self.launcher.open();
             }
             if std::mem::take(&mut desktop.settings_requested) && !self.settings.open {
                 self.launcher.open = false;
+                self.music.open = false;
+                self.notices.open = false;
+                self.power_menu.open = false;
                 self.settings.open(&self.config);
+            }
+            if std::mem::take(&mut desktop.music_requested) && !self.music.open {
+                self.launcher.open = false;
+                self.settings.open = false;
+                self.notices.open = false;
+                self.power_menu.open = false;
+                self.music.open = true;
+            }
+            if std::mem::take(&mut desktop.power_requested) {
+                self.launcher.open = false;
+                self.settings.open = false;
+                self.music.open = false;
+                self.notices.open = false;
+                self.power_menu.open = true;
+            }
+            if std::mem::take(&mut desktop.notifications_requested) && !self.notices.open {
+                self.launcher.open = false;
+                self.settings.open = false;
+                self.music.open = false;
+                self.notices.open = true;
             }
             // Bring the frame in line with the saved choice of panels: once at the
             // start, and again whenever that choice is changed in the settings.
@@ -548,23 +852,88 @@ impl eframe::App for App {
         for tab in &mut self.tabs {
             tab.pump();
         }
-        // Closing a tab to the left of the active one must not change which tab is shown.
-        let mut index = 0;
-        let mut active = self.active;
-        self.tabs.retain(|tab| {
-            if tab.exited && index < self.active {
-                active -= 1;
-            }
-            index += 1;
-            !tab.exited
-        });
+        // Tabs whose shell has exited go; the ones in view keep their places, and a
+        // split whose pane lost its tab becomes whole again.
+        let alive: Vec<bool> = self.tabs.iter().map(|tab| !tab.exited).collect();
+        let (active, side) = remap_panes(&alive, self.active, self.side);
+        self.tabs.retain(|tab| !tab.exited);
         if self.tabs.is_empty() {
             ctx.send_viewport_cmd(ViewportCommand::Close);
             return;
         }
-        self.active = active.min(self.tabs.len() - 1);
+        self.active = active;
+        self.side = side;
+        self.side_focused &= side.is_some();
 
         self.handle_screenshot(ctx);
+
+        // The lock screen comes before everything else, and while it is up nothing
+        // else is drawn or given any input.
+        let (asked, compositor_locked) = match &mut self.desktop {
+            Some(desktop) => (std::mem::take(&mut desktop.lock_requested), Some(desktop.locked)),
+            None => (false, None),
+        };
+        if asked && !self.lock.locked {
+            self.lock_now();
+        }
+        match compositor_locked {
+            // A shell started while the screen is locked takes the lock over.
+            Some(true) if !self.lock.locked => self.lock.engage(),
+            Some(true) => self.lock_confirmed = true,
+            // Unlocked from outside, with `des-ui --unlock`.
+            Some(false) if self.lock.locked && self.lock_confirmed => self.lock.release(),
+            _ => {}
+        }
+        self.notices.pump();
+        if let Some(desktop) = &mut self.desktop {
+            for shot in std::mem::take(&mut desktop.shots) {
+                self.capture.take(shot);
+            }
+            for state in std::mem::take(&mut desktop.recording_news) {
+                self.capture.recording_is(state, &mut self.notices);
+            }
+        }
+        self.capture.report(&mut self.notices);
+        // Sleep is on its way, or the session was told to lock.
+        if self.power.lock_wanted() && !self.lock.locked {
+            let for_sleep = self.power.sleep_waiting();
+            if !for_sleep || self.config.lock_on_sleep {
+                self.lock_now();
+            }
+        }
+        if self.power.sleep_waiting() {
+            // The machine may sleep once the lock is what is on screen, or at once if
+            // there is to be no lock.
+            let up = self.lock.locked && (self.lock_confirmed || self.desktop.is_none());
+            if up || !self.lock.locked {
+                self.power.let_sleep();
+            } else {
+                ctx.request_repaint_after(Duration::from_millis(30));
+            }
+        }
+        let held = self.power.holding();
+        if held != self.idle_held {
+            self.idle_held = held;
+            self.send(Command::HoldIdle(held));
+        }
+        let screens = self.desktop.as_ref().filter(|desktop| desktop.connected()).map(|desktop| desktop.state.screens);
+        if self.watch.check(&mut self.notices, self.mon.power, !self.mon.ip.is_empty(), screens) {
+            power::Act::Suspend.run();
+        }
+        if self.lock.locked {
+            self.capture.cancel();
+            // Nothing is shown over the lock; what arrives waits in the list.
+            if self.toast_area != Some(None) {
+                self.toast_area = Some(None);
+                self.send(Command::Toast(None));
+            }
+            let theme = self.theme.clone();
+            let music = &mut self.music;
+            if self.lock.show(ctx, &theme, |ui, within| music.lock_card(ui, &theme, within)) {
+                self.send(Command::Unlock);
+            }
+            return;
+        }
         let events = self.take_shortcuts(ctx);
         let theme = self.theme.clone();
         let screen = ctx.screen_rect();
@@ -582,6 +951,12 @@ impl eframe::App for App {
             Some("LAUNCHER")
         } else if self.settings.open {
             Some("SETTINGS")
+        } else if self.music.open {
+            Some("MUSIC")
+        } else if self.notices.open {
+            Some("NOTIFICATIONS")
+        } else if self.power_menu.open {
+            Some("POWER")
         } else {
             None
         };
@@ -600,11 +975,23 @@ impl eframe::App for App {
             .show(ctx, |ui| {
                 let status = Rect::from_min_max(pos2(screen.left(), status_top), screen.max);
                 let toggled = region(ui, status, vec2(24.0, 0.0), Layout::left_to_right(Align::Center), |ui| {
-                    panels::status(ui, &theme, &self.mon, state.as_ref(), open, overlay)
+                    panels::status(ui, &theme, &self.mon, state.as_ref(), open, overlay, self.notices.count(), self.capture.recording.map(|since| since.elapsed()))
                 });
-                let (toggled, settings_clicked) = toggled;
+                let (toggled, settings_clicked, music_clicked, notices_clicked, power_clicked, stop_clicked) = toggled;
+                if stop_clicked {
+                    self.toggle_recording();
+                }
+                if power_clicked {
+                    self.toggle_power();
+                }
+                if notices_clicked {
+                    self.toggle_notices();
+                }
                 if settings_clicked {
                     self.toggle_settings();
+                }
+                if music_clicked {
+                    self.toggle_music();
                 }
                 if let Some(panel) = toggled {
                     match &self.desktop {
@@ -623,14 +1010,20 @@ impl eframe::App for App {
                 if open.right {
                     let rect = Rect::from_min_max(pos2(workspace.right(), screen.top()), pos2(screen.right(), status_top));
                     region(ui, rect, column, Layout::top_down(Align::Min), |ui| {
-                        panels::right(ui, &theme, &self.mon, state.as_ref(), rotation, &places)
-                    });
+                        let music = &mut self.music;
+                        let mut wanted = false;
+                        panels::right(ui, &theme, &self.mon, state.as_ref(), rotation, &places, |ui| {
+                            wanted = music.panel(ui, &theme);
+                        });
+                        wanted
+                    })
+                    .then(|| self.toggle_music());
                 }
                 let mut typed = None;
                 if open.bottom {
                     let rect = Rect::from_min_max(workspace.left_bottom(), pos2(workspace.right(), status_top));
                     typed = region(ui, rect, vec2(24.0, 16.0), Layout::top_down(Align::Min), |ui| {
-                        let cwd = self.tabs[self.active].cwd();
+                        let cwd = self.tabs[self.focus_tab()].cwd();
                         self.fs.show(ui, &theme, cwd.as_deref())
                     });
                 }
@@ -643,6 +1036,9 @@ impl eframe::App for App {
                 });
                 if actions.open_tab {
                     self.new_tab();
+                }
+                if actions.split_terminal {
+                    self.split_terminal(false);
                 }
                 if actions.toggle_launcher {
                     self.toggle_launcher();
@@ -657,7 +1053,6 @@ impl eframe::App for App {
                 }
                 let inner = mine.shrink2(vec2(24.0, 18.0));
                 let inner = Rect::from_min_max(inner.min, inner.max.max(inner.min));
-                let response = ui.allocate_rect(inner, Sense::click_and_drag());
 
                 if self.settings.open {
                     let changes = region(ui, mine, vec2(0.0, 0.0), Layout::top_down(Align::Min), |ui| {
@@ -666,6 +1061,38 @@ impl eframe::App for App {
                     });
                     for change in changes {
                         self.apply(ctx, change);
+                    }
+                    return;
+                }
+                if self.music.open {
+                    region(ui, mine, vec2(0.0, 0.0), Layout::top_down(Align::Min), |ui| {
+                        self.music.show(ui, mine, &theme)
+                    });
+                    return;
+                }
+                if self.power_menu.open {
+                    let act = region(ui, mine, vec2(0.0, 0.0), Layout::top_down(Align::Min), |ui| {
+                        self.power_menu.show(ui, mine, &theme, self.mon.power)
+                    });
+                    match act {
+                        Some(power::Act::Lock) => self.lock_now(),
+                        Some(power::Act::LogOut) => ctx.send_viewport_cmd(ViewportCommand::Close),
+                        Some(act) => act.run(),
+                        None => {}
+                    }
+                    return;
+                }
+                if self.notices.open {
+                    let (chosen, quiet) = region(ui, mine, vec2(0.0, 0.0), Layout::top_down(Align::Min), |ui| {
+                        self.notices.show(ui, mine, &theme)
+                    });
+                    if let Some(quiet) = quiet {
+                        if let Err(e) = config::set("do_not_disturb", quiet.then_some("on")) {
+                            eprintln!("des-ui: cannot save the setting: {e}");
+                        }
+                    }
+                    if let Some(chosen) = chosen {
+                        self.follow(chosen);
                     }
                     return;
                 }
@@ -678,6 +1105,51 @@ impl eframe::App for App {
                     }
                     return;
                 }
+
+                // One pane, or two with a gap and a rule between them.
+                let panes: Vec<(usize, Rect)> = match self.side {
+                    None => vec![(self.active, inner)],
+                    Some(side) => {
+                        let gap = 25.0;
+                        let (first, second) = if self.stacked {
+                            let height = ((inner.height() - gap) / 2.0).floor().max(1.0);
+                            let rule = inner.top() + height + gap / 2.0;
+                            ui.painter().hline(inner.x_range(), rule, Stroke::new(1.0, ui::LINE));
+                            (
+                                Rect::from_min_size(inner.min, vec2(inner.width(), height)),
+                                Rect::from_min_max(pos2(inner.left(), inner.top() + height + gap), inner.max),
+                            )
+                        } else {
+                            let width = ((inner.width() - gap) / 2.0).floor().max(1.0);
+                            let rule = inner.left() + width + gap / 2.0;
+                            ui.painter().vline(rule, inner.y_range(), Stroke::new(1.0, ui::LINE));
+                            (
+                                Rect::from_min_size(inner.min, vec2(width, inner.height())),
+                                Rect::from_min_max(pos2(inner.left() + width + gap, inner.top()), inner.max),
+                            )
+                        };
+                        vec![(self.active, first), (side, second)]
+                    }
+                };
+                let responses: Vec<Response> = panes
+                    .iter()
+                    .enumerate()
+                    .map(|(n, (_, rect))| ui.interact(*rect, ui.id().with(("terminal-pane", n)), Sense::click_and_drag()))
+                    .collect();
+                // A click in a pane gives it the keyboard.
+                for (n, response) in responses.iter().enumerate() {
+                    if panes.len() > 1 && (response.clicked() || response.drag_started()) {
+                        self.side_focused = n == 1;
+                    }
+                }
+                let focused = if self.side_focused && panes.len() > 1 { 1 } else { 0 };
+                if panes.len() > 1 {
+                    // A mark over the pane in use.
+                    let rect = panes[focused].1;
+                    let mark = Rect::from_min_size(pos2(rect.left(), rect.top() - 10.0), vec2(36.0, 2.0));
+                    ui.painter().rect_filled(mark, 0.0, theme.main);
+                }
+                let response = &responses[focused];
 
                 // The terminal owns the keyboard: keep focus on it and stop egui from
                 // using Tab, arrows and Escape for its own widget navigation.
@@ -695,12 +1167,15 @@ impl eframe::App for App {
                 });
 
                 let (alt_held, shift_held) = ui.input(|i| (i.modifiers.alt, i.modifiers.shift));
-                let tab = &mut self.tabs[self.active];
+                let tab = &mut self.tabs[panes[focused].0];
                 tab.handle_events(&events, alt_held, shift_held, ctx);
                 if let Some(text) = typed.take() {
                     tab.write(text.as_bytes());
                 }
-                tab.show(ui, inner, &theme, &response, &self.config.term_look());
+                let look = self.config.term_look();
+                for (n, (index, rect)) in panes.iter().enumerate() {
+                    self.tabs[*index].show(ui, *rect, &theme, &responses[n], &look, n == focused);
+                }
             });
         if let (Some(command), Some(desktop)) = (command, self.desktop.as_mut()) {
             desktop.send(command);
@@ -721,6 +1196,27 @@ impl eframe::App for App {
             if open.bottom {
                 lines.hline(workspace.x_range(), workspace.bottom(), line);
             }
+        }
+
+        // Toasts hang from the top right corner of the workspace. The compositor is
+        // told where, so that it shows them above whatever application is open.
+        let (mut covered, chosen) = self.notices.toasts(ctx, &theme, workspace.right_top() + vec2(-16.0, 12.0));
+        // Marking out a piece for a screenshot takes the whole display, above everything.
+        if self.capture.marking() {
+            if self.capture.mark(ctx, theme.main) {
+                self.toggle_recording();
+            }
+            covered = Some(screen);
+        }
+        let area = covered.map(|rect| {
+            (rect.left().floor() as i32, rect.top().floor() as i32, rect.width().ceil() as i32 + 1, rect.height().ceil() as i32 + 1)
+        });
+        if self.toast_area != Some(area) {
+            self.toast_area = Some(area);
+            self.send(Command::Toast(area));
+        }
+        if let Some(chosen) = chosen {
+            self.follow(chosen);
         }
 
         // Every further display gets a window of its own, which the compositor puts
@@ -842,6 +1338,12 @@ fn main() -> eframe::Result {
     let mut screenshot = None;
     let mut font = None;
     let mut launcher = false;
+    let mut lyrics = false;
+    let mut music = false;
+    let mut power_menu = false;
+    let mut greeter = false;
+    let mut locked = false;
+    let mut split = None;
     let mut settings: Option<String> = None;
     let mut config = config::Config::load();
     let mut args = std::env::args().skip(1);
@@ -849,6 +1351,69 @@ fn main() -> eframe::Result {
         match arg.as_str() {
             "--windowed" => windowed = true,
             "--launcher" => launcher = true,
+            "--music" => music = true,
+            "--music=lyrics" => {
+                music = true;
+                lyrics = true;
+            }
+            "--power" => power_menu = true,
+            "--greeter" => greeter = true,
+            "--locked" => locked = true,
+            "--split-terminal" => split = Some(false),
+            "--split-terminal=below" => split = Some(true),
+            "--unlock" => {
+                // Every compositor of this user's: there is normally one.
+                let dir = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).unwrap_or_default();
+                let mut reached = 0;
+                for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    if name.starts_with("des-comp-") && name.ends_with(".sock") {
+                        if let Ok(mut stream) = std::os::unix::net::UnixStream::connect(entry.path()) {
+                            use std::io::Write;
+                            if stream.write_all(Command::Unlock.encode().as_bytes()).is_ok() {
+                                reached += 1;
+                            }
+                        }
+                    }
+                }
+                if reached == 0 {
+                    eprintln!("des-ui: found no running desktop to unlock in {}", dir.display());
+                    std::process::exit(1);
+                }
+                println!("Unlocked.");
+                return Ok(());
+            }
+            "--write-boot-splash" => {
+                let outcome = match args.next() {
+                    Some(dir) => {
+                        let config = config::Config::load();
+                        bootsplash::write(std::path::Path::new(&dir), &Theme::load(&config.theme))
+                    }
+                    None => Err("--write-boot-splash needs a folder".to_string()),
+                };
+                match outcome {
+                    Ok(count) => println!("Wrote {count} pictures for the boot splash."),
+                    Err(e) => {
+                        eprintln!("des-ui: {e}");
+                        std::process::exit(1);
+                    }
+                }
+                return Ok(());
+            }
+            "--set-avatar" => {
+                let outcome = match args.next() {
+                    Some(file) => greeter::set_avatar(std::path::Path::new(&file)),
+                    None => Err("--set-avatar needs a picture file".to_string()),
+                };
+                match outcome {
+                    Ok(path) => println!("Saved to {}. The login screen shows it from now on.", path.display()),
+                    Err(e) => {
+                        eprintln!("des-ui: {e}");
+                        std::process::exit(1);
+                    }
+                }
+                return Ok(());
+            }
             "--settings" => settings = Some(String::new()),
             section if section.starts_with("--settings=") => {
                 settings = Some(section["--settings=".len()..].to_string());
@@ -915,6 +1480,25 @@ fn main() -> eframe::Result {
     }
 
     let theme = Theme::load(&config.theme);
+    if greeter {
+        let options = eframe::NativeOptions {
+            viewport: ViewportBuilder::default()
+                .with_title("DEs-UI login")
+                .with_app_id("des-ui-greeter")
+                .with_inner_size([1280.0, 760.0])
+                .with_fullscreen(!windowed),
+            ..Default::default()
+        };
+        return eframe::run_native(
+            "des-ui-greeter",
+            options,
+            Box::new(move |cc| {
+                apply_style(&cc.egui_ctx, &theme);
+                ui::install_fonts(&cc.egui_ctx, None, None);
+                Ok(Box::new(greeter::Greeter::new(theme, screenshot)))
+            }),
+        );
+    }
     let options = eframe::NativeOptions {
         viewport: ViewportBuilder::default()
             .with_title("des-ui")
@@ -931,13 +1515,57 @@ fn main() -> eframe::Result {
             let symbols = font.or_else(find_nerd_font);
             ui::install_fonts(&cc.egui_ctx, symbols.as_deref(), config.terminal_font.as_deref());
             let mut app = App::new(cc.egui_ctx.clone(), theme, config, symbols, screenshot)?;
+            if locked {
+                app.lock.engage();
+            }
+            if let Some(stacked) = split {
+                app.split_terminal(stacked);
+            }
             if let Some(section) = &settings {
                 app.settings.open_at(&app.config.clone(), section);
             }
             if launcher {
                 app.launcher.open();
             }
+            app.music.open = music;
+            if lyrics {
+                app.music.show_lyrics();
+            }
+            app.power_menu.open = power_menu;
             Ok(Box::new(app))
         }),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::remap_panes;
+
+    #[test]
+    fn tabs_in_view_keep_their_places_when_others_close() {
+        // Nothing closed.
+        assert_eq!(remap_panes(&[true, true, true], 1, Some(2)), (1, Some(2)));
+        // A tab to the left closes: both shift down.
+        assert_eq!(remap_panes(&[false, true, true], 1, Some(2)), (0, Some(1)));
+        // A tab between them closes.
+        assert_eq!(remap_panes(&[true, false, true], 0, Some(2)), (0, Some(1)));
+    }
+
+    #[test]
+    fn a_split_ends_when_one_of_its_tabs_closes() {
+        // The second pane's tab closes: whole again, on the first.
+        assert_eq!(remap_panes(&[true, true, false], 1, Some(2)), (1, None));
+        // The first pane's tab closes: the second pane's tab takes over.
+        assert_eq!(remap_panes(&[true, false, true], 1, Some(2)), (1, None));
+        // Both close: the nearest tab left.
+        assert_eq!(remap_panes(&[true, false, false], 1, Some(2)), (0, None));
+        assert_eq!(remap_panes(&[false, false, true], 0, Some(1)), (0, None));
+    }
+
+    #[test]
+    fn without_a_split_the_tab_in_view_follows_its_neighbours() {
+        assert_eq!(remap_panes(&[true, false, true], 1, None), (1, None));
+        assert_eq!(remap_panes(&[true, true, false], 2, None), (1, None));
+        assert_eq!(remap_panes(&[false, true], 1, None), (0, None));
+    }
 }

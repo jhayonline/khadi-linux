@@ -4,6 +4,8 @@
 
 use std::path::PathBuf;
 
+use des_common::ipc::Usage;
+
 /// One monitor's saved settings.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Saved {
@@ -17,6 +19,12 @@ pub struct Saved {
     pub y: i32,
     pub scale: f64,
     pub primary: bool,
+    /// Quarter turns clockwise, in degrees.
+    pub turn: u16,
+    pub usage: Usage,
+    /// Saved by this desktop, as opposed to read from GNOME: the scale is one this
+    /// desktop was asked for, and the position allows for it.
+    pub own: bool,
 }
 
 /// The layout to use for a set of connected monitors.
@@ -78,6 +86,9 @@ pub fn parse(text: &str) -> Vec<Vec<Saved>> {
                         y: value(logical, "y")?,
                         scale: value(logical, "scale").unwrap_or(1.0),
                         primary: value::<String>(logical, "primary").is_some_and(|primary| primary == "yes"),
+                        turn: 0,
+                        usage: Usage::Own,
+                        own: false,
                     })
                 })
                 .collect()
@@ -96,8 +107,8 @@ pub fn pick(configurations: &[Vec<Saved>], connected: &[String]) -> Layout {
     if let Some(configuration) = exact {
         return Layout {
             monitors: configuration.clone(),
-            // Positions are in scaled coordinates; this desktop does not scale.
-            arranged: configuration.iter().all(|saved| saved.scale == 1.0),
+            // GNOME's positions allow for GNOME's scaling, which is not taken over.
+            arranged: configuration.iter().all(|saved| saved.own || saved.scale == 1.0),
         };
     }
     Layout {
@@ -112,7 +123,8 @@ pub fn pick(configurations: &[Vec<Saved>], connected: &[String]) -> Layout {
 
 /// Reads layouts saved by this desktop's own display settings: blocks separated by
 /// blank lines, one monitor per line as `<connector> <width>x<height>@<Hz> <x>,<y>`,
-/// with ` main` after the main display.
+/// then any of ` main` for the main display, ` scale=<factor>`, ` turn=<degrees>`,
+/// ` mirror` and ` off`.
 pub fn parse_own(text: &str) -> Vec<Vec<Saved>> {
     let mut configurations = Vec::new();
     let mut block: Vec<Saved> = Vec::new();
@@ -130,7 +142,7 @@ pub fn parse_own(text: &str) -> Vec<Vec<Saved>> {
             let (size, rate) = words.next()?.split_once('@')?;
             let (width, height) = size.split_once('x')?;
             let (x, y) = words.next()?.split_once(',')?;
-            Some(Saved {
+            let mut saved = Saved {
                 connector,
                 width: width.parse().ok()?,
                 height: height.parse().ok()?,
@@ -138,8 +150,22 @@ pub fn parse_own(text: &str) -> Vec<Vec<Saved>> {
                 x: x.parse().ok()?,
                 y: y.parse().ok()?,
                 scale: 1.0,
-                primary: words.next() == Some("main"),
-            })
+                primary: false,
+                turn: 0,
+                usage: Usage::Own,
+                own: true,
+            };
+            for word in words {
+                match word.split_once('=') {
+                    None if word == "main" => saved.primary = true,
+                    None if word == "mirror" => saved.usage = Usage::Mirror,
+                    None if word == "off" => saved.usage = Usage::Off,
+                    Some(("scale", scale)) => saved.scale = scale.parse().ok().filter(|scale| (0.5..=4.0).contains(scale))?,
+                    Some(("turn", turn)) => saved.turn = turn.parse().ok().filter(|turn| matches!(turn, 0 | 90 | 180 | 270))?,
+                    _ => return None,
+                }
+            }
+            Some(saved)
         })();
         // A line that cannot be read spoils its whole layout, not the file.
         match parsed {
@@ -155,6 +181,9 @@ pub fn parse_own(text: &str) -> Vec<Vec<Saved>> {
                     y: 0,
                     scale: 0.0,
                     primary: false,
+                    turn: 0,
+                    usage: Usage::Own,
+                    own: true,
                 });
             }
         }
@@ -168,9 +197,23 @@ pub fn format_own(configurations: &[Vec<Saved>]) -> String {
     for block in configurations {
         text.push('\n');
         for saved in block {
-            let main = if saved.primary { " main" } else { "" };
+            let mut more = String::new();
+            if saved.primary {
+                more.push_str(" main");
+            }
+            if saved.scale != 1.0 {
+                more.push_str(&format!(" scale={}", saved.scale));
+            }
+            if saved.turn != 0 {
+                more.push_str(&format!(" turn={}", saved.turn));
+            }
+            match saved.usage {
+                Usage::Own => {}
+                Usage::Mirror => more.push_str(" mirror"),
+                Usage::Off => more.push_str(" off"),
+            }
             text.push_str(&format!(
-                "{} {}x{}@{:.3} {},{}{main}\n",
+                "{} {}x{}@{:.3} {},{}{more}\n",
                 saved.connector, saved.width, saved.height, saved.rate, saved.x, saved.y
             ));
         }
@@ -283,6 +326,9 @@ mod tests {
                 y: 0,
                 scale: 1.0,
                 primary: false,
+                turn: 0,
+                usage: Usage::Own,
+                own: false,
             }
         );
         assert!(configurations[0][1].primary);
@@ -314,10 +360,10 @@ mod tests {
     #[test]
     fn own_layouts_round_trip() {
         let layout = vec![
-            Saved { connector: "HDMI-1".into(), width: 1920, height: 1080, rate: 60.0, x: 0, y: 0, scale: 1.0, primary: true },
-            Saved { connector: "eDP-1".into(), width: 1920, height: 1080, rate: 60.052, x: 1920, y: 0, scale: 1.0, primary: false },
+            Saved { connector: "HDMI-1".into(), width: 1920, height: 1080, rate: 60.0, x: 0, y: 0, scale: 1.0, primary: true, turn: 0, usage: Usage::Own, own: true },
+            Saved { connector: "eDP-1".into(), width: 1920, height: 1080, rate: 60.052, x: 1280, y: 0, scale: 1.5, primary: false, turn: 90, usage: Usage::Mirror, own: true },
         ];
-        let alone = vec![Saved { connector: "eDP-1".into(), width: 1280, height: 720, rate: 60.0, x: 0, y: 0, scale: 1.0, primary: true }];
+        let alone = vec![Saved { connector: "eDP-1".into(), width: 1280, height: 720, rate: 60.0, x: 0, y: 0, scale: 1.0, primary: true, turn: 0, usage: Usage::Off, own: true }];
         let text = format_own(&[layout.clone(), alone.clone()]);
         assert_eq!(parse_own(&text), vec![layout.clone(), alone.clone()]);
 
@@ -340,6 +386,8 @@ mod tests {
         assert_eq!(configurations[1][0].connector, "DP-1");
         assert_eq!(configurations[1][0].rate, 75.5);
         assert!(parse_own("").is_empty());
+        assert!(parse_own("eDP-1 1920x1080@60 0,0 turn=45\n").is_empty());
+        assert!(parse_own("eDP-1 1920x1080@60 0,0 sideways\n").is_empty());
     }
 
     #[test]

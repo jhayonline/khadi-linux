@@ -218,7 +218,16 @@ impl TermTab {
 
     /// Draws the terminal grid into `rect`, resizing the PTY to fit. `response` is the
     /// interaction result for `rect`, used for scrolling and mouse selection.
-    pub fn show(&mut self, ui: &mut Ui, rect: Rect, theme: &Theme, response: &Response, look: &TermLook) {
+    /// `focused` is false for a pane that is in view but does not have the keyboard.
+    pub fn show(
+        &mut self,
+        ui: &mut Ui,
+        rect: Rect,
+        theme: &Theme,
+        response: &Response,
+        look: &TermLook,
+        focused: bool,
+    ) {
         let font = FontId::monospace(look.font_size);
         let (cw, natural) = ui.fonts(|f| (f.glyph_width(&font, 'M'), f.row_height(&font)));
         let ch = (natural * look.line_height).round().max(1.0);
@@ -276,8 +285,8 @@ impl TermTab {
         let screen = self.parser.screen();
 
         // A blinking cursor is on for half of each second.
-        let lit = !look.cursor_blink || ui.input(|i| i.time).rem_euclid(1.0) < 0.5;
-        if look.cursor_blink {
+        let lit = !look.cursor_blink || !focused || ui.input(|i| i.time).rem_euclid(1.0) < 0.5;
+        if look.cursor_blink && focused {
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
         }
         let cursor = (!screen.hide_cursor() && screen.scrollback() == 0 && lit).then(|| {
@@ -291,7 +300,12 @@ impl TermTab {
                 CursorShape::Bar => Rect::from_min_size(cell.min, Vec2::new(2.0, ch)),
                 CursorShape::Underline => Rect::from_min_max(Pos2::new(cell.left(), cell.bottom() - 2.0), cell.max),
             };
-            painter.rect_filled(shape, 0.0, theme.cursor);
+            if focused {
+                painter.rect_filled(shape, 0.0, theme.cursor);
+            } else {
+                // Without the keyboard, the cursor is an outline.
+                painter.rect_stroke(cell, 0.0, Stroke::new(1.0, theme.cursor), egui::StrokeKind::Inside);
+            }
         }
 
         for row in 0..rows {
@@ -330,7 +344,7 @@ impl TermTab {
 
         // Under a block cursor the character is drawn again, dark on the cursor's
         // colour, so that it stays readable.
-        if let (Some((crow, ccol, cell)), CursorShape::Block) = (cursor, look.cursor) {
+        if let (Some((crow, ccol, cell)), CursorShape::Block, true) = (cursor, look.cursor, focused) {
             if let Some(under) = screen.cell(crow, ccol).filter(|under| under.has_contents()) {
                 painter.text(
                     Pos2::new(cell.left(), cell.top() + inset),

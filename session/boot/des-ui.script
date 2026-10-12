@@ -1,0 +1,148 @@
+# The DEs-UI boot splash: the desktop's name over a bar of blocks that fills as the
+# machine starts. The name is still most of the time; now and then it glitches, its
+# strips sliding apart with slices of colour showing through. It is the same screen
+# the desktop shows while a session starts.
+
+Window.SetBackgroundTopColor(0.024, 0.031, 0.043);
+Window.SetBackgroundBottomColor(0.024, 0.031, 0.043);
+
+STRIPS = 9;
+STRIP_HEIGHT = 7;
+NAME_WIDTH = 321;
+NAME_HEIGHT = 63;
+BLOCKS = 20;
+BLOCK_STEP = 16;
+BAR_WIDTH = 316;
+BAR_BELOW = 44;
+
+name_left = Window.GetX() + Window.GetWidth() / 2 - NAME_WIDTH / 2;
+name_top = Window.GetY() + Window.GetHeight() / 2 - (NAME_HEIGHT + BAR_BELOW + 6) / 2;
+bar_left = Window.GetX() + Window.GetWidth() / 2 - BAR_WIDTH / 2;
+bar_top = name_top + NAME_HEIGHT + BAR_BELOW;
+
+# The name's strips: in its own colours (0), and twice more in the colours a glitch
+# shows (1 and 2), which stay out of sight until one happens.
+for (colouring = 0; colouring < 3; colouring++) {
+    for (strip = 0; strip < STRIPS; strip++) {
+        index = colouring * STRIPS + strip;
+        strips[index] = Sprite(Image("strip-" + colouring + "-" + strip + ".png"));
+        strips[index].SetPosition(name_left, name_top + strip * STRIP_HEIGHT, 10 - colouring);
+        if (colouring > 0) {
+            strips[index].SetOpacity(0);
+        }
+    }
+}
+
+block_off = Image("block-off.png");
+block_on = Image("block-on.png");
+for (block = 0; block < BLOCKS; block++) {
+    off[block] = Sprite(block_off);
+    off[block].SetPosition(bar_left + block * BLOCK_STEP, bar_top, 5);
+    on[block] = Sprite(block_on);
+    on[block].SetPosition(bar_left + block * BLOCK_STEP, bar_top, 6);
+    on[block].SetOpacity(0);
+}
+
+ticks = 0;
+progress = 0;
+glitching = 0;
+
+fun still() {
+    for (strip = 0; strip < STRIPS; strip++) {
+        strips[strip].SetX(name_left);
+        strips[STRIPS + strip].SetOpacity(0);
+        strips[2 * STRIPS + strip].SetOpacity(0);
+    }
+}
+
+fun glitch() {
+    jump = Math.Int(Math.Random() * 9) - 4;
+    for (strip = 0; strip < STRIPS; strip++) {
+        slide = jump;
+        if (Math.Random() < 0.5) {
+            slide = slide + Math.Int(Math.Random() * 25) - 12;
+        }
+        strips[strip].SetX(name_left + slide);
+        if (Math.Random() < 0.33) {
+            strips[STRIPS + strip].SetX(name_left + slide + 4 + Math.Int(Math.Random() * 15));
+            strips[STRIPS + strip].SetOpacity(1);
+        } else {
+            strips[STRIPS + strip].SetOpacity(0);
+        }
+        if (Math.Random() < 0.25) {
+            strips[2 * STRIPS + strip].SetX(name_left + slide - 4 - Math.Int(Math.Random() * 15));
+            strips[2 * STRIPS + strip].SetOpacity(1);
+        } else {
+            strips[2 * STRIPS + strip].SetOpacity(0);
+        }
+    }
+}
+
+# Called fifty times a second.
+fun refresh() {
+    ticks++;
+    # Three short glitches in every 120 ticks (2.4 seconds).
+    within = ticks % 120;
+    now = 0;
+    if (within >= 16 && within < 23) now = 1;
+    if (within >= 64 && within < 69) now = 1;
+    if (within >= 95 && within < 102) now = 1;
+    if (now == 1) {
+        # A glitch changes shape every other tick.
+        if (ticks % 2 == 0) glitch();
+        glitching = 1;
+    } else if (glitching == 1) {
+        still();
+        glitching = 0;
+    }
+
+    # The bar follows how far the boot has got; where that is not told (shutting
+    # down), it fills with time, and stops short of full.
+    by_time = ticks / 250;
+    if (by_time > 0.9) by_time = 0.9;
+    shown = progress;
+    if (by_time > shown) shown = by_time;
+    filled = Math.Int(shown * BLOCKS);
+    for (block = 0; block < BLOCKS; block++) {
+        if (block < filled) {
+            on[block].SetOpacity(1);
+        } else {
+            on[block].SetOpacity(0);
+        }
+    }
+}
+Plymouth.SetRefreshFunction(refresh);
+
+fun boot_progress(duration, fraction) {
+    progress = fraction;
+}
+Plymouth.SetBootProgressFunction(boot_progress);
+
+# Asking for a password (an encrypted disk): the question, and a mark for each
+# character typed, under the bar.
+prompt_sprite = Sprite();
+fun ask_password(prompt, bullets) {
+    line = prompt + "  ";
+    for (typed = 0; typed < bullets; typed++) {
+        line = line + "*";
+    }
+    asked = Image.Text(line, 0.86, 0.91, 0.93);
+    prompt_sprite.SetImage(asked);
+    prompt_sprite.SetPosition(Window.GetX() + Window.GetWidth() / 2 - asked.GetWidth() / 2, bar_top + 40, 20);
+    prompt_sprite.SetOpacity(1);
+}
+Plymouth.SetDisplayPasswordFunction(ask_password);
+
+fun back_to_normal() {
+    prompt_sprite.SetOpacity(0);
+}
+Plymouth.SetDisplayNormalFunction(back_to_normal);
+
+# Something the system has to say while starting, such as a disk being checked.
+message_sprite = Sprite();
+fun say(text) {
+    said = Image.Text(text, 0.56, 0.64, 0.69);
+    message_sprite.SetImage(said);
+    message_sprite.SetPosition(Window.GetX() + Window.GetWidth() / 2 - said.GetWidth() / 2, bar_top + 70, 20);
+}
+Plymouth.SetMessageFunction(say);

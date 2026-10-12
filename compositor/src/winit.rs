@@ -6,8 +6,7 @@ use smithay::{
         egl::EGLDevice,
         renderer::{
             ExportMem, ImportDma, damage::OutputDamageTracker,
-            element::Kind, element::surface::WaylandSurfaceRenderElement,
-            element::surface::render_elements_from_surface_tree, gles::GlesRenderer,
+            gles::GlesRenderer,
         },
         winit::{self, WinitEvent},
     },
@@ -61,7 +60,9 @@ pub fn init_winit(
         },
     );
     let _global = output.create_global::<DesComp>(display_handle);
-    output.change_current_state(Some(mode), Some(Transform::Flipped180), None, Some((0, 0).into()));
+    // Testing aid: `DES_TEST_SCALE=1.5` runs the window as a scaled display.
+    let scale = std::env::var("DES_TEST_SCALE").ok().and_then(|scale| scale.parse::<f64>().ok()).filter(|scale| (0.5..=4.0).contains(scale)).unwrap_or(1.0);
+    output.change_current_state(Some(mode), Some(Transform::Flipped180), Some(smithay::output::Scale::Fractional(scale)), Some((0, 0).into()));
     output.set_preferred(mode);
 
     state.space.map_output(&output, (0, 0));
@@ -86,9 +87,44 @@ pub fn init_winit(
     });
 
     state.backend = Some(backend);
-    state.set_screens(screens_of(mode.size.w, mode.size.h, state.split));
+    let logical = move |size: smithay::utils::Size<i32, smithay::utils::Physical>| size.to_f64().to_logical(scale).to_i32_round::<i32>();
+    state.set_screens(screens_of(logical(mode.size).w, logical(mode.size).h, state.split));
 
     let mut damage_tracker = OutputDamageTracker::from_output(&output);
+
+    // The host stops asking for frames while this window is out of sight. The desktop
+    // inside must not stop with it: its shell is still spoken to, and its applications
+    // are still told to draw.
+    event_loop
+        .handle()
+        .insert_source(
+            smithay::reexports::calloop::timer::Timer::from_duration(Duration::from_millis(100)),
+            |_, _, state| {
+                let hidden = state.last_frame.elapsed() > Duration::from_millis(250);
+                // Out of sight nothing is drawn to the window, so the picture asked
+                // for with `--screenshot` is drawn off screen instead.
+                if hidden && state.screenshot.is_some() && state.start_time.elapsed() > Duration::from_millis(crate::state::test_millis("DES_TEST_SHOT_MS", 5000)) {
+                    match state.grab(0, false) {
+                        Ok(frame) => {
+                            let mut data = format!("P6\n{} {}\n255\n", frame.width, frame.height).into_bytes();
+                            data.extend(frame.rgba.chunks_exact(4).flat_map(|pixel| [pixel[0], pixel[1], pixel[2]]));
+                            if let Err(e) = std::fs::write(state.screenshot.as_deref().unwrap(), data) {
+                                tracing::error!("cannot write the screenshot: {e}");
+                            }
+                        }
+                        Err(e) => tracing::error!("screenshot failed: {e}"),
+                    }
+                    state.loop_signal.stop();
+                }
+                if hidden && state.before_frame() {
+                    state.record_tick();
+                    state.after_frame();
+                    let _ = state.display_handle.flush_clients();
+                }
+                smithay::reexports::calloop::timer::TimeoutAction::ToDuration(Duration::from_millis(100))
+            },
+        )
+        .map_err(|e| format!("cannot start the timer for frames out of sight: {e}"))?;
 
     event_loop.handle().insert_source(winit, move |event, _, data| {
         let state = data;
@@ -104,7 +140,7 @@ pub fn init_winit(
                     None,
                     None,
                 );
-                state.set_screens(screens_of(size.w, size.h, state.split));
+                state.set_screens(screens_of(logical(size).w, logical(size).h, state.split));
             }
             WinitEvent::Input(event) => state.process_input_event(event),
             WinitEvent::Redraw => {
@@ -112,54 +148,36 @@ pub fn init_winit(
                     return;
                 }
 
-                let capture = state.screenshot.is_some() && state.start_time.elapsed() > Duration::from_secs(5);
+                let capture = state.screenshot.is_some() && state.start_time.elapsed() > Duration::from_millis(crate::state::test_millis("DES_TEST_SHOT_MS", 5000));
+                let toast_area = state.toast_area();
+                let primary = state.screens.first().map(|screen| screen.loc);
                 let backend = state.backend.as_mut().unwrap();
                 let size = backend.window_size();
                 let damage = Rectangle::from_size(size);
 
                 {
                     let (renderer, mut framebuffer) = backend.bind().unwrap();
-                    // While locked, only the lock screen is drawn. A render pass over
-                    // the space with the lock on top would still have the desktop in
-                    // the framebuffer for anything that reads it back.
-                    match state.lock.as_ref().map(|lock| lock.surface_for(&output).cloned()) {
-                        Some(surface) => {
-                            let elements: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = surface
-                                .map(|surface| {
-                                    render_elements_from_surface_tree(
-                                        renderer,
-                                        surface.wl_surface(),
-                                        (0, 0),
-                                        1.0,
-                                        1.0,
-                                        Kind::Unspecified,
-                                    )
-                                })
-                                .unwrap_or_default();
-                            damage_tracker
-                                .render_output(renderer, &mut framebuffer, 0, &elements, [0.0, 0.0, 0.0, 1.0])
-                                .unwrap();
-                        }
-                        None => {
-                            smithay::desktop::space::render_output::<
-                                _,
-                                WaylandSurfaceRenderElement<GlesRenderer>,
-                                _,
-                                _,
-                            >(
-                                &output,
-                                renderer,
-                                &mut framebuffer,
-                                1.0,
-                                0,
-                                [&state.space],
-                                &[],
-                                &mut damage_tracker,
-                                [0.0, 0.0, 0.0, 1.0],
-                            )
-                            .unwrap();
-                        }
+                    let mut toasts: Vec<crate::splash::TopElements> = Vec::new();
+                    if let Some(splash) = state.splash.as_mut() {
+                        toasts.extend(splash.elements(renderer, size.to_f64().to_logical(scale).to_i32_round(), scale));
                     }
+                    toasts.extend(
+                        crate::toast::elements(renderer, state.shell.as_ref(), toast_area, primary, &state.toast_id, (0, 0).into(), scale)
+                            .into_iter()
+                            .map(crate::splash::TopElements::Toast),
+                    );
+                    smithay::desktop::space::render_output::<_, crate::splash::TopElements, _, _>(
+                        &output,
+                        renderer,
+                        &mut framebuffer,
+                        1.0,
+                        0,
+                        [&state.space],
+                        &toasts,
+                        &mut damage_tracker,
+                        [0.0, 0.0, 0.0, 1.0],
+                    )
+                    .unwrap();
 
                     if capture {
                         let region = Rectangle::from_size((size.w, size.h).into());
@@ -182,6 +200,8 @@ pub fn init_winit(
                 }
                 state.lock_frame_presented(&output);
 
+                state.record_tick();
+                state.last_frame = std::time::Instant::now();
                 state.after_frame();
                 let _ = state.display_handle.flush_clients();
 
