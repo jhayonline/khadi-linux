@@ -72,6 +72,18 @@ ffmpeg             # screen recording. Without it the shell says so rather than
 # nothing else needs it, and uninstall-boot-splash.sh puts the old one back.
 plymouth
 
+# --- first-boot setup -----------------------------------------------------
+# The questions a new machine asks about itself, on a VT before anything
+# graphical exists. See provisioning/setup-form.sh.
+gum                # the prompts themselves
+#
+# NOT listed: tzupdate, which guesses the timezone from the public address. It
+# is in the AUR and not the repos, and `pacman -S` installs nothing at all when
+# one name on its command line cannot be resolved — so a single AUR package here
+# would break the install line this file documents. The form copes without it:
+# the timezone prompt becomes a search box rather than a list with the right
+# answer already picked. Install it yourself if you want the guess.
+
 # --- login ---------------------------------------------------------------
 # NOT YET SETTLED. install.sh registers a session in /usr/share/wayland-sessions,
 # which needs a display manager to offer it, and Arch ships none by default.

@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+# First-boot setup: asks who this machine belongs to, on tty1, before the login
+# screen starts.
+#
+# Armed by /var/lib/khadi/provisioning/pending. Without that file the unit does
+# not run, so an ordinary installed machine never sees this. The marker is
+# written by whatever left the machine with no account on it — an ISO install
+# that deferred provisioning, or a factory reset.
+#
+# Run as root, on a VT, with no desktop and often with no network. Everything
+# here has to survive that: no GPU, no fonts beyond the console's, and a
+# timezone guess that will usually fail.
+#
+# The questions live in setup-form.sh, which the ISO's installer step will share
+# rather than copy.
+
+set -uo pipefail
+
+KHADI_PATH="${KHADI_PATH:-/usr/local/share/khadi}"
+PROVISIONING_DIR=/var/lib/khadi/provisioning
+PENDING="$PROVISIONING_DIR/pending"
+LOG_FILE=/var/log/khadi-provision.log
+
+# Khadi's accent and a dim grey, as plain terminal escapes: this runs on a VT
+# with sixteen colours and no theme engine, long before anything that reads
+# themes/signal.json is running.
+ACCENT=$'\e[38;2;79;227;216m'
+DIM=$'\e[38;2;111;132;146m'
+BOLD=$'\e[1m'
+OFF=$'\e[0m'
+
+log() { printf '%s %s\n' "$(date -Is)" "$*" >>"$LOG_FILE"; }
+
+die() {
+    printf '\n  %s%s%s\n\n' "$ACCENT" "$*" "$OFF" >&2
+    log "FAILED: $*"
+    exit 1
+}
+
+# What the form calls to explain itself. Prints, waits, then rubs the line out
+# so the message does not pile up behind a retried prompt.
+notice() {
+    printf '  %s%s%s' "$ACCENT" "$1" "$OFF"
+    sleep "${2:-2}"
+    printf '\r\e[2K'
+}
+
+banner() {
+    clear
+    printf '\n'
+    printf '   %s%s█▄▀ █ █ ▄▀█ █▀▄ █%s\n' "$BOLD" "$ACCENT" "$OFF"
+    printf '   %s%s█ █ █▀█ █▀█ █▄▀ █%s\n' "$BOLD" "$ACCENT" "$OFF"
+    printf '\n'
+    printf '   %sThis machine has no account yet. A few questions and it will.%s\n' "$DIM" "$OFF"
+    printf '   %sEsc goes back to the first question.%s\n\n' "$DIM" "$OFF"
+}
+
+# --- the form ---------------------------------------------------------------
+
+# Where the form should report gum's own failures, as well as to the screen.
+export KHADI_FORM_LOG="$LOG_FILE"
+
+# shellcheck source=setup-form.sh
+source "$KHADI_PATH/provisioning/setup-form.sh" ||
+    die "The setup questions are missing from $KHADI_PATH/provisioning."
+
+# This machine already has accounts on it, unlike an installer's empty target.
+khadi_username_taken() { getent passwd "$1" >/dev/null; }
+
+ask_everything() {
+    local status
+    while true; do
+        banner
+        for prompt in khadi_prompt_keyboard khadi_prompt_username khadi_prompt_password \
+                      khadi_prompt_identity khadi_prompt_hostname khadi_prompt_timezone; do
+            "$prompt"
+            status=$?
+            case $status in
+                0) ;;
+                # Esc: start the form again rather than stepping back one field.
+                # Stepping back needs every prompt to remember what it held, and
+                # a form this short is quicker to retype than to get wrong.
+                "$KHADI_FORM_BACK") continue 2 ;;
+                # Ctrl+C has no meaning here. The machine has no account: there
+                # is nothing to exit to, and a shell on tty1 would be one.
+                "$KHADI_FORM_SIGNAL") continue 2 ;;
+                # gum itself failed — a flag it does not know, or no terminal to
+                # draw on. Restarting the form would loop for ever on the same
+                # failure with nothing on screen to explain it, which is exactly
+                # what a shared style flag `gum filter` rejects once did.
+                "$KHADI_FORM_FATAL") die "The setup questions cannot be shown. See $LOG_FILE." ;;
+                *) continue 2 ;;
+            esac
+        done
+        return 0
+    done
+}
+
+# --- applying the answers ---------------------------------------------------
+
+apply_keyboard() {
+    # An unknown keymap keeps the default rather than failing: a machine nobody
+    # can type on is worse than one with the wrong layout, which is two commands
+    # to put right from inside the desktop.
+    if localectl --no-pager list-keymaps 2>/dev/null | grep -qix "$keyboard"; then
+        localectl set-keymap "$keyboard" >>"$LOG_FILE" 2>&1 ||
+            log "could not set keymap $keyboard"
+    else
+        log "keymap $keyboard unknown to localectl; keeping the default"
+    fi
+}
+
+create_user() {
+    # Pinned before the account is made, so a run that fails later and is tried
+    # again resumes this same account instead of leaving two privileged ones.
+    printf '%s\n' "$username" >"$PROVISIONING_DIR/setup-user"
+
+    if getent passwd "$username" >/dev/null; then
+        log "account $username exists; bringing it up to date"
+        usermod -aG wheel ${full_name:+-c "$full_name"} "$username" >>"$LOG_FILE" 2>&1 ||
+            die "Could not update the account."
+    else
+        useradd -m -G wheel -s /bin/bash ${full_name:+-c "$full_name"} "$username" >>"$LOG_FILE" 2>&1 ||
+            die "Could not create the account."
+    fi
+
+    # Never logged, never echoed, and fed on stdin rather than as an argument,
+    # which would put it in the process list for anyone running ps.
+    printf '%s:%s\n' "$username" "$password" | chpasswd ||
+        die "Could not set the password."
+    printf '%s:%s\n' root "$password" | chpasswd ||
+        die "Could not set root's password."
+
+    # An ISO that deferred provisioning never ran archinstall's user step, which
+    # is what normally grants wheel. Writing the drop-in unconditionally is safer
+    # than detecting an existing grant, and a duplicate grant does nothing.
+    printf '%%wheel ALL=(ALL:ALL) ALL\n' >/etc/sudoers.d/00-khadi-wheel
+    chmod 440 /etc/sudoers.d/00-khadi-wheel
+}
+
+apply_machine() {
+    hostnamectl set-hostname "$hostname" >>"$LOG_FILE" 2>&1 ||
+        log "could not set the hostname to $hostname"
+    timedatectl set-timezone "$timezone" >>"$LOG_FILE" 2>&1 ||
+        log "could not set the timezone to $timezone"
+}
+
+apply_identity() {
+    # git's own config, written as the user rather than as root, or it lands in
+    # /root/.gitconfig and the account that needs it never sees it.
+    [[ -n ${full_name//[[:space:]]/} ]] &&
+        runuser -u "$username" -- git config --global user.name "$full_name" >>"$LOG_FILE" 2>&1
+    [[ -n ${email_address//[[:space:]]/} ]] &&
+        runuser -u "$username" -- git config --global user.email "$email_address" >>"$LOG_FILE" 2>&1
+    return 0
+}
+
+# --- main -------------------------------------------------------------------
+
+[[ $EUID -eq 0 ]] || die "This has to run as root."
+[[ -e $PENDING ]] || exit 0
+
+mkdir -p "$PROVISIONING_DIR"
+: >>"$LOG_FILE"
+chmod 600 "$LOG_FILE"
+log "first-boot setup starting"
+
+command -v gum >/dev/null || die "gum is not installed, so the questions cannot be asked."
+
+ask_everything
+
+clear
+printf '\n   %sSetting the machine up…%s\n\n' "$DIM" "$OFF"
+
+apply_keyboard
+create_user
+apply_machine
+apply_identity
+
+# Last, and only once everything above has worked: while this file exists the
+# unit runs again on the next boot, which is what should happen if any step
+# above died. Removing it earlier would leave a half-made machine with no second
+# chance at the questions.
+rm -f "$PENDING"
+log "first-boot setup finished for $username"
+
+printf '   %s%sWelcome, %s.%s\n\n' "$BOLD" "$ACCENT" "${full_name:-$username}" "$OFF"
+printf '   %sThe login screen is next.%s\n\n' "$DIM" "$OFF"
+sleep 2

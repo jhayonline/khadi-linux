@@ -57,6 +57,15 @@ sudo install -m644 themes/*.json /usr/local/share/khadi/themes/
 # The name Khadi goes by. Not /etc/os-release — see the top of the file for why.
 sudo install -Dm644 session/os-release /usr/local/share/khadi/os-release
 
+# First-boot setup. Installed, deliberately not enabled: the unit only runs when
+# /var/lib/khadi/provisioning/pending exists, and an ordinary machine — one that
+# already has an account on it — must never be asked who it belongs to. An ISO
+# install that defers provisioning writes the marker and enables the unit.
+sudo install -Dm755 provisioning/khadi-provision-owner /usr/local/bin/khadi-provision-owner
+sudo install -Dm644 provisioning/setup-form.sh /usr/local/share/khadi/provisioning/setup-form.sh
+sudo install -Dm644 provisioning/khadi-provision-owner.service \
+    /etc/systemd/system/khadi-provision-owner.service
+
 
 # This desktop was called edex-rs before. Whatever still starts a session under that
 # name gets this one; the rest of the old installation goes once nothing of it runs.

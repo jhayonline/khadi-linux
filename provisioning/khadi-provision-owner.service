@@ -1,0 +1,36 @@
+# First-boot setup: asks who this machine belongs to, on tty1, before the login
+# screen starts.
+#
+# Installed but NOT enabled by install.sh — see the Install= section. An ordinary
+# machine, where somebody already has an account, must never see this.
+#
+# Plymouth is dismissed in ExecStartPre rather than by ordering after
+# plymouth-quit-wait.service: ordering against it as well as before
+# display-manager.service is how units end up in a cycle that systemd breaks by
+# dropping one of them, and the one it drops is not up to us.
+[Unit]
+Description=Khadi first-boot owner setup
+Documentation=file:/usr/local/share/khadi/provisioning/setup-form.sh
+# The marker is the whole arming mechanism. No marker, no questions.
+ConditionPathExists=/var/lib/khadi/provisioning/pending
+After=systemd-user-sessions.service
+Before=greetd.service display-manager.service getty@tty1.service
+# tty1 cannot be shared. Without this, agetty and this both draw on it and the
+# questions appear with a login prompt written through them.
+Conflicts=getty@tty1.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-/usr/bin/plymouth quit
+ExecStart=/usr/local/bin/khadi-provision-owner
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+[Install]
+WantedBy=multi-user.target
