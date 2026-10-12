@@ -15,5 +15,10 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sysinfo = "0.38.4"
 vt100 = "0.16.2"
+# 0.7, not 0.8: the newer pam-sys generates its bindings with bindgen, which
+# wants libclang at build time — a 150 MB build dependency for a hundred lines
+# of declarations, and absent on a fresh Arch install. 0.5, which this pulls,
+# ships them written out.
+pam = "0.7"
 khadi-common = { path = "../common" }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

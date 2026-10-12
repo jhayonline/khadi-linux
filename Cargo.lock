@@ -2137,6 +2137,7 @@ dependencies = [
  "eframe",
  "image",
  "khadi-common",
+ "pam",
  "portable-pty",
  "serde",
  "serde_json",
@@ -3209,6 +3210,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36820e9051aca1014ddc75770aab4d68bc1e9e632f0f5627c4086bc216fb583b"
 dependencies = [
  "ttf-parser",
+]
+
+[[package]]
+name = "pam"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa2bdc959c201c047004a1420a92aaa1dd1a6b64d5ef333aa3a4ac764fb93097"
+dependencies = [
+ "libc",
+ "pam-sys",
+ "users",
+]
+
+[[package]]
+name = "pam-sys"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd4858311a097f01a0006ef7d0cd50bca81ec430c949d7bf95cbefd202282434"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -4964,6 +4985,15 @@ dependencies = [
  "percent-encoding",
  "serde",
  "serde_derive",
+]
+
+[[package]]
+name = "users"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fed7d0912567d35f88010c23dbaf865e9da8b5227295e8dc0f2fdd109155ab7"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

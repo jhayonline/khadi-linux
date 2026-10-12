@@ -8,37 +8,72 @@ use crate::greeter::{Identity, load_picture};
 use crate::theme::Theme;
 use crate::ui;
 use eframe::egui::{self, Align2, CentralPanel, Event, Frame, Key, TextureHandle, pos2, vec2};
-use std::io::Write;
-use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
 
-/// The helper that checks a user's own password against the system's records.
-const CHECKER: &str = "/usr/sbin/unix_chkpwd";
+/// The PAM service whose rules decide an unlock: `/etc/pam.d/khadi-lock`,
+/// installed by `install.sh`.
+const SERVICE: &str = "khadi-lock";
 
 /// Whether passwords can be checked here. Without that, locking would be a trap.
+///
+/// The service file, not the helper behind it. `pam_unix` reaches the shadow file
+/// through the setuid `unix_chkpwd`, but it is only one of the things that may
+/// answer: a machine set up for a fingerprint reader or a smart card has those in
+/// the same file and no use for the helper at all.
 pub fn can_check() -> bool {
-    std::path::Path::new(CHECKER).exists()
+    std::path::Path::new("/etc/pam.d").join(SERVICE).exists()
 }
 
 /// Checks `user`'s password. An error means the check could not be made at all.
+///
+/// Through PAM rather than by running `unix_chkpwd` directly, which is what this
+/// did before. The helper only compares a local password, so going straight to it
+/// steps around everything else the machine has been told to do: `pam_faillock`,
+/// which locks an account after repeated failures, account expiry, and any other
+/// way of proving who you are. A lock screen that cannot be rate-limited is a lock
+/// screen you can sit and guess at.
 pub fn check(user: &str, password: &str) -> Result<bool, String> {
-    let mut child = Command::new(CHECKER)
-        .args([user, "nullok"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
+    let mut authenticator = pam::Authenticator::with_password(SERVICE)
         .map_err(|e| format!("The password could not be checked: {e}"))?;
-    // The helper reads the password, ended by a zero byte, from its input.
-    let sent = child.stdin.take().map(|mut input| {
-        input.write_all(password.as_bytes()).and_then(|()| input.write_all(&[0]))
-    });
-    let status = child.wait().map_err(|e| format!("The password could not be checked: {e}"))?;
-    match sent {
-        Some(Ok(())) => Ok(status.success()),
-        _ => Err("The password could not be checked".to_string()),
+    authenticator.get_handler().set_credentials(user, password);
+    // pam_authenticate followed by pam_acct_mgmt, so an expired or locked account
+    // is refused as well as a wrong password.
+    match authenticator.authenticate() {
+        Ok(()) => Ok(true),
+        // A refusal is not an error: it is the answer. Only the reason is dropped,
+        // because what the screen may say and what the log may say are different —
+        // whoever is standing at it has not proved who they are yet.
+        Err(e) => {
+            eprintln!("khadi: unlock refused: {e}");
+            Ok(false)
+        }
     }
+}
+
+/// Who to authenticate as: the owner of this process, from the real user id rather
+/// than `$USER`. The two match in an ordinary session, but the environment is not
+/// where identity should come from on the one screen whose job is to establish it.
+pub fn current_user() -> Option<String> {
+    let uid = unsafe { libc_getuid() };
+    let passwd = std::fs::read_to_string("/etc/passwd").ok()?;
+    for line in passwd.lines() {
+        let mut fields = line.split(':');
+        let name = fields.next()?;
+        let _password = fields.next();
+        let Some(Ok(entry)) = fields.next().map(str::parse::<u32>) else {
+            continue;
+        };
+        if entry == uid {
+            return Some(name.to_string());
+        }
+    }
+    None
+}
+
+unsafe extern "C" {
+    #[link_name = "getuid"]
+    fn libc_getuid() -> u32;
 }
 
 enum State {
@@ -61,7 +96,9 @@ impl Lock {
     pub fn new() -> Lock {
         Lock {
             locked: false,
-            user: std::env::var("USER").unwrap_or_else(|_| "user".to_string()),
+            user: current_user()
+                .or_else(|| std::env::var("USER").ok())
+                .unwrap_or_else(|| "user".to_string()),
             password: String::new(),
             state: State::Ready,
             result: None,
