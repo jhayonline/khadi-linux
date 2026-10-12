@@ -55,11 +55,22 @@ gnome-keyring
 # and renders tofu without one.
 ttf-jetbrains-mono-nerd
 
-# --- the lock screen -----------------------------------------------------
-pam                # khadi-lock asks PAM whether the password is right. Part of
-                   # any Arch install already; named so the dependency is written
-                   # down rather than assumed. The rules live in
+# --- the lock and login screens ------------------------------------------
+pam                # the lock screen asks PAM whether the password is right. Part
+                   # of any Arch install already; named so the dependency is
+                   # written down rather than assumed. The rules live in
                    # /etc/pam.d/khadi-lock, which install.sh puts there.
+
+# --- screenshots and recording -------------------------------------------
+wl-clipboard       # wl-copy, for putting a screenshot on the clipboard. Without
+                   # it the picture is still saved; only copying is lost.
+ffmpeg             # screen recording. Without it the shell says so rather than
+                   # appearing to record nothing.
+
+# --- boot splash ----------------------------------------------------------
+# install-boot-splash.sh adds the theme and rebuilds the initramfs. Optional:
+# nothing else needs it, and uninstall-boot-splash.sh puts the old one back.
+plymouth
 
 # --- login ---------------------------------------------------------------
 # NOT YET SETTLED. install.sh registers a session in /usr/share/wayland-sessions,

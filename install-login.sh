@@ -20,13 +20,14 @@ if ! /usr/local/bin/khadi-comp --help 2>/dev/null | grep -q -- --no-xwayland; th
     exit 1
 fi
 
-sudo apt-get install -y greetd
+sudo pacman -S --needed --noconfirm greetd
 
 config=/etc/greetd/config.toml
 # The account greetd runs the login screen as, and the console it uses, are the
 # distribution's choices: keep them.
 greeter_user=$(sed -n 's/^user *= *"\(.*\)"/\1/p' "$config" 2>/dev/null | head -n 1)
-greeter_user=${greeter_user:-_greetd}
+# Debian calls the account _greetd; the Arch package makes `greeter`.
+greeter_user=${greeter_user:-greeter}
 vt=$(sed -n 's/^vt *= *\([0-9a-z"]*\).*/\1/p' "$config" 2>/dev/null | head -n 1)
 vt=${vt:-7}
 if ! id "$greeter_user" >/dev/null 2>&1; then
