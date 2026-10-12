@@ -1,26 +1,22 @@
 <div align="center">
 
-<a href="https://coxy-trophy.github.io/des-website/"><img src="docs/screenshots/desktop.png" alt="The DEs-UI desktop: a terminal in the middle, system panels either side, a file browser below" width="100%"></a>
+<img src="docs/screenshots/desktop.png" alt="The Khadi desktop: a terminal in the middle, system panels either side, a file browser below" width="100%">
 
-# DEs-UI
+# Khadi
 
-**A sci-fi terminal desktop for Linux, written in Rust.**
+**A keyboard-driven, terminal-first Arch desktop, written in Rust.**
 
 A Wayland compositor and a shell that run as their own login session:
 the terminal in the middle, the machine drawn around it, applications inside the frame.
 
-**[Website](https://coxy-trophy.github.io/des-website/)** · [Try it](#try-it-in-a-window) · [Install](#install-as-a-login-session) · [Keys](#keys) · [What is in it](#what-is-in-it) · [Not done yet](#not-done-yet)
+[Where this comes from](#where-this-comes-from) · [Try it](#try-it-in-a-window) · [Install](#install-as-a-login-session) · [Keys](#keys) · [What is in it](#what-is-in-it) · [Not done yet](#not-done-yet)
 
 </div>
 
 > [!NOTE]
-> DEs-UI is in development and is being built in the open. It is used daily on one
-> machine; expect rough edges on yours. [What is missing](#not-done-yet) is listed
-> plainly, and [docs/UNTESTED.md](docs/UNTESTED.md) lists what is built but not yet
-> tried on real hardware.
-
-The website has a version of the desktop you can use in the browser:
-**[coxy-trophy.github.io/des-website](https://coxy-trophy.github.io/des-website/)**
+> Khadi is in development and is being built in the open. [What is missing](#not-done-yet)
+> is listed plainly, and [docs/UNTESTED.md](docs/UNTESTED.md) lists what is built but
+> not yet tried on real hardware.
 
 ## What it looks like
 
@@ -36,15 +32,15 @@ One login session, made of three programs:
 
 | Program | Where | What it does |
 |---|---|---|
-| **`des-ui`** | `shell/` | The interface: terminal, system panels, file browser, launcher, settings, lock and login screens. |
-| **`des-comp`** | `compositor/` | A Wayland compositor that shows the shell fullscreen and places other applications in the middle of its frame. |
-| **`des-music`** | `music/` | A Spotify player with no window of its own; the shell is its interface. |
+| **`khadi`** | `shell/` | The interface: terminal, system panels, file browser, launcher, settings, lock and login screens. |
+| **`khadi-comp`** | `compositor/` | A Wayland compositor that shows the shell fullscreen and places other applications in the middle of its frame. |
+| **`khadi-music`** | `music/` | A Spotify player with no window of its own; the shell is its interface. |
 
 ```
-┌─ des-comp ── drives the displays and input ───────────────┐
-│ ┌─ des-ui ── drawn fullscreen ──────────────────────────┐ │
+┌─ khadi-comp ── drives the displays and input ───────────────┐
+│ ┌─ khadi ── drawn fullscreen ──────────────────────────┐ │
 │ │ clock    │  terminal                      │ network   │ │
-│ │ system   │  and your applications,        │ globe     │ │      ┌─ des-music ─┐
+│ │ system   │  and your applications,        │ globe     │ │      ┌─ khadi-music ─┐
 │ │ cpu, mem │  Wayland or X11                │ keys      │ │◄────►│ no window   │
 │ │ procs    ├────────────────────────────────┤           │ │socket│ PipeWire    │
 │ │          │  files (follow the terminal)   │           │ │      └─────────────┘
@@ -52,14 +48,20 @@ One login session, made of three programs:
 └───────────────────────────────────────────────────────────┘
 ```
 
-## Inspired by eDEX-UI
+## Where this comes from
 
-DEs-UI began as a rewrite of **[eDEX-UI](https://github.com/GitSquared/edex-ui)** by
-GitSquared, the sci-fi terminal that made this look famous. eDEX-UI was archived in
-2021. DEs-UI takes the idea further in one direction: instead of an application that
-covers your desktop, it *is* the desktop.
+Khadi is **[DEs-UI](https://github.com/coxy-trophy/des-ui)** by Coxwell Wussah,
+renamed and made to build and install on Arch. Almost everything good here is his:
+the compositor, the shell, the settings, the launcher, the globe, the lock and
+login screens, the music player. His own site has a version you can try in a
+browser: **[coxy-trophy.github.io/des-website](https://coxy-trophy.github.io/des-website/)**.
 
-| | eDEX-UI | DEs-UI |
+DEs-UI in turn began as a rewrite of **[eDEX-UI](https://github.com/GitSquared/edex-ui)**
+by GitSquared, the sci-fi terminal that made this look famous, archived in 2021.
+Both take the idea in the same direction: instead of an application that covers
+your desktop, this *is* the desktop.
+
+| | eDEX-UI | Khadi |
 |---|---|---|
 | What it is | A fullscreen terminal application | A desktop: its own login session |
 | Runs | Inside your existing desktop | In place of it, with its own Wayland compositor |
@@ -72,39 +74,48 @@ covers your desktop, it *is* the desktop.
 | Licence | GPL-3.0 | MIT |
 | Status | Archived, no longer maintained | In development |
 
-No code is shared between the two. Only the theme format is, so that themes made for
-eDEX-UI can be used here.
+No code is shared with eDEX-UI. Only the theme format is, so that themes made for
+it can be used here.
+
+Khadi's own history before DEs-UI is a different desktop — Hyprland, with the shell
+in a webview — and is at the tag `pre-des-ui`.
 
 ## Try it in a window
 
 Nothing is installed and nothing on your machine changes:
 
 ```sh
-sudo apt install libudev-dev libinput-dev libgbm-dev libseat-dev cage
-git clone https://github.com/coxy-trophy/des-ui
-cd des-ui
+sudo pacman -S --needed $(sed 's/#.*//' packages.txt | tr -s '[:space:]' ' ')
+git clone https://github.com/jhayonline/khadi-linux
+cd khadi-linux
 cargo build
 
-./target/debug/des-comp                      # the whole desktop
-./target/debug/des-comp -- --theme blade     # arguments after -- go to the shell
-./target/debug/des-ui --windowed             # the shell on its own
+./target/debug/khadi-comp                      # the whole desktop
+./target/debug/khadi-comp -- --theme blade     # arguments after -- go to the shell
+./target/debug/khadi --windowed             # the shell on its own
 ```
 
 Open applications with the launcher, or by starting them from the terminal.
-`des-ui --list-apps` prints what the launcher offers.
+`khadi --list-apps` prints what the launcher offers.
 
 ## Install as a login session
 
-    sudo apt install libudev-dev libinput-dev libgbm-dev libseat-dev cage
+    sudo pacman -S --needed $(sed 's/#.*//' packages.txt | tr -s '[:space:]' ' ')
     ./install.sh
 
-Then log out and choose **DEs-UI** from the session menu on the login screen.
+`packages.txt` lists every package with a line saying what needs it. Arch does not
+split headers into their own packages, so the build dependencies and the runtime
+ones are mostly the same names; `install.sh` checks for the libraries smithay links
+against before it starts, because a missing one otherwise shows up as a linker
+error naming a symbol rather than a package.
+
+Then log out and choose **Khadi** from the session menu on the login screen.
 Exiting the last shell, or Ctrl+Shift+Q, ends the session. `./uninstall.sh`
 removes it again.
 
-In the session, `des-comp` drives the displays and input devices itself (one GPU,
+In the session, `khadi-comp` drives the displays and input devices itself (one GPU,
 every monitor connected to it, including ones plugged in later). If that fails in the first seconds it falls back to running inside
-`cage`, and the reason is in `~/.local/state/des-ui/session.log`. What applications started
+`cage`, and the reason is in `~/.local/state/khadi/session.log`. What applications started
 from the launcher print goes to `apps.log` next to it.
 
 Ways out if something goes wrong: **Ctrl+Alt+Backspace** ends the session, and
@@ -200,24 +211,24 @@ Esc closes. Changes apply at once and are saved.
 
 A display change is tried for 15 seconds and kept only if you confirm it; otherwise
 it goes back by itself, so a mode your monitor cannot show does not strand you.
-Confirmed layouts are saved in `~/.config/des-ui/displays`, one per set of
+Confirmed layouts are saved in `~/.config/khadi/displays`, one per set of
 monitors, and come before GNOME's saved layout.
 
-The rest are kept in `~/.config/des-ui/config` as `key = value` lines, which can also
+The rest are kept in `~/.config/khadi/config` as `key = value` lines, which can also
 be edited by hand. The compositor reads the keyboard, mouse and touchpad
 settings from the same file. Network and Bluetooth go through `nmcli` and
 `bluetoothctl`; a Wi-Fi password is handed to `nmcli` on its command line. Two can be set from a terminal:
 
-    des-ui --set-location 48.8566,2.3522,Paris   # or: --set-location auto
-    des-ui --geo off                             # no lookups at all; on to resume
+    khadi --set-location 48.8566,2.3522,Paris   # or: --set-location auto
+    khadi --geo off                             # no lookups at all; on to resume
 
-X11 applications run through Xwayland, which `des-comp` starts and manages; the
+X11 applications run through Xwayland, which `khadi-comp` starts and manages; the
 clipboard is shared between them and Wayland applications.
 
 The look is called Signal (`shell/src/ui.rs`): fixed greys, two typefaces, and one
 accent colour. A theme sets that accent and the terminal's colours, in the JSON
 format eDEX-UI uses, so its theme files work here. `themes/` holds the built-in
-one; your own go in `~/.config/des-ui/themes/`.
+one; your own go in `~/.config/khadi/themes/`.
 
 </details>
 
@@ -239,7 +250,7 @@ It also locks by itself:
 - when the system asks, as `loginctl lock-session` does.
 
 If the lock screen ever cannot be unlocked, press Ctrl+Alt+F3, sign in on the text
-console, and run `des-ui --unlock`.
+console, and run `khadi --unlock`.
 
 </details>
 
@@ -266,20 +277,20 @@ too, and the keyboard's play, next and previous keys work from anywhere.
 
 It needs Spotify Premium, and two things done once, both from the music view:
 
-1. **Sign in** (or `des-music login`), on Spotify's own page in your browser.
+1. **Sign in** (or `khadi-music login`), on Spotify's own page in your browser.
    This is what plays.
-2. **Connect your library** (or `des-music library <client ID>`). Spotify turns
+2. **Connect your library** (or `khadi-music library <client ID>`). Spotify turns
    away library requests made in a player's name, so reading playlists, liked songs
    and search needs an app of your own: at
    [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) create
    an app with the Redirect URI `http://127.0.0.1:8898/login` and the Web API ticked,
    and paste its Client ID into the music view.
 
-`des-music logout` forgets both. Nothing else of Spotify needs to be installed or open.
+`khadi-music logout` forgets both. Nothing else of Spotify needs to be installed or open.
 
-The playing is done by `des-music`, built on
+The playing is done by `khadi-music`, built on
 [librespot](https://github.com/librespot-org/librespot): it appears in Spotify's
-device list as "DEs-UI", so a phone can control it as well, and it keeps playing
+device list as "Khadi", so a phone can control it as well, and it keeps playing
 while the shell restarts. Sound goes out through PipeWire (`pw-cat`).
 
 </details>
@@ -322,7 +333,7 @@ and **Shift+Print** go straight to the window and to a piece.
 Screenshots are saved in `~/Pictures/Screenshots` and, where `wl-copy` is
 installed, also copied, ready to paste. Recordings are saved in
 `~/Videos/Recordings` as MP4, with the pointer and without sound; they need
-`ffmpeg`. Both programs come with `sudo apt install ffmpeg wl-clipboard`.
+`ffmpeg`. Both programs come with `sudo pacman -S ffmpeg wl-clipboard`.
 
 Nothing is pictured while the screen is locked.
 
@@ -360,7 +371,7 @@ next to click, and the keyboard's media keys work there too.
 The globe marks this machine and the places it has connections open to. Positions
 come from looking addresses up at get.geojs.io, which tells that service the public
 addresses this machine talks to; each is asked about once and kept in
-`~/.cache/des-ui/places.tsv`. Your own position is guessed from your address
+`~/.cache/khadi/places.tsv`. Your own position is guessed from your address
 unless you set it.
 
 </details>
@@ -391,18 +402,18 @@ Optional, and separate from the above, because it changes how the machine boots:
 
     ./install-login.sh
 
-That installs greetd, a small login manager, and makes the DEs-UI login screen the
+That installs greetd, a small login manager, and makes the Khadi login screen the
 machine's own in place of GDM, from the next boot. `./uninstall-login.sh` puts GDM
-back. To see the screen without any of that: `des-ui --greeter --windowed`.
+back. To see the screen without any of that: `khadi --greeter --windowed`.
 
 The screen shows a picture, a name and a password line. The picture is a pattern
 made from the name unless you give it one, in **Settings → Session**
-or with `des-ui --set-avatar <file>`. F1 changes
+or with `khadi --set-avatar <file>`. F1 changes
 the session, Tab the account when there are several, and the three marks at the
 bottom right suspend, restart and shut down, each on a second click.
 
-The screen is shown by `des-comp` itself; its log is
-`/var/lib/des-ui/greeter/login.log`. If it cannot start, a text login takes its
+The screen is shown by `khadi-comp` itself; its log is
+`/var/lib/khadi/greeter/login.log`. If it cannot start, a text login takes its
 place. If the machine ever comes
 up with no usable login at all, press Ctrl+Alt+F3, sign in on the text console, and
 run `sudo systemctl disable greetd && sudo systemctl enable gdm3 && sudo reboot`.
@@ -483,4 +494,4 @@ notice, as the licence requires. `compositor/` is derived from Smithay's
 are under the SIL Open Font License.
 
 eDEX-UI's own theme files are GPL-3.0 and are not part of this repository. They
-work as themes here: copy them into `~/.config/des-ui/themes/`.
+work as themes here: copy them into `~/.config/khadi/themes/`.

@@ -6,7 +6,7 @@
 
 use crate::notify::Center;
 use crate::ui;
-use des_common::ipc::{Command, Recording, ShotMode};
+use khadi_common::ipc::{Command, Recording, ShotMode};
 use eframe::egui::{self, Align2, Area, Color32, Id, Key, Order, Pos2, Rect, Sense, Stroke, StrokeKind, TextureHandle, pos2, vec2};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;

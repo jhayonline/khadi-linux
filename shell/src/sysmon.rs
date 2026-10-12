@@ -51,17 +51,17 @@ pub struct SysMon {
 /// Stands for "not known" in the shared volume reading.
 const NO_VOLUME: u8 = u8::MAX;
 
-/// Where DEs-UI keeps the name it goes by, in preference to the base system's.
+/// Where Khadi keeps the name it goes by, in preference to the base system's.
 /// See `session/os-release` for why it is not /etc/os-release.
 const KHADI_OS_RELEASE: [&str; 2] = [
-    "/usr/local/share/des-ui/os-release",
-    "/usr/share/des-ui/os-release",
+    "/usr/local/share/khadi/os-release",
+    "/usr/share/khadi/os-release",
 ];
 
 /// The name of the operating system, for the system panel.
 ///
-/// DEs-UI's own file first, then whatever the base system says. Reading DEs-UI's
-/// rather than printing "DEs-UI" outright keeps the panel honest: the shell runs on
+/// Khadi's own file first, then whatever the base system says. Reading Khadi's
+/// rather than printing "Khadi" outright keeps the panel honest: the shell runs on
 /// a plain Arch machine during development, through `dev.sh`, and there it should
 /// say Arch — nothing has been installed that would make it anything else.
 fn os_name() -> String {
@@ -361,18 +361,18 @@ mod tests {
 
     #[test]
     fn reads_the_name_out_of_os_release() {
-        let text = "# a comment\nID=des-ui\nNAME=\"DEs-UI Linux\"\nPRETTY_NAME=\"DEs-UI Linux\"\n";
-        assert_eq!(os_release_name(text).as_deref(), Some("DEs-UI Linux"));
+        let text = "# a comment\nID=khadi\nNAME=\"Khadi Linux\"\nPRETTY_NAME=\"Khadi Linux\"\n";
+        assert_eq!(os_release_name(text).as_deref(), Some("Khadi Linux"));
     }
 
     #[test]
     fn takes_name_unquoted_and_ignores_the_rest() {
-        assert_eq!(os_release_name("NAME=DEs-UI\n").as_deref(), Some("DEs-UI"));
-        assert_eq!(os_release_name("NAME='DEs-UI Linux'\n").as_deref(), Some("DEs-UI Linux"));
+        assert_eq!(os_release_name("NAME=Khadi\n").as_deref(), Some("Khadi"));
+        assert_eq!(os_release_name("NAME='Khadi Linux'\n").as_deref(), Some("Khadi Linux"));
         // PRETTY_NAME ends in NAME= but is not it, and must not be mistaken for it.
-        assert_eq!(os_release_name("PRETTY_NAME=\"Arch\"\nNAME=\"DEs-UI\"\n").as_deref(), Some("DEs-UI"));
+        assert_eq!(os_release_name("PRETTY_NAME=\"Arch\"\nNAME=\"Khadi\"\n").as_deref(), Some("Khadi"));
         // Nothing to report rather than an empty string, so the caller falls back.
-        assert_eq!(os_release_name("ID=des-ui\n"), None);
+        assert_eq!(os_release_name("ID=khadi\n"), None);
         assert_eq!(os_release_name("NAME=\"\"\n"), None);
     }
 }

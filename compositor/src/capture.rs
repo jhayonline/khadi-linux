@@ -20,9 +20,9 @@ use smithay::{
     utils::{Logical, Rectangle, SERIAL_COUNTER, Transform},
 };
 
-use crate::state::DesComp;
+use crate::state::KhadiComp;
 use crate::udev::OutputElements;
-use des_common::ipc::{Event, ShotMode};
+use khadi_common::ipc::{Event, ShotMode};
 
 /// A picture of a display: rows from the top, four bytes (red, green, blue, alpha) a pixel.
 pub struct Frame {
@@ -83,7 +83,7 @@ fn encoder(size: (i32, i32), path: &str) -> std::io::Result<Child> {
         .spawn()
 }
 
-impl DesComp {
+impl KhadiComp {
     fn output_of(&self, screen: usize) -> Option<(Output, Rectangle<i32, Logical>)> {
         let rect = *self.screens.get(screen)?;
         let output = self.space.outputs().find(|output| self.space.output_geometry(output) == Some(rect))?;

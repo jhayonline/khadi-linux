@@ -18,7 +18,7 @@ use smithay::{
     utils::{Buffer, Logical, Physical, Point, Rectangle, Scale, Transform},
 };
 
-use crate::state::DesComp;
+use crate::state::KhadiComp;
 
 /// The cropped copy of the shell. It goes by a name of its own, so that what tracks
 /// changes on screen does not take it for the shell's window beneath.
@@ -74,7 +74,7 @@ impl RenderElement<GlesRenderer> for ToastElement {
     }
 }
 
-impl DesComp {
+impl KhadiComp {
     /// Where on the desktop the shell's toasts are, if it is showing any. Locked, the
     /// shell is all there is to see, and nothing needs lifting above anything.
     pub fn toast_area(&self) -> Option<Rectangle<i32, Logical>> {

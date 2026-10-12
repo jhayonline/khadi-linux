@@ -1,6 +1,6 @@
-//! Serves the desktop protocol (see `des_common::ipc`) to the shell.
+//! Serves the desktop protocol (see `khadi_common::ipc`) to the shell.
 
-use des_common::ipc::{Command, DesktopState};
+use khadi_common::ipc::{Command, DesktopState};
 use std::io::{ErrorKind, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
@@ -33,7 +33,7 @@ impl IpcServer {
             clients: Vec::new(),
             last: DesktopState::default().encode(),
             last_displays: String::new(),
-            last_locked: des_common::ipc::Event::locked(false),
+            last_locked: khadi_common::ipc::Event::locked(false),
         })
     }
 
@@ -111,7 +111,7 @@ impl IpcServer {
     /// Tells every client whether the screen is locked, when that changes. A shell
     /// started while it is locked is told as it connects.
     pub fn publish_locked(&mut self, locked: bool) {
-        let line = des_common::ipc::Event::locked(locked);
+        let line = khadi_common::ipc::Event::locked(locked);
         if line != self.last_locked {
             self.send(&line);
             self.last_locked = line;
@@ -119,7 +119,7 @@ impl IpcServer {
     }
 
     /// Sends the monitors to every client, unless nothing about them changed.
-    pub fn publish_displays(&mut self, displays: &des_common::ipc::Displays) {
+    pub fn publish_displays(&mut self, displays: &khadi_common::ipc::Displays) {
         let line = displays.encode();
         if line != self.last_displays {
             self.send(&line);
@@ -141,7 +141,7 @@ mod tests {
 
     #[test]
     fn serves_state_and_receives_commands() {
-        let path = std::env::temp_dir().join(format!("des-ui-ipc-test-{}.sock", std::process::id()));
+        let path = std::env::temp_dir().join(format!("khadi-ipc-test-{}.sock", std::process::id()));
         let mut server = IpcServer::bind(path.clone()).unwrap();
 
         let mut client = UnixStream::connect(&path).unwrap();
@@ -154,10 +154,10 @@ mod tests {
         let state = DesktopState {
             screens: 2,
             focus: Some(0),
-            apps: vec![des_common::ipc::AppInfo {
+            apps: vec![khadi_common::ipc::AppInfo {
                 title: "Editor".into(),
                 screen: 1,
-                place: des_common::ipc::Place::Main,
+                place: khadi_common::ipc::Place::Main,
             }],
             ..Default::default()
         };

@@ -1,9 +1,9 @@
 [package]
-name = "des-music"
+name = "khadi-music"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "The DEs-UI music service: plays Spotify without its application"
+description = "The Khadi music service: plays Spotify without its application"
 
 [dependencies]
 serde_json = "1"

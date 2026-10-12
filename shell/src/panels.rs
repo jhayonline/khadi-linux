@@ -6,7 +6,7 @@ use crate::globe;
 use crate::sysmon::SysMon;
 use crate::theme::Theme;
 use crate::ui::{self, Icon};
-use des_common::{
+use khadi_common::{
     Panel, Panels,
     ipc::{DesktopState, Place},
 };
@@ -357,7 +357,7 @@ pub fn status(
 ) -> (Option<Panel>, bool, bool, bool, bool, bool) {
     let mut toggled = None;
     ui.spacing_mut().item_spacing.x = 20.0;
-    ui::tracked(ui, "DEs-UI", ui::display_bold(11.0), theme.main, 3.0);
+    ui::tracked(ui, "Khadi", ui::display_bold(11.0), theme.main, 3.0);
     // The way into the settings, lit while they are open.
     let way_in = |ui: &mut Ui, name: &str, hint: &str| {
         let label = ui::galley(ui, name, ui::display(11.0), ui::SECONDARY, 2.0);
@@ -455,7 +455,7 @@ pub fn backdrop(ui: &mut Ui, theme: &Theme, mon: &SysMon, number: usize) {
 
     let inner = rect.shrink2(vec2(72.0, 48.0));
     let painter = ui.painter().clone();
-    let brand = ui::galley(ui, "DEs-UI", ui::display_bold(14.0), theme.main, 4.0);
+    let brand = ui::galley(ui, "Khadi", ui::display_bold(14.0), theme.main, 4.0);
     let brand_width = brand.size().x;
     painter.galley(inner.left_top(), brand, theme.main);
     let label = ui::galley(ui, &format!("DISPLAY {number}"), ui::display(14.0), ui::SECONDARY, 4.0);

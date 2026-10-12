@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Khadi
+Comment=Sci-fi terminal desktop
+Exec=/usr/local/bin/khadi-session
+Type=Application
+DesktopNames=khadi

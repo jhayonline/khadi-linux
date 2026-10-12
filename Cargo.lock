@@ -805,53 +805,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "des-common"
-version = "0.1.0"
-
-[[package]]
-name = "des-comp"
-version = "0.1.0"
-dependencies = [
- "des-common",
- "smithay",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "des-music"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "http",
- "http-body-util",
- "librespot-connect",
- "librespot-core",
- "librespot-metadata",
- "librespot-oauth",
- "librespot-playback",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "des-ui"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "des-common",
- "eframe",
- "image",
- "portable-pty",
- "serde",
- "serde_json",
- "sysinfo 0.38.4",
- "vt100",
- "zbus",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2173,6 +2126,53 @@ dependencies = [
  "cfg-if",
  "futures-util",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "khadi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "eframe",
+ "image",
+ "khadi-common",
+ "portable-pty",
+ "serde",
+ "serde_json",
+ "sysinfo 0.38.4",
+ "vt100",
+ "zbus",
+]
+
+[[package]]
+name = "khadi-common"
+version = "0.1.0"
+
+[[package]]
+name = "khadi-comp"
+version = "0.1.0"
+dependencies = [
+ "khadi-common",
+ "smithay",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "khadi-music"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "http",
+ "http-body-util",
+ "librespot-connect",
+ "librespot-core",
+ "librespot-metadata",
+ "librespot-oauth",
+ "librespot-playback",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

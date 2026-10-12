@@ -23,9 +23,9 @@ use smithay::{
     },
 };
 
-use crate::DesComp;
+use crate::KhadiComp;
 
-impl DesComp {
+impl KhadiComp {
     /// Starts the X server. Applications can connect at once; their windows appear as
     /// soon as it is ready.
     pub fn start_xwayland(&mut self) {
@@ -87,14 +87,14 @@ impl DesComp {
     }
 }
 
-impl XWaylandShellHandler for DesComp {
+impl XWaylandShellHandler for KhadiComp {
     fn xwayland_shell_state(&mut self) -> &mut XWaylandShellState {
         &mut self.xwayland_shell_state
     }
 }
-delegate_xwayland_shell!(DesComp);
+delegate_xwayland_shell!(KhadiComp);
 
-impl XwmHandler for DesComp {
+impl XwmHandler for KhadiComp {
     fn xwm_state(&mut self, _xwm: XwmId) -> &mut X11Wm {
         self.xwm.as_mut().expect("X11 event without a window manager")
     }

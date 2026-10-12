@@ -22,9 +22,9 @@ use smithay::{
     },
 };
 
-use crate::{DesComp, focus::Focus};
+use crate::{KhadiComp, focus::Focus};
 
-impl XdgShellHandler for DesComp {
+impl XdgShellHandler for KhadiComp {
     fn xdg_shell_state(&mut self) -> &mut XdgShellState {
         &mut self.xdg_shell_state
     }
@@ -101,7 +101,7 @@ impl XdgShellHandler for DesComp {
 
     // Menus take the keyboard and pointer while open, so that a click elsewhere closes them.
     fn grab(&mut self, surface: PopupSurface, seat: wl_seat::WlSeat, serial: Serial) {
-        let Some(seat) = Seat::<DesComp>::from_resource(&seat) else {
+        let Some(seat) = Seat::<KhadiComp>::from_resource(&seat) else {
             return;
         };
         let kind = PopupKind::Xdg(surface);
@@ -137,7 +137,7 @@ impl XdgShellHandler for DesComp {
 
 // Applications are told not to draw their own title bars where they can avoid it: the
 // frame already says what is open, and windows cannot be moved.
-impl XdgDecorationHandler for DesComp {
+impl XdgDecorationHandler for KhadiComp {
     fn new_decoration(&mut self, toplevel: ToplevelSurface) {
         toplevel.with_pending_state(|state| state.decoration_mode = Some(DecorationMode::ServerSide));
     }
@@ -156,10 +156,10 @@ impl XdgDecorationHandler for DesComp {
         }
     }
 }
-delegate_xdg_decoration!(DesComp);
+delegate_xdg_decoration!(KhadiComp);
 
 // Xdg Shell
-delegate_xdg_shell!(DesComp);
+delegate_xdg_shell!(KhadiComp);
 
 /// Should be called on `WlSurface::commit`. `window` is the window owning `surface`, if any.
 pub fn handle_commit(popups: &mut PopupManager, window: Option<&Window>, surface: &WlSurface) {
@@ -186,7 +186,7 @@ pub fn handle_commit(popups: &mut PopupManager, window: Option<&Window>, surface
     }
 }
 
-impl DesComp {
+impl KhadiComp {
     fn unconstrain_popup(&self, popup: &PopupSurface) {
         let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
             return;

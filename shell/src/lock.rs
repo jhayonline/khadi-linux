@@ -160,7 +160,7 @@ impl Lock {
             let screen = ui.max_rect();
             ui.painter().rect_filled(screen, 0.0, ui::GROUND);
             let inner = screen.shrink2(vec2(64.0, 48.0));
-            let brand = ui::galley(ui, "DEs-UI", ui::display_bold(14.0), ui::SECONDARY, 4.0);
+            let brand = ui::galley(ui, "Khadi", ui::display_bold(14.0), ui::SECONDARY, 4.0);
             let brand_width = brand.size().x;
             ui.painter().galley(inner.left_top(), brand, ui::SECONDARY);
             let locked = ui::galley(ui, "LOCKED", ui::display(14.0), edge, 4.0);

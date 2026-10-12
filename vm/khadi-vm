@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# DEs-UI — test VM.
+# Khadi — test VM.
 #
-# A throwaway Arch VM, and the only safe way to test a compositor: des-comp
+# A throwaway Arch VM, and the only safe way to test a compositor: khadi-comp
 # takes over the display, so running a build on the machine you are working on
 # logs you out of it. Deliberately plain QEMU, no libvirt — one
 # script, no daemon, nothing installed into the host's system state.
 #
-#   des-ui-vm deps     what you must install (needs root; this script will not)
-#   des-ui-vm fetch    download + verify the Arch ISO
-#   des-ui-vm create   make the disk image
-#   des-ui-vm run      boot it (installer on first run, disk after)
-#   des-ui-vm stop     graceful power-off via the QMP socket
-#   des-ui-vm shot     screenshot the guest framebuffer via QMP
-#   des-ui-vm ssh      shell into the guest once Arch is installed
-#   des-ui-vm push     copy this repo into the guest
-#   des-ui-vm autologin start a session on tty1 without going through greetd
-#   des-ui-vm type     type into the guest console over QMP (drives the greeter)
-#   des-ui-vm status   what exists so far
-#   des-ui-vm clean    delete the disk (keeps the ISO)
+#   khadi-vm deps     what you must install (needs root; this script will not)
+#   khadi-vm fetch    download + verify the Arch ISO
+#   khadi-vm create   make the disk image
+#   khadi-vm run      boot it (installer on first run, disk after)
+#   khadi-vm stop     graceful power-off via the QMP socket
+#   khadi-vm shot     screenshot the guest framebuffer via QMP
+#   khadi-vm ssh      shell into the guest once Arch is installed
+#   khadi-vm push     copy this repo into the guest
+#   khadi-vm autologin start a session on tty1 without going through greetd
+#   khadi-vm type     type into the guest console over QMP (drives the greeter)
+#   khadi-vm status   what exists so far
+#   khadi-vm clean    delete the disk (keeps the ISO)
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,7 +25,7 @@ ROOT="$(cd "$HERE/.." && pwd)"
 ISO_VER="2026.10.01"
 ISO_SHA="684ded26c63240ff4a41e8c25ee84ea6da233f557364821f13d12c2b0a9059a5"
 ISO="$HERE/archlinux-$ISO_VER-x86_64.iso"
-DISK="$HERE/des-ui.qcow2"
+DISK="$HERE/khadi.qcow2"
 NVRAM="$HERE/OVMF_VARS.fd"
 QMP="$HERE/.qmp.sock"
 MIRROR="https://geo.mirror.pkgbuild.com/iso/$ISO_VER"
@@ -36,7 +36,7 @@ SIZE="${KHADI_VM_DISK:-24G}"
 SSH_PORT="${KHADI_VM_SSH:-2222}"
 # QEMU's default guest display is 1024x768, which at Iosevka Term size 10 is
 # 153 columns — below the 180 the reference layout needs (PLAN.md section 10).
-# The gate would fail on VM configuration rather than on DEs-UI. Match the host.
+# The gate would fail on VM configuration rather than on Khadi. Match the host.
 XRES="${KHADI_VM_XRES:-1920}"
 YRES="${KHADI_VM_YRES:-1080}"
 # GL: on by default, KHADI_VM_GL=off falls back to a plain framebuffer.
@@ -45,7 +45,7 @@ GL="${KHADI_VM_GL:-on}"
 # VNC. The GTK window's size *dictates* the guest resolution — under a tiling
 # WM that is whatever the WM assigned (732x810 here, ~109 columns, far under
 # the 180 the layout needs). Headless makes resolution reproducible and
-# `des-ui-vm shot` meaningful, which is what automated gate runs require.
+# `khadi-vm shot` meaningful, which is what automated gate runs require.
 HEADLESS="${KHADI_VM_HEADLESS:-0}"
 # Open the window already filling the screen, so the guest picks a mode the
 # shell's layout fits in rather than one the window decorations left over.
@@ -61,7 +61,7 @@ vm_pid() {
     local p
     for p in /proc/[0-9]*; do
         [[ "$(readlink "$p/exe" 2>/dev/null)" == */qemu-system-x86_64 ]] || continue
-        grep -qa 'des-ui-test' "$p/cmdline" 2>/dev/null && { basename "$p"; return 0; }
+        grep -qa 'khadi-test' "$p/cmdline" 2>/dev/null && { basename "$p"; return 0; }
     done
     return 1
 }
@@ -69,13 +69,13 @@ vm_pid() {
 cmd_deps() {
     cat <<DEPS
 
-  DEs-UI's VM needs these. Installing packages requires root, so run it
+  Khadi's VM needs these. Installing packages requires root, so run it
   yourself:
 
       sudo pacman -S --needed qemu-desktop edk2-ovmf
 
   qemu-desktop   the emulator plus a GTK display (qemu-base is headless)
-  edk2-ovmf      UEFI firmware — DEs-UI's real installer assumes UEFI + LUKS,
+  edk2-ovmf      UEFI firmware — Khadi's real installer assumes UEFI + LUKS,
                  so the VM should boot the same way
 
   Already present and no action needed:
@@ -86,7 +86,7 @@ DEPS
 }
 
 need_qemu() {
-    have qemu-system-x86_64 || die "qemu is not installed. Run: des-ui-vm deps"
+    have qemu-system-x86_64 || die "qemu is not installed. Run: khadi-vm deps"
 }
 
 cmd_fetch() {
@@ -106,7 +106,7 @@ cmd_fetch() {
 
 cmd_create() {
     need_qemu
-    [[ -f "$DISK" ]] && die "$DISK already exists. 'des-ui-vm clean' first."
+    [[ -f "$DISK" ]] && die "$DISK already exists. 'khadi-vm clean' first."
     qemu-img create -f qcow2 "$DISK" "$SIZE" >/dev/null
     echo "  ✓ created $DISK ($SIZE, sparse — it only grows as it fills)"
     for f in /usr/share/edk2/x64/OVMF_VARS.4m.fd /usr/share/edk2-ovmf/x64/OVMF_VARS.fd; do
@@ -145,28 +145,28 @@ except Exception: sys.exit(1)' 2>/dev/null
 
 cmd_run() {
     need_qemu
-    [[ -f "$DISK" ]] || die "No disk yet. Run: des-ui-vm create"
+    [[ -f "$DISK" ]] || die "No disk yet. Run: khadi-vm create"
     # One VM, one disk. A second would get as far as qemu's own write lock and
     # fail there, after printing enough to look like it was starting.
     local running
     if running="$(vm_pid)"; then
         die "Already running (pid $running).
-    ./vm/des-ui-vm shot screen.ppm   look at what it is showing
-    ./vm/des-ui-vm ssh               get a shell in it
-    ./vm/des-ui-vm stop              shut it down"
+    ./vm/khadi-vm shot screen.ppm   look at what it is showing
+    ./vm/khadi-vm ssh               get a shell in it
+    ./vm/khadi-vm stop              shut it down"
     fi
     local boot=() code used; code="$(ovmf_code)"
     if [[ "${1:-}" == "--iso" ]]; then
-        [[ -f "$ISO" ]] || die "No ISO yet. Run: des-ui-vm fetch"
+        [[ -f "$ISO" ]] || die "No ISO yet. Run: khadi-vm fetch"
         boot=(-cdrom "$ISO" -boot d)
         echo "  Booting the installer ISO (asked for with --iso)."
     elif ! used="$(disk_used_bytes)"; then
         die "Cannot read $DISK — qemu-img could not open it.
   Something else is holding it open, or it is corrupt. Refusing to guess:
   guessing here means offering the installer over an installed system.
-  Force the installer with: des-ui-vm run --iso"
+  Force the installer with: khadi-vm run --iso"
     elif (( used < 1000000 )); then
-        [[ -f "$ISO" ]] || die "No ISO yet. Run: des-ui-vm fetch"
+        [[ -f "$ISO" ]] || die "No ISO yet. Run: khadi-vm fetch"
         boot=(-cdrom "$ISO" -boot d)
         echo "  Disk is empty ($used bytes used). Booting the installer ISO."
     else
@@ -174,7 +174,7 @@ cmd_run() {
     fi
     echo "  SSH will be on localhost:$SSH_PORT once sshd runs in the guest."
     echo
-    # virtio-gpu-gl + virgl gives the guest a GPU to render through. des-comp
+    # virtio-gpu-gl + virgl gives the guest a GPU to render through. khadi-comp
     # drives DRM and renders with EGL either way; without this it resolves to
     # llvmpipe and every frame is rasterised on the guest's CPU.
     #
@@ -201,7 +201,7 @@ cmd_run() {
         disp="gtk,gl=on,show-cursor=on,zoom-to-fit=on"
         echo "  GL on, EGL pinned to: $__EGL_VENDOR_LIBRARY_FILENAMES"
         echo "  If the window fills with 'eglMakeCurrent failed', this host cannot"
-        echo "  do it: KHADI_VM_GL=off ./vm/des-ui-vm run"
+        echo "  do it: KHADI_VM_GL=off ./vm/khadi-vm run"
     else
         gpu=(-device "virtio-gpu,xres=$XRES,yres=$YRES")
         disp="gtk,gl=off,show-cursor=on,zoom-to-fit=on"
@@ -219,7 +219,7 @@ cmd_run() {
     if [[ "$FULLSCREEN" == "1" ]]; then full=(-full-screen); fi
 
     exec qemu-system-x86_64 \
-        -name "des-ui-test" \
+        -name "khadi-test" \
         -enable-kvm -cpu host -smp "$CPUS" -m "$RAM" \
         -machine q35,accel=kvm \
         -vga none \
@@ -284,7 +284,7 @@ cmd_push() {
     echo "  Copying the repo into the guest…"
     # The whole directory goes, rather than a list of paths to refresh. tar
     # adds files but never removes them, so a renamed or deleted one lives on
-    # in the guest forever — which is how an orphaned des-ui-tron.theme once
+    # in the guest forever — which is how an orphaned khadi-tron.theme once
     # survived a rename and poisoned every theme. Enumerating what to delete
     # was the old fix and it rotted the moment the layout changed: it still
     # named templates/ and crates/, which no longer exist, while missing
@@ -301,24 +301,24 @@ cmd_push() {
       | ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" \
             'set -e
-             rm -rf ~/.des-ui-incoming ~/.des-ui-outgoing
-             mkdir -p ~/.des-ui-incoming
-             tar -C ~/.des-ui-incoming -xf -
-             if [ -d ~/des-ui ]; then mv ~/des-ui ~/.des-ui-outgoing; fi
+             rm -rf ~/.khadi-incoming ~/.khadi-outgoing
+             mkdir -p ~/.khadi-incoming
+             tar -C ~/.khadi-incoming -xf -
+             if [ -d ~/khadi ]; then mv ~/khadi ~/.khadi-outgoing; fi
              # The build cache moves across rather than being thrown away with the
              # old tree. It is not in the tar (--exclude=target), so replacing the
              # tree wholesale meant every push cost a twenty-minute rebuild of a
              # dependency graph that had not changed.
-             if [ -d ~/.des-ui-outgoing/target ]; then
-                 mv ~/.des-ui-outgoing/target ~/.des-ui-incoming/target
+             if [ -d ~/.khadi-outgoing/target ]; then
+                 mv ~/.khadi-outgoing/target ~/.khadi-incoming/target
              fi
-             mv ~/.des-ui-incoming ~/des-ui
-             rm -rf ~/.des-ui-outgoing'
-    echo "  ✓ repo is at ~/des-ui in the guest"
+             mv ~/.khadi-incoming ~/khadi
+             rm -rf ~/.khadi-outgoing'
+    echo "  ✓ repo is at ~/khadi in the guest"
 
     # NO BINARIES. They used to be pushed from the host because the guest had
     # no Rust toolchain and building in a VM was slow. That made the guest a
-    # place binaries were delivered to rather than a machine DEs-UI installs
+    # place binaries were delivered to rather than a machine Khadi installs
     # on, and it is exactly the thing provisioning is supposed to prove. The
     # guest builds its own now; `rust` is in packages.txt.
 }
@@ -328,8 +328,8 @@ cmd_push() {
 # this, "can anyone actually log in" stays untested, which for a login screen
 # is the only question that matters.
 #
-#   des-ui-vm type des-ui        send the literal string
-#   des-ui-vm type des-ui ret    trailing `ret` presses Enter
+#   khadi-vm type khadi        send the literal string
+#   khadi-vm type khadi ret    trailing `ret` presses Enter
 cmd_type() {
     [[ -S "$QMP" ]] || die "no QMP socket — is the VM running?"
     python3 - "$QMP" "$@" <<'TPY'
@@ -353,7 +353,7 @@ def keys_for(ch):
     if ch in SHIFTED: return [SHIFTED[ch]], True
     if ch.isdigit(): return [ch], False
     if ch.isalpha(): return [ch.lower()], ch.isupper()
-    raise SystemExit(f"des-ui-vm type: no key mapping for {ch!r}")
+    raise SystemExit(f"khadi-vm type: no key mapping for {ch!r}")
 for arg in args:
     if arg in ("ret", "tab", "esc", "spc", "backspace"):
         q({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": arg}]}})
@@ -371,7 +371,7 @@ TPY
 # seat, which ssh does not give you, so anything that has to look at a running
 # desktop needs the guest to bring one up by itself on boot.
 #
-# TEST SCAFFOLDING, written into the guest and nowhere near the repo: DEs-UI's
+# TEST SCAFFOLDING, written into the guest and nowhere near the repo: Khadi's
 # own session manager is greetd, which asks for a password on purpose.
 cmd_autologin() {
     local rc
@@ -389,7 +389,7 @@ printf '[Service]\nExecStart=\nExecStart=-/usr/bin/agetty --autologin %s --nocle
 # started and nothing to say why.
 #
 # Rewritten every time, not appended once. Skipping the write when the markers
-# were already there meant a guest provisioned before the des-ui replacement
+# were already there meant a guest provisioned before the khadi replacement
 # kept execing `start-hyprland` — so a VM with the new compositor installed
 # still booted the old desktop over the top of it, and nothing said so.
 for profile in ~/.bash_profile ~/.zprofile; do
@@ -401,10 +401,10 @@ p.write_text(re.sub(r'\n*# >>> KHADI-VM-TEST >>>.*?# <<< KHADI-VM-TEST <<<\n', '
 STRIP
 cat >> "$profile" <<'EOF'
 
-# >>> KHADI-VM-TEST >>> scaffolding, not part of DEs-UI. Starts the session on
+# >>> KHADI-VM-TEST >>> scaffolding, not part of Khadi. Starts the session on
 # tty1 without a login, for checking loaded state against a real compositor.
 if [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = /dev/tty1 ]; then
-    exec /usr/local/bin/des-ui-session > ~/.cache/des-ui-start.log 2>&1
+    exec /usr/local/bin/khadi-session > ~/.cache/khadi-start.log 2>&1
 fi
 # <<< KHADI-VM-TEST <<<
 EOF
@@ -417,7 +417,7 @@ GUEST
     ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -o LogLevel=ERROR "${KHADI_VM_USER:-root}@localhost" "bash -s" <<<"$rc"
     echo "  ✓ session starting. Give it ~20s, then:"
-    echo "      ./vm/des-ui-vm shot session.png"
+    echo "      ./vm/khadi-vm shot session.png"
 }
 
 cmd_status() {

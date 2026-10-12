@@ -11,7 +11,7 @@ use smithay::{
     utils::SERIAL_COUNTER,
 };
 
-use crate::state::DesComp;
+use crate::state::KhadiComp;
 
 /// A compositor shortcut, as opposed to a key press that belongs to the focused client.
 enum Action {
@@ -25,7 +25,7 @@ enum Action {
     Notifications,
     /// The power key, or its shortcut.
     Power,
-    Shot(des_common::ipc::ShotMode),
+    Shot(khadi_common::ipc::ShotMode),
     Lock,
     /// Super with a key that is no shortcut: swallowed, so that it types nothing.
     Ignore,
@@ -33,7 +33,7 @@ enum Action {
     Fullscreen,
     /// Give the keyboard to the left (false) or right (true) half of a split.
     FocusHalf(bool),
-    Panel(des_common::Panel),
+    Panel(khadi_common::Panel),
     RestartShell,
     /// A volume or brightness key.
     Media(Media),
@@ -58,8 +58,8 @@ enum Media {
 /// Passes a playback key on to the music service, which is installed beside this
 /// program. Nothing happens when the service is not running.
 fn music(command: &str) {
-    let beside = std::env::current_exe().ok().and_then(|exe| Some(exe.parent()?.join("des-music")));
-    let program = beside.filter(|path| path.exists()).unwrap_or_else(|| "des-music".into());
+    let beside = std::env::current_exe().ok().and_then(|exe| Some(exe.parent()?.join("khadi-music")));
+    let program = beside.filter(|path| path.exists()).unwrap_or_else(|| "khadi-music".into());
     run(&program.to_string_lossy(), &["send", command]);
 }
 
@@ -143,11 +143,11 @@ impl Media {
 const SWITCH_VT_1: u32 = 0x1008_FE01;
 const SWITCH_VT_12: u32 = 0x1008_FE0C;
 
-impl DesComp {
+impl KhadiComp {
     /// Reads the input settings again and applies them to the keyboard and to every
     /// pointing device.
     pub fn reload_input(&mut self) {
-        self.input_settings = des_common::input::InputSettings::load();
+        self.input_settings = khadi_common::input::InputSettings::load();
         let settings = self.input_settings.clone();
         let keyboard = self.seat.get_keyboard().unwrap();
         keyboard.change_repeat_info(settings.repeat_rate as i32, settings.repeat_delay as i32);
@@ -209,7 +209,7 @@ impl DesComp {
                         // Print asks what to take; with Alt it is the window at once,
                         // with Shift a piece.
                         if sym == Keysym::Print || sym == Keysym::Sys_Req {
-                            use des_common::ipc::ShotMode;
+                            use khadi_common::ipc::ShotMode;
                             let mode = if modifiers.shift {
                                 ShotMode::Region
                             } else if modifiers.alt {
@@ -245,13 +245,13 @@ impl DesComp {
                             Keysym::Left => FilterResult::Intercept(Action::FocusHalf(false)),
                             Keysym::Right => FilterResult::Intercept(Action::FocusHalf(true)),
                             Keysym::bracketleft => {
-                                FilterResult::Intercept(Action::Panel(des_common::Panel::Left))
+                                FilterResult::Intercept(Action::Panel(khadi_common::Panel::Left))
                             }
                             Keysym::bracketright => {
-                                FilterResult::Intercept(Action::Panel(des_common::Panel::Right))
+                                FilterResult::Intercept(Action::Panel(khadi_common::Panel::Right))
                             }
                             Keysym::backslash => {
-                                FilterResult::Intercept(Action::Panel(des_common::Panel::Bottom))
+                                FilterResult::Intercept(Action::Panel(khadi_common::Panel::Bottom))
                             }
                             Keysym::q | Keysym::Q => FilterResult::Intercept(Action::Close),
                             // Not a shortcut, but not a letter for the application either.

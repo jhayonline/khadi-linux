@@ -6,10 +6,10 @@ sudo systemctl disable greetd 2>/dev/null || true
 sudo systemctl enable --force gdm3 2>/dev/null || sudo systemctl enable --force gdm
 
 config=/etc/greetd/config.toml
-if [ -f "$config.before-des-ui" ]; then
-    sudo mv "$config.before-des-ui" "$config"
+if [ -f "$config.before-khadi" ]; then
+    sudo mv "$config.before-khadi" "$config"
 fi
-sudo rm -f /usr/local/bin/des-ui-greeter /usr/local/bin/edex-rs-greeter
+sudo rm -f /usr/local/bin/khadi-greeter /usr/local/bin/edex-rs-greeter
 if [ -L /var/lib/edex-rs ]; then
     sudo rm -f /var/lib/edex-rs
 fi

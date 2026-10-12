@@ -1,4 +1,4 @@
-use crate::{DesComp, state::ClientState};
+use crate::{KhadiComp, state::ClientState};
 use smithay::{
     backend::renderer::utils::on_commit_buffer_handler,
     delegate_compositor, delegate_shm,
@@ -18,7 +18,7 @@ use smithay::{
 use super::xdg_shell;
 use smithay::xwayland::XWaylandClientData;
 
-impl CompositorHandler for DesComp {
+impl CompositorHandler for KhadiComp {
     fn compositor_state(&mut self) -> &mut CompositorState {
         &mut self.compositor_state
     }
@@ -48,15 +48,15 @@ impl CompositorHandler for DesComp {
     }
 }
 
-impl BufferHandler for DesComp {
+impl BufferHandler for KhadiComp {
     fn buffer_destroyed(&mut self, _buffer: &wl_buffer::WlBuffer) {}
 }
 
-impl ShmHandler for DesComp {
+impl ShmHandler for KhadiComp {
     fn shm_state(&self) -> &ShmState {
         &self.shm_state
     }
 }
 
-delegate_compositor!(DesComp);
-delegate_shm!(DesComp);
+delegate_compositor!(KhadiComp);
+delegate_shm!(KhadiComp);

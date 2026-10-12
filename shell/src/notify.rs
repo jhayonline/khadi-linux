@@ -347,7 +347,7 @@ impl Service {
     }
 
     fn get_server_information(&self) -> (String, String, String, String) {
-        ("DEs-UI".to_string(), "DEs-UI".to_string(), env!("CARGO_PKG_VERSION").to_string(), "1.2".to_string())
+        ("Khadi".to_string(), "Khadi".to_string(), env!("CARGO_PKG_VERSION").to_string(), "1.2".to_string())
     }
 }
 
@@ -384,7 +384,7 @@ impl Center {
                     .serve_at(PATH, service)?
                     .build()
             })
-            .and_then(|built| built.map_err(|e| eprintln!("des-ui: not taking applications' notifications: {e}")).ok());
+            .and_then(|built| built.map_err(|e| eprintln!("khadi: not taking applications' notifications: {e}")).ok());
         Center { open: false, quiet, sounds: false, last_sound: None, notices: Vec::new(), inbox, bus, own_id: u32::MAX / 2 }
     }
 
@@ -394,7 +394,7 @@ impl Center {
         self.add(
             Notice {
                 id: self.own_id,
-                app: "DEs-UI".to_string(),
+                app: "Khadi".to_string(),
                 title: title.to_string(),
                 body: body.to_string(),
                 actions: Vec::new(),

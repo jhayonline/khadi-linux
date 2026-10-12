@@ -1,4 +1,4 @@
-//! The user's settings, kept as `key = value` lines in `~/.config/des-ui/config`.
+//! The user's settings, kept as `key = value` lines in `~/.config/khadi/config`.
 //!
 //! Everything has a default, so the file only holds what was changed. It is written
 //! one key at a time, which leaves comments and unknown lines alone.
@@ -6,7 +6,7 @@
 use crate::geo::{Place, parse_location};
 use crate::term::{CursorShape, TermLook};
 use crate::theme;
-use des_common::Panels;
+use khadi_common::Panels;
 use std::path::PathBuf;
 
 pub const MIN_FONT_SIZE: f32 = 10.0;
@@ -69,7 +69,7 @@ impl Default for Config {
 }
 
 fn path() -> Option<PathBuf> {
-    des_common::input::config_path()
+    khadi_common::input::config_path()
 }
 
 impl Config {

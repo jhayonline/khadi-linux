@@ -28,7 +28,7 @@
 
 use crate::{Panel, Panels};
 
-pub const SOCKET_ENV: &str = "DES_COMP_SOCKET";
+pub const SOCKET_ENV: &str = "KHADI_COMP_SOCKET";
 
 /// Where an application is on its display.
 #[derive(Debug, Clone, Copy, PartialEq)]

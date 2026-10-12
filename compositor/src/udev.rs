@@ -55,8 +55,8 @@ use smithay::{
     wayland::{compositor::with_states, dmabuf::DmabufFeedbackBuilder},
 };
 
-use crate::{DesComp, monitors};
-use des_common::ipc::{DisplayInfo, Mode as DisplayMode, Setup, Usage};
+use crate::{KhadiComp, monitors};
+use khadi_common::ipc::{DisplayInfo, Mode as DisplayMode, Setup, Usage};
 
 /// How long the first frame may take to reach a screen before the backend gives up.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
@@ -216,8 +216,8 @@ fn cursor_buffer() -> MemoryRenderBuffer {
 }
 
 pub fn init_udev(
-    event_loop: &mut EventLoop<'static, DesComp>,
-    state: &mut DesComp,
+    event_loop: &mut EventLoop<'static, KhadiComp>,
+    state: &mut KhadiComp,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let display_handle = &state.display_handle.clone();
 
@@ -261,8 +261,8 @@ pub fn init_udev(
     state.dmabuf_global = Some(match &feedback {
         Some(feedback) => state
             .dmabuf_state
-            .create_global_with_default_feedback::<DesComp>(display_handle, feedback),
-        None => state.dmabuf_state.create_global::<DesComp>(display_handle, formats),
+            .create_global_with_default_feedback::<KhadiComp>(display_handle, feedback),
+        None => state.dmabuf_state.create_global::<KhadiComp>(display_handle, formats),
     });
 
     state.udev = Some(UdevData {
@@ -401,7 +401,7 @@ pub fn init_udev(
 }
 
 /// Applies the settings to one input device: touchpads and mice each get their own.
-fn configure_device(device: &mut input::Device, settings: &des_common::input::InputSettings) {
+fn configure_device(device: &mut input::Device, settings: &khadi_common::input::InputSettings) {
     // Only touchpads can tap.
     let touchpad = device.config_tap_finger_count() > 0;
     if touchpad {
@@ -465,7 +465,7 @@ fn connector_name(info: &connector::Info) -> String {
     format!("{}-{}", info.interface().as_str(), info.interface_id())
 }
 
-impl DesComp {
+impl KhadiComp {
     /// Brings the set of monitors in line with what is plugged in, then lays them out.
     fn rescan_monitors(&mut self) {
         let Some(udev) = self.udev.as_mut() else {
@@ -524,7 +524,7 @@ impl DesComp {
                 tracing::warn!("cannot turn the screen off: {e}");
             }
             self.space.unmap_output(&gone.output);
-            self.display_handle.remove_global::<DesComp>(gone.global.clone());
+            self.display_handle.remove_global::<KhadiComp>(gone.global.clone());
         }
 
         for info in &connected {
@@ -639,7 +639,7 @@ impl DesComp {
                         | connector::Interface::DSI
                 ),
                 surface,
-                global: output.create_global::<DesComp>(&self.display_handle),
+                global: output.create_global::<KhadiComp>(&self.display_handle),
                 output,
                 refresh: Duration::from_secs_f64(1000.0 / wl_mode.refresh.max(1) as f64),
                 setup: Setup::default(),
@@ -777,7 +777,7 @@ impl DesComp {
             if differs {
                 let gone = udev.monitors.remove(index);
                 self.space.unmap_output(&gone.output);
-                self.display_handle.remove_global::<DesComp>(gone.global.clone());
+                self.display_handle.remove_global::<KhadiComp>(gone.global.clone());
             } else {
                 index += 1;
             }

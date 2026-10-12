@@ -1,8 +1,0 @@
-[Plymouth Theme]
-Name=DEs-UI
-Description=The DEs-UI splash: the name, which glitches now and then, over a bar that fills.
-ModuleName=script
-
-[script]
-ImageDir=/usr/share/plymouth/themes/des-ui
-ScriptFile=/usr/share/plymouth/themes/des-ui/des-ui.script

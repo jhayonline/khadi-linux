@@ -1,6 +1,0 @@
-[Desktop Entry]
-Name=DEs-UI
-Comment=Sci-fi terminal desktop
-Exec=/usr/local/bin/des-ui-session
-Type=Application
-DesktopNames=des-ui

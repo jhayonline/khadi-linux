@@ -1,7 +1,7 @@
 //! The shell's link to the compositor: which applications are open, and requests to
 //! switch between them. Absent when the shell runs on its own.
 
-use des_common::ipc::{Command, DesktopState, Displays, Event, SOCKET_ENV};
+use khadi_common::ipc::{Command, DesktopState, Displays, Event, SOCKET_ENV};
 use eframe::egui;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
@@ -24,7 +24,7 @@ pub struct Desktop {
     /// Screenshots the compositor took, waiting to be taken over.
     pub shots: Vec<crate::capture::Shot>,
     /// What the compositor has said about the recording since last looked at.
-    pub recording_news: Vec<des_common::ipc::Recording>,
+    pub recording_news: Vec<khadi_common::ipc::Recording>,
     /// Set when the compositor's lock shortcut was pressed.
     pub lock_requested: bool,
     /// Whether the compositor has the screen locked.
@@ -41,7 +41,7 @@ impl Desktop {
         let writer = match UnixStream::connect(&path) {
             Ok(stream) => stream,
             Err(e) => {
-                eprintln!("des-ui: cannot reach compositor at {}: {e}", path.display());
+                eprintln!("khadi: cannot reach compositor at {}: {e}", path.display());
                 return None;
             }
         };

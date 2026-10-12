@@ -127,7 +127,7 @@ fn chosen_accent() -> [u8; 3] {
     else {
         return DEFAULT_ACCENT;
     };
-    let chosen = std::fs::read_to_string(config.join("des-ui/config")).ok().and_then(|text| {
+    let chosen = std::fs::read_to_string(config.join("khadi/config")).ok().and_then(|text| {
         text.lines().find_map(|line| {
             let (key, value) = line.split_once('=')?;
             (key.trim() == "theme").then(|| value.trim().to_string())
@@ -136,7 +136,7 @@ fn chosen_accent() -> [u8; 3] {
     let Some(name) = chosen.filter(|name| !name.is_empty() && !name.contains('/') && !name.contains("..")) else {
         return DEFAULT_ACCENT;
     };
-    [config.join("des-ui/themes"), PathBuf::from("/usr/local/share/des-ui/themes"), PathBuf::from("/usr/share/des-ui/themes")]
+    [config.join("khadi/themes"), PathBuf::from("/usr/local/share/khadi/themes"), PathBuf::from("/usr/share/khadi/themes")]
         .iter()
         .find_map(|dir| accent_in(&std::fs::read_to_string(dir.join(format!("{name}.json"))).ok()?))
         .unwrap_or(DEFAULT_ACCENT)

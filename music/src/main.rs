@@ -1,8 +1,8 @@
-//! The DEs-UI music service: signs in to Spotify, plays through librespot, and serves
+//! The Khadi music service: signs in to Spotify, plays through librespot, and serves
 //! the shell's music player over a Unix socket.
 //!
 //! It is a program of its own so that music keeps playing when the shell restarts.
-//! The shell speaks to it in lines of JSON (see `protocol`); `des-music send` does the
+//! The shell speaks to it in lines of JSON (see `protocol`); `khadi-music send` does the
 //! same from a command line, which is how the keyboard's media keys reach it.
 
 mod protocol;
@@ -42,7 +42,7 @@ const REDIRECT: &str = "http://127.0.0.1:8898/login";
 const OUTPUT: &str = "pw-cat --playback --raw --format s16 --rate 44100 --channels 2 -";
 
 const USAGE: &str = "\
-Usage: des-music [COMMAND]
+Usage: khadi-music [COMMAND]
 
   (none)         Run the music service
   login          Sign in to Spotify, in your browser; needed once
@@ -56,7 +56,7 @@ fn cache_dir() -> PathBuf {
         .filter(|path| path.is_absolute())
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
         .unwrap_or_else(std::env::temp_dir)
-        .join("des-ui/music")
+        .join("khadi/music")
 }
 
 fn open_cache() -> Result<Cache, String> {
@@ -72,7 +72,7 @@ async fn login() -> Result<(), String> {
     println!("Opening Spotify's sign-in page in your browser…");
     let client = librespot_oauth::OAuthClientBuilder::new(&config.client_id, REDIRECT, SCOPES.to_vec())
         .open_in_browser()
-        .with_custom_message("Signed in. You can close this page and go back to DEs-UI.")
+        .with_custom_message("Signed in. You can close this page and go back to Khadi.")
         .build()
         .map_err(|e| format!("cannot start the sign-in: {e}"))?;
     let token = client
@@ -299,7 +299,7 @@ impl Service {
     async fn handle(&self, request: Request) -> Option<String> {
         let done = |outcome: Result<(), librespot_core::Error>| {
             if let Err(e) = outcome {
-                eprintln!("des-music: {e}");
+                eprintln!("khadi-music: {e}");
             }
             None
         };
@@ -476,7 +476,7 @@ async fn serve() -> Result<(), String> {
         return Err("the music service is already running".to_string());
     }
     let cache = open_cache()?;
-    let credentials = cache.credentials().ok_or("not signed in: run `des-music login` first")?;
+    let credentials = cache.credentials().ok_or("not signed in: run `khadi-music login` first")?;
     let session = Session::new(SessionConfig { device_id: device_id(), ..Default::default() }, Some(cache));
 
     let mixer_builder = mixer::find(None).ok_or("no volume control is built in")?;
@@ -488,13 +488,13 @@ async fn serve() -> Result<(), String> {
     let mut events = player.get_player_event_channel();
 
     let connect = ConnectConfig {
-        name: "DEs-UI".to_string(),
+        name: "Khadi".to_string(),
         ..Default::default()
     };
     let (spirc, spirc_task) = Spirc::new(connect, session.clone(), credentials, player, mixer)
         .await
         .map_err(|e| format!("cannot connect to Spotify: {e}"))?;
-    eprintln!("des-music: signed in as {}", session.username());
+    eprintln!("khadi-music: signed in as {}", session.username());
 
     let _ = std::fs::remove_file(&path);
     let listener = UnixListener::bind(&path).map_err(|e| format!("cannot listen on {}: {e}", path.display()))?;
@@ -543,7 +543,7 @@ async fn serve() -> Result<(), String> {
 
     // The service lasts as long as its connection to Spotify, or until told to stop.
     tokio::select! {
-        () = spirc_task => eprintln!("des-music: the connection to Spotify ended"),
+        () = spirc_task => eprintln!("khadi-music: the connection to Spotify ended"),
         _ = tokio::signal::ctrl_c() => {}
     }
     let _ = service.spirc.shutdown();
@@ -576,7 +576,7 @@ async fn main() {
         // Again, as the app already connected: for when more needs approving.
         ["library"] => match saved_client() {
             Some(client) => connect_library(&client).await,
-            None => Err("give the client ID of your Spotify app: des-music library <ID>".to_string()),
+            None => Err("give the client ID of your Spotify app: khadi-music library <ID>".to_string()),
         },
         ["logout"] => {
             let _ = std::fs::remove_file(web_token_file());
@@ -591,7 +591,7 @@ async fn main() {
         _ => Err(format!("unrecognised arguments\n\n{USAGE}")),
     };
     if let Err(why) = outcome {
-        eprintln!("des-music: {why}");
+        eprintln!("khadi-music: {why}");
         // Lets the shell tell "not signed in" from other failures.
         std::process::exit(if why.starts_with("not signed in") { 3 } else { 1 });
     }
@@ -651,7 +651,7 @@ async fn connect_library(client: &str) -> Result<(), String> {
     println!("Opening Spotify's page in your browser, to let your app read your library…");
     let token = librespot_oauth::OAuthClientBuilder::new(client, REDIRECT, LIBRARY_SCOPES.to_vec())
         .open_in_browser()
-        .with_custom_message("Library connected. You can close this page and go back to DEs-UI.")
+        .with_custom_message("Library connected. You can close this page and go back to Khadi.")
         .build()
         .map_err(|e| format!("cannot start the sign-in: {e}"))?
         .get_access_token_async()
@@ -662,9 +662,9 @@ async fn connect_library(client: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub const NO_QUEUE: &str = "The queue needs one more approval from Spotify. Run `des-music library` again.";
+pub const NO_QUEUE: &str = "The queue needs one more approval from Spotify. Run `khadi-music library` again.";
 
-pub const NO_LIBRARY: &str = "Your library is not connected yet. Run `des-music library <client ID>` once; the README says where the ID comes from.";
+pub const NO_LIBRARY: &str = "Your library is not connected yet. Run `khadi-music library <client ID>` once; the README says where the ID comes from.";
 
 /// A token for the Web API: the one from `library`, renewed when it runs out.
 pub async fn web_token() -> Result<String, String> {
@@ -684,7 +684,7 @@ pub async fn web_token() -> Result<String, String> {
         .map_err(|e| format!("cannot renew the library connection: {e}"))?
         .refresh_token_async(refresh)
         .await
-        .map_err(|e| format!("Spotify would not renew the library connection ({e}). Run `des-music library` again."))?;
+        .map_err(|e| format!("Spotify would not renew the library connection ({e}). Run `khadi-music library` again."))?;
     // Spotify does not always send a new renewal token; the old one then still stands.
     let mut token = token;
     if token.refresh_token.is_empty() {

@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Khadi
+Description=The Khadi splash: the name, which glitches now and then, over a bar that fills.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/khadi
+ScriptFile=/usr/share/plymouth/themes/khadi/khadi.script

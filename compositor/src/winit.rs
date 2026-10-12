@@ -17,9 +17,9 @@ use smithay::{
     wayland::dmabuf::{DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
 };
 
-use crate::DesComp;
+use crate::KhadiComp;
 
-impl DmabufHandler for DesComp {
+impl DmabufHandler for KhadiComp {
     fn dmabuf_state(&mut self) -> &mut DmabufState {
         &mut self.dmabuf_state
     }
@@ -29,17 +29,17 @@ impl DmabufHandler for DesComp {
             .renderer()
             .is_some_and(|renderer| renderer.import_dmabuf(&dmabuf, None).is_ok());
         if imported {
-            let _ = notifier.successful::<DesComp>();
+            let _ = notifier.successful::<KhadiComp>();
         } else {
             notifier.failed();
         }
     }
 }
-delegate_dmabuf!(DesComp);
+delegate_dmabuf!(KhadiComp);
 
 pub fn init_winit(
-    event_loop: &mut EventLoop<'static, DesComp>,
-    state: &mut DesComp,
+    event_loop: &mut EventLoop<'static, KhadiComp>,
+    state: &mut KhadiComp,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let display_handle = &state.display_handle.clone();
 
@@ -55,11 +55,11 @@ pub fn init_winit(
         PhysicalProperties {
             size: (0, 0).into(),
             subpixel: Subpixel::Unknown,
-            make: "des-ui".into(),
+            make: "khadi".into(),
             model: "Winit".into(),
         },
     );
-    let _global = output.create_global::<DesComp>(display_handle);
+    let _global = output.create_global::<KhadiComp>(display_handle);
     // Testing aid: `DES_TEST_SCALE=1.5` runs the window as a scaled display.
     let scale = std::env::var("DES_TEST_SCALE").ok().and_then(|scale| scale.parse::<f64>().ok()).filter(|scale| (0.5..=4.0).contains(scale)).unwrap_or(1.0);
     output.change_current_state(Some(mode), Some(Transform::Flipped180), Some(smithay::output::Scale::Fractional(scale)), Some((0, 0).into()));
@@ -79,10 +79,10 @@ pub fn init_winit(
     state.dmabuf_global = Some(match &feedback {
         Some(feedback) => state
             .dmabuf_state
-            .create_global_with_default_feedback::<DesComp>(display_handle, feedback),
+            .create_global_with_default_feedback::<KhadiComp>(display_handle, feedback),
         None => {
             tracing::warn!("no render node found, clients will render in software");
-            state.dmabuf_state.create_global::<DesComp>(display_handle, formats)
+            state.dmabuf_state.create_global::<KhadiComp>(display_handle, formats)
         }
     });
 

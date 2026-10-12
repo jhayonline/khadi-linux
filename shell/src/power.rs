@@ -37,8 +37,8 @@ pub struct Power {
 /// Asks logind to wait for this program before sleeping.
 fn delay_sleep(manager: &Proxy) -> Option<OwnedFd> {
     let fd: zbus::zvariant::OwnedFd = manager
-        .call("Inhibit", &("sleep", "DEs-UI", "Locking the screen", "delay"))
-        .map_err(|e| eprintln!("des-ui: cannot lock before sleep: {e}"))
+        .call("Inhibit", &("sleep", "Khadi", "Locking the screen", "delay"))
+        .map_err(|e| eprintln!("khadi: cannot lock before sleep: {e}"))
         .ok()?;
     Some(fd.into())
 }
@@ -50,8 +50,8 @@ fn watch_sleep(shared: Arc<Mutex<Shared>>, ctx: egui::Context, own_power_key: bo
     // The power key opens the power menu, for as long as this shell is there to show
     // it; without this the system switches off at the first press.
     let _power_key: Option<zbus::zvariant::OwnedFd> = own_power_key
-        .then(|| manager.call("Inhibit", &("handle-power-key", "DEs-UI", "Showing the power menu", "block")))
-        .and_then(|held| held.map_err(|e| eprintln!("des-ui: the power key keeps its usual meaning: {e}")).ok());
+        .then(|| manager.call("Inhibit", &("handle-power-key", "Khadi", "Showing the power menu", "block")))
+        .and_then(|held| held.map_err(|e| eprintln!("khadi: the power key keeps its usual meaning: {e}")).ok());
 
     // `loginctl lock-session`, and whatever else locks sessions through logind.
     if let Ok(id) = std::env::var("XDG_SESSION_ID") {
@@ -123,7 +123,7 @@ impl Power {
         let for_sleep = shared.clone();
         std::thread::spawn(move || {
             if let Err(e) = watch_sleep(for_sleep, ctx, own_power_key) {
-                eprintln!("des-ui: not watching for sleep: {e}");
+                eprintln!("khadi: not watching for sleep: {e}");
             }
         });
         let saver = || ScreenSaver { shared: shared.clone() };
@@ -132,7 +132,7 @@ impl Power {
             .and_then(|builder| builder.serve_at("/org/freedesktop/ScreenSaver", saver()))
             .and_then(|builder| builder.serve_at("/ScreenSaver", saver()))
             .and_then(|builder| builder.build())
-            .map_err(|e| eprintln!("des-ui: applications cannot hold off the lock: {e}"))
+            .map_err(|e| eprintln!("khadi: applications cannot hold off the lock: {e}"))
             .ok();
         Power { shared, session, checked: Instant::now(), holding: false }
     }
@@ -199,7 +199,7 @@ impl Act {
             Act::Lock | Act::LogOut => return,
         };
         if let Err(e) = std::process::Command::new("systemctl").arg(verb).spawn() {
-            eprintln!("des-ui: cannot {verb}: {e}");
+            eprintln!("khadi: cannot {verb}: {e}");
         }
     }
 }

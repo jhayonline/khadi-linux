@@ -1,7 +1,7 @@
 //! The music player: what is playing in the right column, and a full view of the
 //! user's Spotify library in the workspace.
 //!
-//! The playing is done by `des-music`, a service of its own; this is its remote
+//! The playing is done by `khadi-music`, a service of its own; this is its remote
 //! control. The shell starts the service when it is not running, and offers the
 //! sign-in when the service says nobody is signed in.
 
@@ -230,16 +230,16 @@ fn socket_path() -> PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
-        .join("des-music.sock")
+        .join("khadi-music.sock")
 }
 
 /// The service's program: the one installed beside this one.
 fn service_program() -> PathBuf {
     std::env::current_exe()
         .ok()
-        .and_then(|exe| Some(exe.parent()?.join("des-music")))
+        .and_then(|exe| Some(exe.parent()?.join("khadi-music")))
         .filter(|path| path.exists())
-        .unwrap_or_else(|| PathBuf::from("des-music"))
+        .unwrap_or_else(|| PathBuf::from("khadi-music"))
 }
 
 /// Keeps a connection to the service for as long as the shell runs: starts the
@@ -524,7 +524,7 @@ fn fetch_cover(url: &str) -> Option<egui::ColorImage> {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
         .unwrap_or_else(std::env::temp_dir)
-        .join("des-ui/music/covers");
+        .join("khadi/music/covers");
     let path = dir.join(name);
     let fetched = path.exists()
         || (std::fs::create_dir_all(&dir).is_ok()

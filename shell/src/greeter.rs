@@ -18,7 +18,7 @@ use std::sync::mpsc::{Receiver, channel};
 use std::time::{Duration, Instant};
 
 /// Where users' pictures for the login screen are kept, readable by the login screen.
-pub const AVATAR_DIR: &str = "/var/lib/des-ui/avatars";
+pub const AVATAR_DIR: &str = "/var/lib/khadi/avatars";
 
 /// A desktop that can be started after signing in.
 #[derive(Debug, Clone, PartialEq)]
@@ -56,7 +56,7 @@ fn sessions() -> Vec<Session> {
         .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "desktop"))
         .filter_map(|entry| parse_session(&std::fs::read_to_string(entry.path()).ok()?))
         .collect();
-    found.sort_by_key(|session| (!session.command[0].contains("des-ui"), session.name.to_lowercase()));
+    found.sort_by_key(|session| (!session.command[0].contains("khadi"), session.name.to_lowercase()));
     found
 }
 
@@ -351,7 +351,7 @@ impl Greeter {
         };
         let inner = screen.shrink2(vec2(64.0, 48.0));
 
-        let brand = ui::galley(ui, "DEs-UI", ui::display_bold(14.0), ui::SECONDARY, 4.0);
+        let brand = ui::galley(ui, "Khadi", ui::display_bold(14.0), ui::SECONDARY, 4.0);
         painter.galley(inner.left_top(), brand, ui::SECONDARY);
         let now = chrono::Local::now();
         let date = ui::galley(ui, &now.format("%a %d %b").to_string().to_uppercase(), ui::display(13.0), ui::SECONDARY, 2.0);
@@ -682,7 +682,7 @@ mod tests {
 
     #[test]
     fn signs_in_through_the_login_service() {
-        let session = Session { name: "DEs-UI".into(), command: vec!["/usr/local/bin/des-ui-session".into()], desktop: "des-ui".into() };
+        let session = Session { name: "Khadi".into(), command: vec!["/usr/local/bin/khadi-session".into()], desktop: "khadi".into() };
         let dir = std::env::temp_dir().join(format!("des-greeter-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
 
@@ -693,8 +693,8 @@ mod tests {
         assert_eq!(seen[0]["username"], "ada");
         let start = seen.last().unwrap();
         assert_eq!(start["type"], "start_session");
-        assert_eq!(start["cmd"][0], "/usr/local/bin/des-ui-session");
-        assert!(start["env"].as_array().unwrap().iter().any(|v| v == "XDG_CURRENT_DESKTOP=des-ui"));
+        assert_eq!(start["cmd"][0], "/usr/local/bin/khadi-session");
+        assert!(start["env"].as_array().unwrap().iter().any(|v| v == "XDG_CURRENT_DESKTOP=khadi"));
 
         let path = dir.join("bad.sock");
         let server = fake_greetd(path.clone(), "open sesame");

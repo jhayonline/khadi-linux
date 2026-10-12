@@ -4,7 +4,7 @@
 /themes/*
 !/themes/signal.json
 
-# VM artefacts — large, local, reproducible from vm/des-ui-vm. The VM is the
+# VM artefacts — large, local, reproducible from vm/khadi-vm. The VM is the
 # only safe way to test a compositor: it takes over the display, so trying a
 # build on the machine you are working on logs you out of it.
 vm/*.iso
@@ -20,5 +20,7 @@ omarchy/
 __pycache__/
 *.pyc
 
-# The upstream project this descends from, kept here to merge from.
+# The upstream project this descends from, kept here to merge from. Its
+# directory keeps upstream's name on purpose: it is his checkout, not ours,
+# and the rename pass must not touch it.
 des-ui/

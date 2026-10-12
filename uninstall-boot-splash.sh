@@ -1,9 +1,9 @@
 #!/bin/sh
-# Takes the DEs-UI splash off the boot screen again: what was shown before comes back.
+# Takes the Khadi splash off the boot screen again: what was shown before comes back.
 set -eu
 
-theme=/usr/share/plymouth/themes/des-ui
-sudo update-alternatives --remove default.plymouth "$theme/des-ui.plymouth" 2>/dev/null || true
+theme=/usr/share/plymouth/themes/khadi
+sudo update-alternatives --remove default.plymouth "$theme/khadi.plymouth" 2>/dev/null || true
 sudo rm -rf "$theme"
 echo "Rebuilding the boot image; this takes a minute."
 sudo update-initramfs -u

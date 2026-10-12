@@ -18,7 +18,7 @@ use smithay::{
     xwayland::X11Surface,
 };
 
-use crate::DesComp;
+use crate::KhadiComp;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Focus {
@@ -51,15 +51,15 @@ impl WaylandFocus for Focus {
     }
 }
 
-impl KeyboardTarget<DesComp> for Focus {
-    fn enter(&self, seat: &Seat<DesComp>, data: &mut DesComp, keys: Vec<KeysymHandle<'_>>, serial: Serial) {
+impl KeyboardTarget<KhadiComp> for Focus {
+    fn enter(&self, seat: &Seat<KhadiComp>, data: &mut KhadiComp, keys: Vec<KeysymHandle<'_>>, serial: Serial) {
         match self {
             Focus::Surface(surface) => KeyboardTarget::enter(surface, seat, data, keys, serial),
             Focus::X11(window) => KeyboardTarget::enter(window, seat, data, keys, serial),
         }
     }
 
-    fn leave(&self, seat: &Seat<DesComp>, data: &mut DesComp, serial: Serial) {
+    fn leave(&self, seat: &Seat<KhadiComp>, data: &mut KhadiComp, serial: Serial) {
         match self {
             Focus::Surface(surface) => KeyboardTarget::leave(surface, seat, data, serial),
             Focus::X11(window) => KeyboardTarget::leave(window, seat, data, serial),
@@ -68,8 +68,8 @@ impl KeyboardTarget<DesComp> for Focus {
 
     fn key(
         &self,
-        seat: &Seat<DesComp>,
-        data: &mut DesComp,
+        seat: &Seat<KhadiComp>,
+        data: &mut KhadiComp,
         key: KeysymHandle<'_>,
         state: KeyState,
         serial: Serial,
@@ -81,7 +81,7 @@ impl KeyboardTarget<DesComp> for Focus {
         }
     }
 
-    fn modifiers(&self, seat: &Seat<DesComp>, data: &mut DesComp, modifiers: ModifiersState, serial: Serial) {
+    fn modifiers(&self, seat: &Seat<KhadiComp>, data: &mut KhadiComp, modifiers: ModifiersState, serial: Serial) {
         match self {
             Focus::Surface(surface) => KeyboardTarget::modifiers(surface, seat, data, modifiers, serial),
             Focus::X11(window) => KeyboardTarget::modifiers(window, seat, data, modifiers, serial),

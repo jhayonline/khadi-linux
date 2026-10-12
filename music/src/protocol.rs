@@ -15,7 +15,7 @@ pub fn socket_path() -> PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
-        .join("des-music.sock")
+        .join("khadi-music.sock")
 }
 
 #[derive(Debug, Clone, PartialEq)]
