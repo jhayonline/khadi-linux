@@ -33,7 +33,6 @@ use smithay::{
 
 use crate::{
     ipc::IpcServer,
-    lock::Lock,
     policy::{App, ScreenMode},
     udev::UdevData,
 };

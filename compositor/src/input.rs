@@ -41,8 +41,6 @@ enum Action {
     SwitchVt(i32),
     /// End the session (Ctrl+Alt+Backspace).
     Quit,
-    /// Lock the screen.
-    Lock,
 }
 
 #[derive(Clone, Copy)]
@@ -255,7 +253,6 @@ impl DesComp {
                             Keysym::backslash => {
                                 FilterResult::Intercept(Action::Panel(des_common::Panel::Bottom))
                             }
-                            Keysym::Escape => FilterResult::Intercept(Action::Lock),
                             Keysym::q | Keysym::Q => FilterResult::Intercept(Action::Close),
                             // Not a shortcut, but not a letter for the application either.
                             other if modifiers.logo && other.key_char().is_some_and(|c| !c.is_control()) => {
@@ -298,7 +295,6 @@ impl DesComp {
                     // Started, not waited for: the lock takes effect when the client
                     // asks for it, and this process has a screen to keep drawing in
                     // the meantime.
-                    Some(Action::Lock) => run("des-ui-lock", &[]),
                     None => {}
                 }
             }

@@ -198,7 +198,6 @@ pub fn init_winit(
                 if let Err(e) = backend.submit(Some(&[damage])) {
                     tracing::error!("cannot present frame: {e}");
                 }
-                state.lock_frame_presented(&output);
 
                 state.record_tick();
                 state.last_frame = std::time::Instant::now();

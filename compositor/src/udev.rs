@@ -149,9 +149,6 @@ struct Monitor {
     setup: Setup,
     /// When the frame currently waiting for its page flip was queued.
     pending_since: Option<Instant>,
-    /// Whether the frame now in flight was drawn under a session lock. Read when the
-    /// flip completes, which is the first moment the desktop is really off the screen.
-    lock_frame: bool,
     /// Whether a frame has reached this monitor yet.
     lit: bool,
 }
@@ -347,7 +344,6 @@ pub fn init_udev(
                 let Some(udev) = data.udev.as_mut() else {
                     return;
                 };
-                let mut blanked = None;
                 if let Some(monitor) = udev.monitors.iter_mut().find(|monitor| monitor.crtc == crtc) {
                     if let Err(e) = monitor.surface.frame_submitted() {
                         tracing::warn!("page flip bookkeeping failed: {e}");
@@ -356,16 +352,7 @@ pub fn init_udev(
                     if !std::mem::replace(&mut monitor.lit, true) {
                         tracing::info!(output = %monitor.output.name(), "first frame on screen");
                     }
-                    if std::mem::take(&mut monitor.lock_frame) {
-                        blanked = Some(monitor.output.clone());
-                    }
                     udev.flips += 1;
-                }
-                // Outside the borrow of `udev`, and only now: a queued frame is not
-                // a frame anyone can see, and the lock is confirmed on what is on
-                // the screen rather than on what has been handed to the kernel.
-                if let Some(output) = blanked {
-                    data.lock_frame_presented(&output);
                 }
             }
             DrmEvent::Error(e) => tracing::error!("display error: {e}"),
@@ -657,7 +644,6 @@ impl DesComp {
                 refresh: Duration::from_secs_f64(1000.0 / wl_mode.refresh.max(1) as f64),
                 setup: Setup::default(),
                 pending_since: None,
-                lock_frame: false,
                 lit: false,
             });
         }
@@ -843,7 +829,6 @@ impl DesComp {
             ..
         } = udev;
 
-        let locked = self.lock.is_some();
         for monitor in monitors.iter_mut() {
             // A page flip that never completes must not freeze the screen for good.
             match monitor.pending_since {
@@ -882,12 +867,7 @@ impl DesComp {
 
             match drawn {
                 Ok(true) => match monitor.surface.queue_frame(()) {
-                    Ok(()) => {
-                        monitor.pending_since = Some(Instant::now());
-                        // The desktop was not collected above when locked, so what
-                        // is in flight has none of it in it.
-                        monitor.lock_frame = locked;
-                    }
+                    Ok(()) => monitor.pending_since = Some(Instant::now()),
                     Err(e) => tracing::error!("cannot present frame: {e}"),
                 },
                 Ok(false) => {}
