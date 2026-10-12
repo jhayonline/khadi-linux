@@ -11,7 +11,7 @@ use smithay::{
     utils::SERIAL_COUNTER,
 };
 
-use crate::state::EdexComp;
+use crate::state::DesComp;
 
 /// A compositor shortcut, as opposed to a key press that belongs to the focused client.
 enum Action {
@@ -25,7 +25,7 @@ enum Action {
     Fullscreen,
     /// Give the keyboard to the left (false) or right (true) half of a split.
     FocusHalf(bool),
-    Panel(khadi_common::Panel),
+    Panel(des_common::Panel),
     RestartShell,
     /// A volume or brightness key.
     Media(Media),
@@ -120,11 +120,11 @@ impl Media {
 const SWITCH_VT_1: u32 = 0x1008_FE01;
 const SWITCH_VT_12: u32 = 0x1008_FE0C;
 
-impl EdexComp {
+impl DesComp {
     /// Reads the input settings again and applies them to the keyboard and to every
     /// pointing device.
     pub fn reload_input(&mut self) {
-        self.input_settings = khadi_common::input::InputSettings::load();
+        self.input_settings = des_common::input::InputSettings::load();
         let settings = self.input_settings.clone();
         let keyboard = self.seat.get_keyboard().unwrap();
         keyboard.change_repeat_info(settings.repeat_rate as i32, settings.repeat_delay as i32);
@@ -204,13 +204,13 @@ impl EdexComp {
                             Keysym::Left => FilterResult::Intercept(Action::FocusHalf(false)),
                             Keysym::Right => FilterResult::Intercept(Action::FocusHalf(true)),
                             Keysym::bracketleft => {
-                                FilterResult::Intercept(Action::Panel(khadi_common::Panel::Left))
+                                FilterResult::Intercept(Action::Panel(des_common::Panel::Left))
                             }
                             Keysym::bracketright => {
-                                FilterResult::Intercept(Action::Panel(khadi_common::Panel::Right))
+                                FilterResult::Intercept(Action::Panel(des_common::Panel::Right))
                             }
                             Keysym::backslash => {
-                                FilterResult::Intercept(Action::Panel(khadi_common::Panel::Bottom))
+                                FilterResult::Intercept(Action::Panel(des_common::Panel::Bottom))
                             }
                             Keysym::Escape => FilterResult::Intercept(Action::Lock),
                             Keysym::q | Keysym::Q => FilterResult::Intercept(Action::Close),
@@ -241,7 +241,7 @@ impl EdexComp {
                     // Started, not waited for: the lock takes effect when the client
                     // asks for it, and this process has a screen to keep drawing in
                     // the meantime.
-                    Some(Action::Lock) => run("khadi-lock", &[]),
+                    Some(Action::Lock) => run("des-ui-lock", &[]),
                     None => {}
                 }
             }

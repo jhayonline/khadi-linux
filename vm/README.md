@@ -1,12 +1,12 @@
-# Khadi test VM
+# DEs-UI test VM
 
 A throwaway Arch VM. Two reasons it exists:
 
-1. **It is the only safe place to run khadi-comp.** The compositor takes the
+1. **It is the only safe place to run des-comp.** The compositor takes the
    display and the input devices. Starting one on the machine you are working
    on logs you out of it.
 2. **It rehearses the claim that matters** — someone else runs one script on a
-   machine that has never seen Khadi and gets the desktop. The guest builds
+   machine that has never seen DEs-UI and gets the desktop. The guest builds
    from source for that reason. Pushing binaries from the host would be faster
    and would prove nothing: the host already has the toolchain, the libraries
    and the right versions of both.
@@ -26,27 +26,27 @@ this machine, so no group changes and no re-login.
 ## Then
 
 ```sh
-./vm/khadi-vm fetch     # Arch ISO, checksum-verified
-./vm/khadi-vm create    # 24G sparse qcow2
-./vm/khadi-vm run       # boots the installer
+./vm/des-ui-vm fetch     # Arch ISO, checksum-verified
+./vm/des-ui-vm create    # 24G sparse qcow2
+./vm/des-ui-vm run       # boots the installer
 ```
 
 In the guest, install Arch as normal — `archinstall` is on the ISO. Choose a
-**minimal** profile: no desktop, no greeter. Khadi supplies those. Say yes to
+**minimal** profile: no desktop, no greeter. DEs-UI supplies those. Say yes to
 a normal user with sudo.
 
 Then shut down, and from the host:
 
 ```sh
-./vm/khadi-vm run                        # boots the installed disk now
-KHADI_VM_USER=you ./vm/khadi-vm push     # copies the repo to ~/khadi
-KHADI_VM_USER=you ./vm/khadi-vm ssh
+./vm/des-ui-vm run                        # boots the installed disk now
+KHADI_VM_USER=you ./vm/des-ui-vm push     # copies the repo to ~/des-ui
+KHADI_VM_USER=you ./vm/des-ui-vm ssh
 ```
 
 Inside the guest:
 
 ```sh
-~/khadi/vm/provision.sh
+~/des-ui/vm/provision.sh
 ```
 
 That installs the packages, builds the workspace, registers the session and
@@ -60,14 +60,14 @@ A login screen owns a VT and reads a keyboard, so it cannot be driven over
 ssh. Two commands cover that:
 
 ```sh
-KHADI_VM_USER=khadi ./vm/khadi-vm autologin   # session on tty1, no login
-./vm/khadi-vm shot session.png                # the guest framebuffer, over QMP
-./vm/khadi-vm type khadi ret                  # keystrokes, over QMP
+KHADI_VM_USER=des-ui ./vm/des-ui-vm autologin   # session on tty1, no login
+./vm/des-ui-vm shot session.png                # the guest framebuffer, over QMP
+./vm/des-ui-vm type des-ui ret                  # keystrokes, over QMP
 ```
 
 `autologin` is test scaffolding and says so in the guest: it disables greetd,
 sets an agetty override on tty1 and writes a marked block into both login
-profiles. Khadi's own session manager asks for a password on purpose.
+profiles. DEs-UI's own session manager asks for a password on purpose.
 
 The block is **rewritten on every run**, not appended once. The version that
 skipped the write when its markers were already present left a VM that had
@@ -87,10 +87,10 @@ of it, and nothing anywhere saying so.
 
 ## Why these choices
 
-**UEFI, not BIOS.** Khadi's installer plan is archinstall with UEFI and LUKS
+**UEFI, not BIOS.** DEs-UI's installer plan is archinstall with UEFI and LUKS
 full-disk encryption. The VM should fail the same way real hardware would.
 
-**virtio-gpu-gl with virgl.** khadi-comp drives the display through DRM and
+**virtio-gpu-gl with virgl.** des-comp drives the display through DRM and
 renders with EGL. In this guest that resolves to `/dev/dri/card0` and
 llvmpipe, which is software rendering: the desktop is correct but the frame
 rate and the idle CPU reading are not representative of real hardware.
@@ -99,8 +99,8 @@ rate and the idle CPU reading are not representative of real hardware.
 GUI, which makes failures inspectable instead of screenshot-only.
 
 **Nothing is shared with the host.** No virtfs, no shared clipboard. The repo
-gets in via `khadi-vm push`, which is a tar over ssh, and `push` deletes
-`~/khadi` first so a renamed or deleted file cannot live on in the guest. A
+gets in via `des-ui-vm push`, which is a tar over ssh, and `push` deletes
+`~/des-ui` first so a renamed or deleted file cannot live on in the guest. A
 test machine that can reach back into the host is not a test machine.
 
 ## What is not checked

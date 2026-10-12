@@ -164,7 +164,7 @@ pub fn parse_own(text: &str) -> Vec<Vec<Saved>> {
 }
 
 pub fn format_own(configurations: &[Vec<Saved>]) -> String {
-    let mut text = String::from("# Display layouts chosen in the khadi settings. One block per set of monitors.\n");
+    let mut text = String::from("# Display layouts chosen in the des-ui settings. One block per set of monitors.\n");
     for block in configurations {
         text.push('\n');
         for saved in block {
@@ -183,7 +183,7 @@ fn own_path() -> Option<PathBuf> {
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-        .map(|dir| dir.join("khadi/displays"))
+        .map(|dir| dir.join("des-ui/displays"))
 }
 
 /// Whether two layouts are for the same set of monitors.

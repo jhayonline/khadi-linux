@@ -1,9 +1,9 @@
 [package]
-name = "khadi-lock"
+name = "des-ui-lock"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "The Khadi lock screen"
+description = "The DEs-UI lock screen"
 
 [dependencies]
 # The lock screen cannot use the toolkit the shell uses. eframe draws into a window

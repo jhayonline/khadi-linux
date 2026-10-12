@@ -23,9 +23,9 @@ use smithay::{
     },
 };
 
-use crate::EdexComp;
+use crate::DesComp;
 
-impl EdexComp {
+impl DesComp {
     /// Starts the X server. Applications can connect at once; their windows appear as
     /// soon as it is ready.
     pub fn start_xwayland(&mut self) {
@@ -87,14 +87,14 @@ impl EdexComp {
     }
 }
 
-impl XWaylandShellHandler for EdexComp {
+impl XWaylandShellHandler for DesComp {
     fn xwayland_shell_state(&mut self) -> &mut XWaylandShellState {
         &mut self.xwayland_shell_state
     }
 }
-delegate_xwayland_shell!(EdexComp);
+delegate_xwayland_shell!(DesComp);
 
-impl XwmHandler for EdexComp {
+impl XwmHandler for DesComp {
     fn xwm_state(&mut self, _xwm: XwmId) -> &mut X11Wm {
         self.xwm.as_mut().expect("X11 event without a window manager")
     }

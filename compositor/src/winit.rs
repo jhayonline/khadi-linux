@@ -18,9 +18,9 @@ use smithay::{
     wayland::dmabuf::{DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
 };
 
-use crate::EdexComp;
+use crate::DesComp;
 
-impl DmabufHandler for EdexComp {
+impl DmabufHandler for DesComp {
     fn dmabuf_state(&mut self) -> &mut DmabufState {
         &mut self.dmabuf_state
     }
@@ -30,17 +30,17 @@ impl DmabufHandler for EdexComp {
             .renderer()
             .is_some_and(|renderer| renderer.import_dmabuf(&dmabuf, None).is_ok());
         if imported {
-            let _ = notifier.successful::<EdexComp>();
+            let _ = notifier.successful::<DesComp>();
         } else {
             notifier.failed();
         }
     }
 }
-delegate_dmabuf!(EdexComp);
+delegate_dmabuf!(DesComp);
 
 pub fn init_winit(
-    event_loop: &mut EventLoop<'static, EdexComp>,
-    state: &mut EdexComp,
+    event_loop: &mut EventLoop<'static, DesComp>,
+    state: &mut DesComp,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let display_handle = &state.display_handle.clone();
 
@@ -56,11 +56,11 @@ pub fn init_winit(
         PhysicalProperties {
             size: (0, 0).into(),
             subpixel: Subpixel::Unknown,
-            make: "khadi".into(),
+            make: "des-ui".into(),
             model: "Winit".into(),
         },
     );
-    let _global = output.create_global::<EdexComp>(display_handle);
+    let _global = output.create_global::<DesComp>(display_handle);
     output.change_current_state(Some(mode), Some(Transform::Flipped180), None, Some((0, 0).into()));
     output.set_preferred(mode);
 
@@ -78,10 +78,10 @@ pub fn init_winit(
     state.dmabuf_global = Some(match &feedback {
         Some(feedback) => state
             .dmabuf_state
-            .create_global_with_default_feedback::<EdexComp>(display_handle, feedback),
+            .create_global_with_default_feedback::<DesComp>(display_handle, feedback),
         None => {
             tracing::warn!("no render node found, clients will render in software");
-            state.dmabuf_state.create_global::<EdexComp>(display_handle, formats)
+            state.dmabuf_state.create_global::<DesComp>(display_handle, formats)
         }
     });
 

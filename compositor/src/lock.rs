@@ -7,7 +7,7 @@
 //! stays black and locked rather than falling open. That is why this is done here
 //! and not with a window that tries to stay on top of the others.
 //!
-//! Khadi has no lock screen of its own yet. Any client speaking this protocol works,
+//! DEs-UI has no lock screen of its own yet. Any client speaking this protocol works,
 //! `swaylock` among them, which is what made this testable before there was one.
 //!
 //! ## If the lock screen crashes
@@ -33,7 +33,7 @@ use smithay::{
     wayland::session_lock::{LockSurface, SessionLockHandler, SessionLockManagerState, SessionLocker},
 };
 
-use crate::{EdexComp, focus::Focus};
+use crate::{DesComp, focus::Focus};
 
 /// A locked session.
 #[derive(Default)]
@@ -58,7 +58,7 @@ impl Lock {
     }
 }
 
-impl EdexComp {
+impl DesComp {
     /// True while the session is locked: nothing underneath may be drawn or typed into.
     pub fn locked(&self) -> bool {
         self.lock.is_some()
@@ -124,7 +124,7 @@ impl EdexComp {
     }
 }
 
-impl SessionLockHandler for EdexComp {
+impl SessionLockHandler for DesComp {
     fn lock_state(&mut self) -> &mut SessionLockManagerState {
         &mut self.session_lock_state
     }
@@ -172,4 +172,4 @@ impl SessionLockHandler for EdexComp {
     }
 }
 
-delegate_session_lock!(EdexComp);
+delegate_session_lock!(DesComp);

@@ -14,13 +14,13 @@ use std::os::fd::{AsFd, OwnedFd};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
-/// The PAM service: `/etc/pam.d/khadi-lock`, installed by `install.sh`.
+/// The PAM service: `/etc/pam.d/des-ui-lock`, installed by `install.sh`.
 ///
 /// Not a borrowed name like `login` or `system-auth`. Those carry rules that do not
 /// belong on an unlock — session setup, password changing — and on some
 /// configurations they refuse to run for a non-root caller, which is how a lock
 /// screen ends up unable to accept any password at all.
-const SERVICE: &str = "khadi-lock";
+const SERVICE: &str = "des-ui-lock";
 
 pub enum Outcome {
     Accepted,
@@ -88,9 +88,9 @@ fn check(user: &str, password: &str) -> Outcome {
     let mut authenticator = match pam::Authenticator::with_password(SERVICE) {
         Ok(authenticator) => authenticator,
         Err(e) => {
-            // Almost always a missing /etc/pam.d/khadi-lock. Worth being loud about:
+            // Almost always a missing /etc/pam.d/des-ui-lock. Worth being loud about:
             // without the service file nothing can ever unlock.
-            eprintln!("khadi-lock: cannot start PAM service {SERVICE}: {e}");
+            eprintln!("des-ui-lock: cannot start PAM service {SERVICE}: {e}");
             return Outcome::Rejected;
         }
     };
@@ -100,7 +100,7 @@ fn check(user: &str, password: &str) -> Outcome {
     match authenticator.authenticate() {
         Ok(()) => Outcome::Accepted,
         Err(e) => {
-            eprintln!("khadi-lock: rejected: {e}");
+            eprintln!("des-ui-lock: rejected: {e}");
             Outcome::Rejected
         }
     }

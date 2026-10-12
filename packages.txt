@@ -1,4 +1,4 @@
-# Khadi — the Arch packages the desktop needs.
+# DEs-UI — the Arch packages the desktop needs.
 #
 # One name per line, `#` to end of line is a comment. Install with:
 #
@@ -28,8 +28,8 @@ wayland
 libxkbcommon
 
 # --- what the session needs at runtime -----------------------------------
-xorg-xwayland      # X11 applications. khadi-comp starts and manages it itself.
-cage               # the last fallback in khadi-session: if khadi-comp cannot
+xorg-xwayland      # X11 applications. des-comp starts and manages it itself.
+cage               # the last fallback in des-ui-session: if des-comp cannot
                    # drive the display twice over, the shell runs inside this
                    # rather than leaving you at a black screen.
 networkmanager     # nmcli, which the settings screen drives for Wi-Fi
@@ -41,7 +41,7 @@ curl               # geolocation lookups for the globe
 fontconfig         # fc-list, how the shell finds an installed Nerd Font
 
 # --- portals -------------------------------------------------------------
-# session/khadi-portals.conf asks for the gtk backend by name, and for
+# session/des-ui-portals.conf asks for the gtk backend by name, and for
 # gnome-keyring to answer the Secret portal. Without these a file chooser in
 # Firefox hangs waiting for a backend that is not there.
 xdg-desktop-portal
@@ -56,15 +56,15 @@ gnome-keyring
 ttf-jetbrains-mono-nerd
 
 # --- the lock screen -----------------------------------------------------
-pam                # khadi-lock asks PAM whether the password is right. Part of
+pam                # des-ui-lock asks PAM whether the password is right. Part of
                    # any Arch install already; named so the dependency is written
                    # down rather than assumed. The rules live in
-                   # /etc/pam.d/khadi-lock, which install.sh puts there.
+                   # /etc/pam.d/des-ui-lock, which install.sh puts there.
 
 # --- login ---------------------------------------------------------------
 # NOT YET SETTLED. install.sh registers a session in /usr/share/wayland-sessions,
 # which needs a display manager to offer it, and Arch ships none by default.
-# Khadi had its own greeter on greetd; it was dropped with the old codebase and
+# DEs-UI had its own greeter on greetd; it was dropped with the old codebase and
 # is in the history at the tag pre-des-ui. Upstream lists a login screen under
 # "not done yet", so this is a real gap for both projects.
 greetd             # the display manager the old greeter ran under

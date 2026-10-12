@@ -1,4 +1,4 @@
-//! khadi: a Rust rewrite of the eDEX-UI sci-fi terminal desktop.
+//! des-ui: a Rust rewrite of the eDEX-UI sci-fi terminal desktop.
 
 mod apps;
 mod config;
@@ -19,7 +19,7 @@ use eframe::egui::{
     StrokeKind, Ui, UiBuilder, ViewportBuilder, ViewportCommand, Visuals, pos2, vec2,
 };
 use desktop::Desktop;
-use khadi_common::{
+use des_common::{
     Panels,
     ipc::{Command, DesktopState, Place},
 };
@@ -35,7 +35,7 @@ use theme::Theme;
 const MAX_TABS: usize = 9;
 
 const USAGE: &str = "\
-Usage: khadi [OPTIONS]
+Usage: des-ui [OPTIONS]
 
 Options:
   --theme <NAME|FILE>  Theme to use: its accent and terminal colours (default: signal)
@@ -68,7 +68,7 @@ struct App {
     settings: settings::Settings,
     config: config::Config,
     /// The keyboard, mouse and touchpad settings, as last saved.
-    input: khadi_common::input::InputSettings,
+    input: des_common::input::InputSettings,
     /// The font that supplies prompt symbols, kept for when fonts are set up again.
     symbols: Option<PathBuf>,
     /// Whether the saved panel choice has been sent to the compositor yet.
@@ -110,7 +110,7 @@ impl App {
             geo: geo::Geo::start(config.lookups, config.location.clone()),
             local_panels: config.panels,
             config,
-            input: khadi_common::input::InputSettings::load(),
+            input: des_common::input::InputSettings::load(),
             symbols,
             panels_synced: false,
             screenshot,
@@ -134,7 +134,7 @@ impl App {
                 self.tabs.push(tab);
                 self.active = self.tabs.len() - 1;
             }
-            Err(e) => eprintln!("khadi: cannot open tab: {e}"),
+            Err(e) => eprintln!("des-ui: cannot open tab: {e}"),
         }
     }
 
@@ -162,7 +162,7 @@ impl App {
         use settings::Change;
         let save = |key: &str, value: Option<&str>| {
             if let Err(e) = config::set(key, value) {
-                eprintln!("khadi: cannot save the setting: {e}");
+                eprintln!("des-ui: cannot save the setting: {e}");
             }
         };
         match change {
@@ -195,9 +195,9 @@ impl App {
             Change::Panel(panel, open) => {
                 let mut panels = self.config.panels;
                 match panel {
-                    khadi_common::Panel::Left => panels.left = open,
-                    khadi_common::Panel::Right => panels.right = open,
-                    khadi_common::Panel::Bottom => panels.bottom = open,
+                    des_common::Panel::Left => panels.left = open,
+                    des_common::Panel::Right => panels.right = open,
+                    des_common::Panel::Bottom => panels.bottom = open,
                 }
                 self.config.panels = panels;
                 save("panels", Some(&config::Config::panels_value(panels)));
@@ -212,7 +212,7 @@ impl App {
                 let font = self.config.terminal_font.clone();
                 self.config = config::Config::load();
                 self.config.theme = theme;
-                self.input = khadi_common::input::InputSettings::load();
+                self.input = des_common::input::InputSettings::load();
                 if self.config.terminal_font != font {
                     ui::install_fonts(ctx, self.symbols.as_deref(), self.config.terminal_font.as_deref());
                 }
@@ -275,7 +275,7 @@ impl App {
                 data.extend_from_slice(&[pixel.r(), pixel.g(), pixel.b()]);
             }
             if let Err(e) = std::fs::write(path, data) {
-                eprintln!("khadi: cannot write {}: {e}", path.display());
+                eprintln!("des-ui: cannot write {}: {e}", path.display());
             }
             ctx.send_viewport_cmd(ViewportCommand::Close);
         }
@@ -534,9 +534,9 @@ impl eframe::App for App {
             if !self.panels_synced && desktop.connected() {
                 let (now, wanted) = (desktop.state.panels, self.config.panels);
                 for (panel, differs) in [
-                    (khadi_common::Panel::Left, now.left != wanted.left),
-                    (khadi_common::Panel::Right, now.right != wanted.right),
-                    (khadi_common::Panel::Bottom, now.bottom != wanted.bottom),
+                    (des_common::Panel::Left, now.left != wanted.left),
+                    (des_common::Panel::Right, now.right != wanted.right),
+                    (des_common::Panel::Bottom, now.bottom != wanted.bottom),
                 ] {
                     if differs {
                         desktop.send(Command::TogglePanel(panel));
@@ -589,12 +589,12 @@ impl eframe::App for App {
 
         // Every region is placed from the shared geometry, so that the workspace is
         // exactly where the compositor puts application windows.
-        let area = khadi_common::workspace(screen.width(), screen.height(), open);
+        let area = des_common::workspace(screen.width(), screen.height(), open);
         let workspace = Rect::from_min_size(
             screen.min + vec2(area.x, area.y),
             vec2(area.width, area.height),
         );
-        let status_top = screen.bottom() - khadi_common::STATUS_HEIGHT;
+        let status_top = screen.bottom() - des_common::STATUS_HEIGHT;
         CentralPanel::default()
             .frame(Frame::new().fill(ui::GROUND))
             .show(ctx, |ui| {
@@ -728,10 +728,10 @@ impl eframe::App for App {
         let screens = state.as_ref().map_or(1, |state| state.screens);
         for number in 2..=screens {
             ctx.show_viewport_immediate(
-                egui::ViewportId::from_hash_of(("khadi-display", number)),
+                egui::ViewportId::from_hash_of(("des-ui-display", number)),
                 ViewportBuilder::default()
-                    .with_title(format!("khadi display {number}"))
-                    .with_app_id("khadi"),
+                    .with_title(format!("des-ui display {number}"))
+                    .with_app_id("des-ui"),
                 |ctx, class| {
                     // Without support for extra windows there is nowhere to draw this.
                     if class == egui::ViewportClass::Embedded {
@@ -783,7 +783,7 @@ fn spawn_quietly(program: &str, args: &[&str]) {
                 let _ = child.wait();
             });
         }
-        Err(e) => eprintln!("khadi: cannot run {program}: {e}"),
+        Err(e) => eprintln!("des-ui: cannot run {program}: {e}"),
     }
 }
 
@@ -862,14 +862,14 @@ fn main() -> eframe::Result {
                     ("--geo", Some(value)) if value == "on" => ("geo", None),
                     ("--geo", Some(value)) if value == "off" => ("geo", Some(value)),
                     _ => {
-                        eprintln!("khadi: {arg} needs a valid value\n\n{USAGE}");
+                        eprintln!("des-ui: {arg} needs a valid value\n\n{USAGE}");
                         std::process::exit(2);
                     }
                 };
                 match config::set(key, value.as_deref()) {
                     Ok(path) => println!("Saved to {}. It takes effect when the shell next starts.", path.display()),
                     Err(e) => {
-                        eprintln!("khadi: cannot save the setting: {e}");
+                        eprintln!("des-ui: cannot save the setting: {e}");
                         std::process::exit(1);
                     }
                 }
@@ -885,21 +885,21 @@ fn main() -> eframe::Result {
             "--theme" => match args.next() {
                 Some(name) => config.theme = name,
                 None => {
-                    eprintln!("khadi: --theme needs a value\n\n{USAGE}");
+                    eprintln!("des-ui: --theme needs a value\n\n{USAGE}");
                     std::process::exit(2);
                 }
             },
             "--font" => match args.next() {
                 Some(path) => font = Some(PathBuf::from(path)),
                 None => {
-                    eprintln!("khadi: --font needs a value\n\n{USAGE}");
+                    eprintln!("des-ui: --font needs a value\n\n{USAGE}");
                     std::process::exit(2);
                 }
             },
             "--screenshot" => match args.next() {
                 Some(path) => screenshot = Some(PathBuf::from(path)),
                 None => {
-                    eprintln!("khadi: --screenshot needs a value\n\n{USAGE}");
+                    eprintln!("des-ui: --screenshot needs a value\n\n{USAGE}");
                     std::process::exit(2);
                 }
             },
@@ -908,7 +908,7 @@ fn main() -> eframe::Result {
                 return Ok(());
             }
             other => {
-                eprintln!("khadi: unknown option '{other}'\n\n{USAGE}");
+                eprintln!("des-ui: unknown option '{other}'\n\n{USAGE}");
                 std::process::exit(2);
             }
         }
@@ -917,14 +917,14 @@ fn main() -> eframe::Result {
     let theme = Theme::load(&config.theme);
     let options = eframe::NativeOptions {
         viewport: ViewportBuilder::default()
-            .with_title("khadi")
-            .with_app_id("khadi")
+            .with_title("des-ui")
+            .with_app_id("des-ui")
             .with_inner_size([1280.0, 760.0])
             .with_fullscreen(!windowed),
         ..Default::default()
     };
     eframe::run_native(
-        "khadi",
+        "des-ui",
         options,
         Box::new(move |cc| {
             apply_style(&cc.egui_ctx, &theme);

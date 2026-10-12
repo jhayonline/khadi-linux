@@ -1,5 +1,5 @@
 #
-# PAM configuration for khadi-lock, the Khadi lock screen.
+# PAM configuration for des-ui-lock, the DEs-UI lock screen.
 #
 # Only `auth` and `account`. An unlock asks one question — is this the person who
 # locked it — and nothing else. `session` would set a session up again when one is
@@ -10,7 +10,7 @@
 # configured with, so a fingerprint reader or a smart card set up there works here
 # without this file knowing about it.
 #
-# khadi-lock runs as the user and is not setuid. pam_unix reaches the shadow file
+# des-ui-lock runs as the user and is not setuid. pam_unix reaches the shadow file
 # through the setuid `unix_chkpwd` helper, which is what makes that possible.
 
 auth      include   system-auth

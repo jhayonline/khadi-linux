@@ -77,7 +77,7 @@ impl Theme {
         let raw: Raw = match serde_json::from_str(&text) {
             Ok(raw) => raw,
             Err(e) => {
-                eprintln!("khadi-lock: theme {name} will not parse ({e}); using the built-in one");
+                eprintln!("des-ui-lock: theme {name} will not parse ({e}); using the built-in one");
                 serde_json::from_str(DEFAULT).expect("the built-in theme must parse")
             }
         };
@@ -103,7 +103,7 @@ fn current_theme_name() -> String {
     let Some(home) = std::env::var_os("HOME") else {
         return "signal".into();
     };
-    let path = std::path::Path::new(&home).join(".config/khadi/config");
+    let path = std::path::Path::new(&home).join(".config/des-ui/config");
     let Ok(text) = std::fs::read_to_string(path) else {
         return "signal".into();
     };
@@ -120,10 +120,10 @@ fn current_theme_name() -> String {
 fn read_theme(name: &str) -> Option<String> {
     let mut places: Vec<std::path::PathBuf> = Vec::new();
     if let Some(home) = std::env::var_os("HOME") {
-        places.push(std::path::Path::new(&home).join(".config/khadi/themes"));
+        places.push(std::path::Path::new(&home).join(".config/des-ui/themes"));
     }
-    places.push("/usr/local/share/khadi/themes".into());
-    places.push("/usr/share/khadi/themes".into());
+    places.push("/usr/local/share/des-ui/themes".into());
+    places.push("/usr/share/des-ui/themes".into());
     places
         .into_iter()
         .find_map(|dir| std::fs::read_to_string(dir.join(format!("{name}.json"))).ok())

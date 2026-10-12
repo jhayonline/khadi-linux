@@ -3,7 +3,7 @@
 //! No font and no toolkit. Everything here is rectangles, which means the lock
 //! screen has nothing to load and nothing that can be missing: a machine with no
 //! fonts installed, or a `fontconfig` cache that has not been rebuilt, still gets a
-//! lock screen rather than a black rectangle. The Khadi wordmark belongs here and is
+//! lock screen rather than a black rectangle. The DEs-UI wordmark belongs here and is
 //! not here yet, because it needs a glyph renderer and that is a dependency this
 //! program has to earn.
 

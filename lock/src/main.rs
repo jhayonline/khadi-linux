@@ -1,4 +1,4 @@
-//! khadi-lock — the Khadi lock screen.
+//! des-ui-lock — the DEs-UI lock screen.
 //!
 //! Locks the session through `ext-session-lock-v1`, covers every display, takes a
 //! password and unlocks when PAM accepts it.
@@ -9,7 +9,7 @@
 //! it and the screen stays black and locked. So nothing here is security-critical
 //! except the PAM call, and nothing here needs privileges.
 //!
-//! Run it with no arguments from inside a Khadi session.
+//! Run it with no arguments from inside a DEs-UI session.
 
 mod auth;
 mod draw;
@@ -49,21 +49,21 @@ const WRONG_SHOWN_FOR: Duration = Duration::from_millis(1500);
 
 fn main() {
     let Some(user) = auth::current_user() else {
-        eprintln!("khadi-lock: cannot tell who is logged in; refusing to lock");
+        eprintln!("des-ui-lock: cannot tell who is logged in; refusing to lock");
         std::process::exit(1);
     };
 
     let connection = match Connection::connect_to_env() {
         Ok(connection) => connection,
         Err(e) => {
-            eprintln!("khadi-lock: no Wayland display: {e}");
+            eprintln!("des-ui-lock: no Wayland display: {e}");
             std::process::exit(1);
         }
     };
     let (globals, mut queue) = match registry_queue_init::<State>(&connection) {
         Ok(pair) => pair,
         Err(e) => {
-            eprintln!("khadi-lock: cannot talk to the compositor: {e}");
+            eprintln!("des-ui-lock: cannot talk to the compositor: {e}");
             std::process::exit(1);
         }
     };
@@ -72,28 +72,28 @@ fn main() {
     let compositor: WlCompositor = match globals.bind(&qh, 1..=6, ()) {
         Ok(global) => global,
         Err(e) => {
-            eprintln!("khadi-lock: no wl_compositor: {e}");
+            eprintln!("des-ui-lock: no wl_compositor: {e}");
             std::process::exit(1);
         }
     };
     let shm: WlShm = match globals.bind(&qh, 1..=1, ()) {
         Ok(global) => global,
         Err(e) => {
-            eprintln!("khadi-lock: no wl_shm: {e}");
+            eprintln!("des-ui-lock: no wl_shm: {e}");
             std::process::exit(1);
         }
     };
     let manager: ExtSessionLockManagerV1 = match globals.bind(&qh, 1..=1, ()) {
         Ok(global) => global,
         Err(e) => {
-            eprintln!("khadi-lock: this compositor does not support ext-session-lock-v1: {e}");
+            eprintln!("des-ui-lock: this compositor does not support ext-session-lock-v1: {e}");
             std::process::exit(1);
         }
     };
     let _seat: WlSeat = match globals.bind(&qh, 1..=7, ()) {
         Ok(global) => global,
         Err(e) => {
-            eprintln!("khadi-lock: no wl_seat: {e}");
+            eprintln!("des-ui-lock: no wl_seat: {e}");
             std::process::exit(1);
         }
     };
@@ -113,7 +113,7 @@ fn main() {
     let (wake_read, wake_write) = match rustix::pipe::pipe_with(rustix::pipe::PipeFlags::CLOEXEC) {
         Ok(pair) => pair,
         Err(e) => {
-            eprintln!("khadi-lock: cannot make a pipe: {e}");
+            eprintln!("des-ui-lock: cannot make a pipe: {e}");
             std::process::exit(1);
         }
     };
@@ -139,7 +139,7 @@ fn main() {
 
     while !state.unlocked && !state.finished {
         if let Err(e) = queue.dispatch_pending(&mut state) {
-            eprintln!("khadi-lock: connection lost: {e}");
+            eprintln!("des-ui-lock: connection lost: {e}");
             // The compositor keeps the session locked; it does not need us alive.
             std::process::exit(1);
         }
@@ -148,7 +148,7 @@ fn main() {
             break;
         }
         if let Err(e) = connection.flush() {
-            eprintln!("khadi-lock: connection lost: {e}");
+            eprintln!("des-ui-lock: connection lost: {e}");
             std::process::exit(1);
         }
         // `prepare_read` returns None when events arrived while we were working; go
@@ -160,7 +160,7 @@ fn main() {
         if readable.wayland
             && let Err(e) = guard.read()
         {
-            eprintln!("khadi-lock: connection lost: {e}");
+            eprintln!("des-ui-lock: connection lost: {e}");
             std::process::exit(1);
         }
         if readable.wake {
@@ -172,7 +172,7 @@ fn main() {
     if state.finished && !state.unlocked {
         // The compositor refused the lock, or took it away. It is not locked, and
         // saying so is better than exiting quietly as though it were.
-        eprintln!("khadi-lock: the compositor did not lock the session");
+        eprintln!("des-ui-lock: the compositor did not lock the session");
         std::process::exit(1);
     }
     // Everything the compositor needs has been sent; make sure it leaves.
@@ -256,7 +256,7 @@ fn wait(wayland: std::os::fd::BorrowedFd<'_>, wake: std::os::fd::BorrowedFd<'_>,
             wake: false,
         },
         Err(e) => {
-            eprintln!("khadi-lock: cannot wait for events: {e}");
+            eprintln!("des-ui-lock: cannot wait for events: {e}");
             std::process::exit(1);
         }
     }
@@ -434,7 +434,7 @@ impl Drop for Pool {
 /// An anonymous file to share with the compositor.
 fn memfile(size: usize) -> Option<std::fs::File> {
     use rustix::fs::{MemfdFlags, memfd_create};
-    let fd = memfd_create("khadi-lock", MemfdFlags::CLOEXEC).ok()?;
+    let fd = memfd_create("des-ui-lock", MemfdFlags::CLOEXEC).ok()?;
     let mut file = std::fs::File::from(fd);
     // Written rather than truncated: on a filesystem that cannot allocate the space,
     // ftruncate succeeds and the process is killed with SIGBUS on first touch.
@@ -597,7 +597,7 @@ impl Dispatch<WlKeyboard, ()> for State {
                     Ok(Some(keymap)) => {
                         state.xkb.state = Some(xkbcommon::xkb::State::new(&keymap));
                     }
-                    _ => eprintln!("khadi-lock: cannot read the keyboard layout"),
+                    _ => eprintln!("des-ui-lock: cannot read the keyboard layout"),
                 }
             }
             wl_keyboard::Event::Modifiers {

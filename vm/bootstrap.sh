@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Khadi — guest bootstrap. Runs INSIDE the archiso live environment.
+# DEs-UI — guest bootstrap. Runs INSIDE the archiso live environment.
 #
 # A scripted base-Arch install, deliberately not archinstall: this needs to be
 # deterministic and re-runnable, and archinstall's config schema moves between
-# releases. Base system only — no desktop, no greeter. Khadi supplies those,
+# releases. Base system only — no desktop, no greeter. DEs-UI supplies those,
 # and anything else here would contaminate the Phase 1 gate.
 #
 # Fetched and run from the host:
@@ -11,9 +11,9 @@
 set -euo pipefail
 
 DISK=/dev/vda
-USERNAME="${KHADI_USER:-khadi}"
-PASSWORD="${KHADI_PASS:-khadi}"     # test VM only
-HOSTNAME=khadi-test
+USERNAME="${KHADI_USER:-des-ui}"
+PASSWORD="${KHADI_PASS:-des-ui}"     # test VM only
+HOSTNAME=des-ui-test
 PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIML/nY/5CKlQPHd79eHGPQB5A6SHfQV2OzTaogRzLnA jhaycodes999@gmail.com'
 
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
@@ -74,12 +74,12 @@ systemctl enable NetworkManager
 bootctl install
 ROOT_UUID=\$(blkid -s UUID -o value ${DISK}2)
 cat > /boot/loader/loader.conf <<LOADER
-default khadi.conf
+default des-ui.conf
 timeout 1
 console-mode max
 LOADER
-cat > /boot/loader/entries/khadi.conf <<ENTRY
-title   Khadi test
+cat > /boot/loader/entries/des-ui.conf <<ENTRY
+title   DEs-UI test
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 options root=UUID=\$ROOT_UUID rw
@@ -93,8 +93,8 @@ cat <<DONE
   SSH      : key-based from the host, already installed
   Next     : poweroff, then on the host:
 
-      ./vm/khadi-vm run
-      KHADI_VM_USER=$USERNAME ./vm/khadi-vm push
-      KHADI_VM_USER=$USERNAME ./vm/khadi-vm ssh
+      ./vm/des-ui-vm run
+      KHADI_VM_USER=$USERNAME ./vm/des-ui-vm push
+      KHADI_VM_USER=$USERNAME ./vm/des-ui-vm ssh
 
 DONE

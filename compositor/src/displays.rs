@@ -8,10 +8,10 @@
 use std::time::{Duration, Instant};
 
 use crate::{
-    EdexComp,
+    DesComp,
     monitors::{self, Saved},
 };
-use khadi_common::ipc::{DisplayChoice, DisplayInfo, Displays, Mode};
+use des_common::ipc::{DisplayChoice, DisplayInfo, Displays, Mode};
 
 /// How long a new layout waits to be confirmed.
 pub const CONFIRM_WITHIN: Duration = Duration::from_secs(15);
@@ -47,7 +47,7 @@ pub fn layout_for(choices: &[DisplayChoice], connected: &[DisplayInfo]) -> Optio
     Some(layout)
 }
 
-impl EdexComp {
+impl DesComp {
     /// What the shell is told about the monitors.
     pub fn display_report(&self) -> Displays {
         let monitors = self.hardware_displays().unwrap_or_else(|| {

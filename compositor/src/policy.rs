@@ -15,8 +15,8 @@ use smithay::{
     wayland::{compositor::with_states, seat::WaylandFocus, shell::xdg::XdgToplevelSurfaceData},
 };
 
-use crate::{EdexComp, focus::Focus};
-use khadi_common::{
+use crate::{DesComp, focus::Focus};
+use des_common::{
     Panel,
     ipc::{AppInfo, Command, DesktopState, Event, Place},
 };
@@ -24,7 +24,7 @@ use khadi_common::{
 /// An application window and its place on the desktop.
 pub struct App {
     pub window: Window,
-    /// Index into `EdexComp::screens` of the display it lives on.
+    /// Index into `DesComp::screens` of the display it lives on.
     pub screen: usize,
     /// Where it is on that display. At most one application is in each visible place.
     pub place: Place,
@@ -51,7 +51,7 @@ fn focus_of(window: &Window) -> Option<Focus> {
     }
 }
 
-impl EdexComp {
+impl DesComp {
     /// Tells the policy which displays exist, the main one first. Called by the backend
     /// at startup and whenever a display is added, removed or resized.
     pub fn set_screens(&mut self, screens: Vec<Rectangle<i32, Logical>>) {
@@ -204,7 +204,7 @@ impl EdexComp {
             return rect;
         }
         to_rectangle(
-            khadi_common::workspace(rect.size.w as f32, rect.size.h as f32, self.panels),
+            des_common::workspace(rect.size.w as f32, rect.size.h as f32, self.panels),
             rect.loc,
         )
     }
@@ -216,7 +216,7 @@ impl EdexComp {
         if self.in_place(screen, Place::Side).is_none() {
             return (workspace, workspace);
         }
-        let area = khadi_common::Rect {
+        let area = des_common::Rect {
             x: workspace.loc.x as f32,
             y: workspace.loc.y as f32,
             width: workspace.size.w as f32,
@@ -565,7 +565,7 @@ impl EdexComp {
     }
 }
 
-fn to_rectangle(rect: khadi_common::Rect, origin: Point<i32, Logical>) -> Rectangle<i32, Logical> {
+fn to_rectangle(rect: des_common::Rect, origin: Point<i32, Logical>) -> Rectangle<i32, Logical> {
     Rectangle::new(
         (origin.x + rect.x.round() as i32, origin.y + rect.y.round() as i32).into(),
         (rect.width.round() as i32, rect.height.round() as i32).into(),

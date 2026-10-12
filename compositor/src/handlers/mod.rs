@@ -1,7 +1,7 @@
 mod compositor;
 mod xdg_shell;
 
-use crate::{EdexComp, focus::Focus};
+use crate::{DesComp, focus::Focus};
 use smithay::wayland::seat::WaylandFocus;
 
 //
@@ -18,12 +18,12 @@ use smithay::wayland::selection::data_device::{
 use smithay::wayland::selection::{SelectionHandler, SelectionSource, SelectionTarget};
 use smithay::{delegate_data_device, delegate_output, delegate_seat};
 
-impl SeatHandler for EdexComp {
+impl SeatHandler for DesComp {
     type KeyboardFocus = Focus;
     type PointerFocus = WlSurface;
     type TouchFocus = WlSurface;
 
-    fn seat_state(&mut self) -> &mut SeatState<EdexComp> {
+    fn seat_state(&mut self) -> &mut SeatState<DesComp> {
         &mut self.seat_state
     }
 
@@ -40,13 +40,13 @@ impl SeatHandler for EdexComp {
     }
 }
 
-delegate_seat!(EdexComp);
+delegate_seat!(DesComp);
 
 //
 // Wl Data Device
 //
 
-impl SelectionHandler for EdexComp {
+impl SelectionHandler for DesComp {
     type SelectionUserData = ();
 
     // What a Wayland application copies is offered to X11 applications too.
@@ -74,20 +74,20 @@ impl SelectionHandler for EdexComp {
     }
 }
 
-impl DataDeviceHandler for EdexComp {
+impl DataDeviceHandler for DesComp {
     fn data_device_state(&self) -> &DataDeviceState {
         &self.data_device_state
     }
 }
 
-impl ClientDndGrabHandler for EdexComp {}
-impl ServerDndGrabHandler for EdexComp {}
+impl ClientDndGrabHandler for DesComp {}
+impl ServerDndGrabHandler for DesComp {}
 
-delegate_data_device!(EdexComp);
+delegate_data_device!(DesComp);
 
 //
 // Wl Output & Xdg Output
 //
 
-impl OutputHandler for EdexComp {}
-delegate_output!(EdexComp);
+impl OutputHandler for DesComp {}
+delegate_output!(DesComp);
